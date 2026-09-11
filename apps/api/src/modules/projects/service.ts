@@ -1,0 +1,455 @@
+import type {
+  ActorContext,
+  CreateProjectInput,
+  ProjectDetailDto,
+  ProjectDto,
+  ProjectRole,
+} from '@flowdesk/contracts';
+import { AuditAction, Permission, RealtimeEventType, permissionsFor } from '@flowdesk/contracts';
+import { prisma } from '../../lib/prisma';
+import { assertCan, projectContext, visibleProjectIds } from '../../lib/context';
+import { conflict, forbidden, notFound, badRequest } from '../../lib/errors';
+import { audit } from '../../lib/audit';
+import { emit } from '../../realtime/eventBus';
+import { DEFAULT_LABELS, DEFAULT_STATUSES } from '../../domain/issueRules';
+import { labelSelect, statusSelect, toLabel, toSprint, toStatus, toUserSummary, sprintInclude } from '../../lib/serialize';
+
+const projectSelect = {
+  id: true,
+  workspaceId: true,
+  name: true,
+  key: true,
+  description: true,
+  icon: true,
+  color: true,
+  projectType: true,
+  isArchived: true,
+  createdAt: true,
+  updatedAt: true,
+  lead: { select: { id: true, name: true, email: true, avatarUrl: true } },
+};
+
+export async function listProjects(
+  actor: ActorContext,
+  opts: { includeArchived?: boolean } = {},
+): Promise<ProjectDto[]> {
+  const allowed = await visibleProjectIds(actor);
+
+  const projects = await prisma.project.findMany({
+    where: {
+      workspaceId: actor.workspaceId,
+      ...(opts.includeArchived ? {} : { isArchived: false }),
+      ...(allowed === 'ALL' ? {} : { id: { in: allowed } }),
+    },
+    orderBy: [{ isArchived: 'asc' }, { name: 'asc' }],
+    select: {
+      ...projectSelect,
+      members: { where: { userId: actor.userId }, select: { role: true } },
+      _count: { select: { issues: true } },
+    },
+  });
+
+  const [favorites, openCounts] = await Promise.all([
+    prisma.favorite.findMany({
+      where: { userId: actor.userId, entityType: 'project' },
+      select: { entityId: true },
+    }),
+    prisma.issue.groupBy({
+      by: ['projectId'],
+      where: {
+        projectId: { in: projects.map((p) => p.id) },
+        archivedAt: null,
+        status: { category: { notIn: ['COMPLETED', 'CANCELED'] } },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const favoriteIds = new Set(favorites.map((f) => f.entityId));
+  const openByProject = new Map(openCounts.map((c) => [c.projectId, c._count._all]));
+
+  return projects.map((p) => ({
+    id: p.id,
+    workspaceId: p.workspaceId,
+    name: p.name,
+    key: p.key,
+    description: p.description,
+    icon: p.icon,
+    color: p.color,
+    projectType: p.projectType,
+    isArchived: p.isArchived,
+    lead: toUserSummary(p.lead),
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+    isFavorite: favoriteIds.has(p.id),
+    openIssueCount: openByProject.get(p.id) ?? 0,
+    totalIssueCount: p._count.issues,
+    myRole: p.members[0]?.role ?? null,
+  }));
+}
+
+export async function createProject(
+  actor: ActorContext,
+  input: CreateProjectInput,
+  ip?: string,
+): Promise<ProjectDetailDto> {
+  assertCan(actor, Permission.PROJECT_CREATE);
+
+  const existing = await prisma.project.findUnique({
+    where: { workspaceId_key: { workspaceId: actor.workspaceId, key: input.key } },
+    select: { id: true },
+  });
+  if (existing) throw conflict('Такой ключ проекта уже занят', { key: 'Такой ключ уже занят' });
+
+  const project = await prisma.$transaction(async (tx) => {
+    const created = await tx.project.create({
+      data: {
+        workspaceId: actor.workspaceId,
+        name: input.name,
+        key: input.key,
+        description: input.description ?? null,
+        icon: input.icon ?? '📦',
+        color: input.color ?? '#6366f1',
+        projectType: input.projectType as never,
+        leadId: input.leadId ?? actor.userId,
+      },
+    });
+
+    // Every project starts with a usable workflow — an empty board is useless.
+    await tx.workflowStatus.createMany({
+      data: DEFAULT_STATUSES.map((s, index) => ({
+        projectId: created.id,
+        name: s.name,
+        category: s.category as never,
+        color: s.color,
+        position: index,
+        wipLimit: s.wipLimit ?? null,
+        isDefault: index === 1,
+      })),
+    });
+
+    await tx.label.createMany({
+      data: DEFAULT_LABELS.map((l) => ({ projectId: created.id, name: l.name, color: l.color })),
+    });
+
+    await tx.projectMember.create({
+      data: { projectId: created.id, userId: input.leadId ?? actor.userId, role: 'LEAD' },
+    });
+
+    return created;
+  });
+
+  audit({
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    action: AuditAction.PROJECT_CREATED,
+    entityType: 'Project',
+    entityId: project.id,
+    metadata: { key: project.key, name: project.name },
+    ip,
+  });
+
+  return getProject({ ...actor, projectRole: 'LEAD' }, project.id);
+}
+
+export async function getProject(actor: ActorContext, projectId: string): Promise<ProjectDetailDto> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, workspaceId: actor.workspaceId },
+    select: {
+      ...projectSelect,
+      statuses: { orderBy: { position: 'asc' }, select: statusSelect },
+      labels: { orderBy: { name: 'asc' }, select: labelSelect },
+      members: {
+        select: { userId: true, role: true, user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+      },
+      sprints: {
+        where: { status: 'ACTIVE' },
+        take: 1,
+        include: sprintInclude,
+      },
+      _count: { select: { issues: true } },
+    },
+  });
+  if (!project) throw notFound('Проект');
+
+  const [favorite, openCount, statusCounts] = await Promise.all([
+    prisma.favorite.findUnique({
+      where: {
+        userId_entityType_entityId: { userId: actor.userId, entityType: 'project', entityId: projectId },
+      },
+      select: { id: true },
+    }),
+    prisma.issue.count({
+      where: { projectId, archivedAt: null, status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
+    }),
+    prisma.issue.groupBy({
+      by: ['statusId'],
+      where: { projectId, archivedAt: null, parentId: null },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const countByStatus = new Map(statusCounts.map((c) => [c.statusId, c._count._all]));
+  const activeSprint = project.sprints[0];
+
+  return {
+    id: project.id,
+    workspaceId: project.workspaceId,
+    name: project.name,
+    key: project.key,
+    description: project.description,
+    icon: project.icon,
+    color: project.color,
+    projectType: project.projectType,
+    isArchived: project.isArchived,
+    lead: toUserSummary(project.lead),
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString(),
+    isFavorite: Boolean(favorite),
+    openIssueCount: openCount,
+    totalIssueCount: project._count.issues,
+    myRole: actor.projectRole ?? null,
+    statuses: project.statuses.map((s) => ({ ...toStatus(s), issueCount: countByStatus.get(s.id) ?? 0 })),
+    labels: project.labels.map(toLabel),
+    members: project.members.map((m) => ({
+      userId: m.userId,
+      role: m.role,
+      user: toUserSummary(m.user)!,
+    })),
+    activeSprint: activeSprint ? toSprint(activeSprint) : null,
+    permissions: permissionsFor(actor),
+  };
+}
+
+export async function updateProject(
+  actor: ActorContext,
+  projectId: string,
+  patch: Record<string, unknown>,
+  ip?: string,
+): Promise<ProjectDetailDto> {
+  assertCan(actor, Permission.PROJECT_UPDATE);
+  await prisma.project.update({ where: { id: projectId }, data: patch as never });
+  audit({
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    action: patch.isArchived ? AuditAction.PROJECT_ARCHIVED : AuditAction.PROJECT_UPDATED,
+    entityType: 'Project',
+    entityId: projectId,
+    metadata: patch,
+    ip,
+  });
+  emit(RealtimeEventType.PROJECT_UPDATED, {
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    payload: { projectId },
+  });
+  return getProject(actor, projectId);
+}
+
+export async function deleteProject(actor: ActorContext, projectId: string, ip?: string): Promise<void> {
+  assertCan(actor, Permission.PROJECT_DELETE);
+  await prisma.project.delete({ where: { id: projectId } });
+  audit({
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    action: AuditAction.PROJECT_DELETED,
+    entityType: 'Project',
+    entityId: projectId,
+    ip,
+  });
+}
+
+/* -------------------------------------------------------------- workflow */
+
+export async function createStatus(
+  actor: ActorContext,
+  projectId: string,
+  input: { name: string; category: string; color?: string; wipLimit?: number | null },
+) {
+  assertCan(actor, Permission.PROJECT_MANAGE_WORKFLOW);
+  const last = await prisma.workflowStatus.findFirst({
+    where: { projectId },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  const status = await prisma.workflowStatus.create({
+    data: {
+      projectId,
+      name: input.name,
+      category: input.category as never,
+      color: input.color ?? '#94a3b8',
+      wipLimit: input.wipLimit ?? null,
+      position: (last?.position ?? -1) + 1,
+    },
+    select: statusSelect,
+  });
+  auditWorkflow(actor, projectId, { created: status.name });
+  return toStatus(status);
+}
+
+export async function updateStatus(
+  actor: ActorContext,
+  projectId: string,
+  statusId: string,
+  patch: Record<string, unknown>,
+) {
+  assertCan(actor, Permission.PROJECT_MANAGE_WORKFLOW);
+  const existing = await prisma.workflowStatus.findFirst({
+    where: { id: statusId, projectId },
+    select: { id: true },
+  });
+  if (!existing) throw notFound('Статус');
+  const status = await prisma.workflowStatus.update({
+    where: { id: statusId },
+    data: patch as never,
+    select: statusSelect,
+  });
+  auditWorkflow(actor, projectId, { updated: status.name, patch });
+  return toStatus(status);
+}
+
+/**
+ * Deleting a status must not orphan issues, so the caller supplies a
+ * replacement column; if none is given we fall back to the project default.
+ */
+export async function deleteStatus(
+  actor: ActorContext,
+  projectId: string,
+  statusId: string,
+  moveToStatusId?: string,
+) {
+  assertCan(actor, Permission.PROJECT_MANAGE_WORKFLOW);
+
+  const statuses = await prisma.workflowStatus.findMany({
+    where: { projectId },
+    orderBy: { position: 'asc' },
+    select: { id: true, name: true, isDefault: true },
+  });
+  if (statuses.length <= 1) throw badRequest('В проекте должен остаться хотя бы один статус');
+
+  const target = statuses.find((s) => s.id === statusId);
+  if (!target) throw notFound('Статус');
+
+  const fallback =
+    statuses.find((s) => s.id === moveToStatusId && s.id !== statusId) ??
+    statuses.find((s) => s.isDefault && s.id !== statusId) ??
+    statuses.find((s) => s.id !== statusId)!;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.issue.updateMany({ where: { statusId }, data: { statusId: fallback.id } });
+    await tx.workflowStatus.delete({ where: { id: statusId } });
+  });
+
+  auditWorkflow(actor, projectId, { deleted: target.name, movedTo: fallback.name });
+}
+
+export async function reorderStatuses(actor: ActorContext, projectId: string, statusIds: string[]) {
+  assertCan(actor, Permission.PROJECT_MANAGE_WORKFLOW);
+  const owned = await prisma.workflowStatus.findMany({ where: { projectId }, select: { id: true } });
+  const ownedIds = new Set(owned.map((s) => s.id));
+  if (statusIds.some((id) => !ownedIds.has(id))) throw badRequest('В запросе на переупорядочивание неизвестный статус');
+
+  await prisma.$transaction(
+    statusIds.map((id, index) => prisma.workflowStatus.update({ where: { id }, data: { position: index } })),
+  );
+  auditWorkflow(actor, projectId, { reordered: statusIds.length });
+}
+
+function auditWorkflow(actor: ActorContext, projectId: string, metadata: Record<string, unknown>): void {
+  audit({
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    action: AuditAction.WORKFLOW_UPDATED,
+    entityType: 'Project',
+    entityId: projectId,
+    metadata,
+  });
+}
+
+/* ---------------------------------------------------------------- labels */
+
+export async function listLabels(projectId: string) {
+  const labels = await prisma.label.findMany({
+    where: { projectId },
+    orderBy: { name: 'asc' },
+    select: { ...labelSelect, _count: { select: { issues: true } } },
+  });
+  return labels.map((l) => ({ ...toLabel(l), issueCount: l._count.issues }));
+}
+
+export async function createLabel(
+  actor: ActorContext,
+  projectId: string,
+  input: { name: string; color: string },
+) {
+  assertCan(actor, Permission.PROJECT_UPDATE);
+  const label = await prisma.label.create({
+    data: { projectId, name: input.name, color: input.color },
+    select: labelSelect,
+  });
+  return toLabel(label);
+}
+
+export async function updateLabel(
+  actor: ActorContext,
+  projectId: string,
+  labelId: string,
+  patch: { name?: string; color?: string },
+) {
+  assertCan(actor, Permission.PROJECT_UPDATE);
+  const existing = await prisma.label.findFirst({ where: { id: labelId, projectId }, select: { id: true } });
+  if (!existing) throw notFound('Метка');
+  const label = await prisma.label.update({ where: { id: labelId }, data: patch, select: labelSelect });
+  return toLabel(label);
+}
+
+export async function deleteLabel(actor: ActorContext, projectId: string, labelId: string) {
+  assertCan(actor, Permission.PROJECT_UPDATE);
+  const existing = await prisma.label.findFirst({ where: { id: labelId, projectId }, select: { id: true } });
+  if (!existing) throw notFound('Метка');
+  await prisma.label.delete({ where: { id: labelId } });
+}
+
+/* -------------------------------------------------------- project members */
+
+export async function addProjectMember(
+  actor: ActorContext,
+  projectId: string,
+  input: { userId: string; role: ProjectRole },
+) {
+  assertCan(actor, Permission.PROJECT_MANAGE_MEMBERS);
+  const member = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: actor.workspaceId, userId: input.userId } },
+    select: { id: true },
+  });
+  if (!member) throw badRequest('Этот пользователь не состоит в пространстве');
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId, userId: input.userId } },
+    create: { projectId, userId: input.userId, role: input.role as never },
+    update: { role: input.role as never },
+  });
+}
+
+export async function removeProjectMember(actor: ActorContext, projectId: string, userId: string) {
+  assertCan(actor, Permission.PROJECT_MANAGE_MEMBERS);
+  await prisma.projectMember.deleteMany({ where: { projectId, userId } });
+}
+
+/* ------------------------------------------------------------- favorites */
+
+export async function toggleFavorite(userId: string, projectId: string): Promise<boolean> {
+  const key = { userId, entityType: 'project', entityId: projectId };
+  const existing = await prisma.favorite.findUnique({
+    where: { userId_entityType_entityId: key },
+    select: { id: true },
+  });
+  if (existing) {
+    await prisma.favorite.delete({ where: { id: existing.id } });
+    return false;
+  }
+  await prisma.favorite.create({ data: key });
+  return true;
+}
+
+export { projectContext, forbidden };

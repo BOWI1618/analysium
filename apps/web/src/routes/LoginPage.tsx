@@ -1,0 +1,118 @@
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ApiError } from '~/lib/api';
+import { useSession } from '~/app/session';
+import { AuthLayout } from './AuthLayout';
+import { Button } from '~/ui/Button';
+import { Input } from '~/ui/Input';
+
+const DEMO = { email: 'alex@acme.test', password: 'demo1234' };
+
+export function LoginPage() {
+  const { login } = useSession();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from ?? '/';
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [pending, setPending] = useState(false);
+
+  const submit = async (credentials: { email: string; password: string }) => {
+    setPending(true);
+    setError(null);
+    setFieldErrors({});
+    try {
+      await login(credentials);
+      navigate(from, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+        setFieldErrors(err.fields);
+      } else {
+        setError('Сервер недоступен. API запущен?');
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <AuthLayout
+      title="Вход"
+      subtitle="С возвращением — продолжим с того же места."
+      footer={
+        <>
+          Впервые здесь?{' '}
+          <Link to="/register" className="font-medium text-accent hover:underline">
+            Создать аккаунт
+          </Link>
+        </>
+      }
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit({ email, password });
+        }}
+      >
+        {error && (
+          <div role="alert" className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        )}
+
+        <Input
+          label="Почта"
+          type="email"
+          autoComplete="email"
+          required
+          inputSize="lg"
+          value={email}
+          error={fieldErrors.email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@company.com"
+        />
+
+        <Input
+          label="Пароль"
+          type="password"
+          autoComplete="current-password"
+          required
+          inputSize="lg"
+          value={password}
+          error={fieldErrors.password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="••••••••"
+        />
+
+        <Button type="submit" variant="primary" size="lg" fullWidth loading={pending}>
+          Войти
+        </Button>
+      </form>
+
+      <div className="mt-4 rounded-lg border border-border bg-surface-sunken p-3">
+        <p className="text-xs font-medium">Демо-пространство</p>
+        <p className="mt-0.5 text-xs text-text-muted">
+          Готовое пространство с проектами, спринтами и 70+ задачами.
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="mt-2"
+          disabled={pending}
+          onClick={() => {
+            setEmail(DEMO.email);
+            setPassword(DEMO.password);
+            void submit(DEMO);
+          }}
+        >
+          Войти как Алекс (владелец)
+        </Button>
+      </div>
+    </AuthLayout>
+  );
+}
