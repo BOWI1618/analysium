@@ -213,19 +213,34 @@ export async function inviteMember(
     where: { workspaceId_userId: { workspaceId: actor.workspaceId, userId: user.id } },
     select: { id: true },
   });
-  if (existing) throw conflict('Этот человек уже участник', { email: 'Already a member' });
+  // Someone who is already a member but has never set a password is an
+  // invitation that did not arrive — a lost letter, a typo in the SMTP
+  // settings, a spam filter. Repeating the invite has to send a new link
+  // instead of refusing, otherwise the only way out is removing the person and
+  // adding them again, which nobody guesses.
+  if (existing && user.passwordHash) {
+    throw conflict('Этот человек уже участник', { email: 'Уже в пространстве' });
+  }
 
-  const member = await prisma.workspaceMember.create({
-    data: { workspaceId: actor.workspaceId, userId: user.id, role },
-    select: {
-      id: true,
-      role: true,
-      joinedAt: true,
-      user: {
-        select: { id: true, name: true, email: true, avatarUrl: true, status: true, lastActiveAt: true },
-      },
+  const memberSelect = {
+    id: true,
+    role: true,
+    joinedAt: true,
+    user: {
+      select: { id: true, name: true, email: true, avatarUrl: true, status: true, lastActiveAt: true },
     },
-  });
+  } as const;
+
+  const member = existing
+    ? await prisma.workspaceMember.update({
+        where: { id: existing.id },
+        data: { role },
+        select: memberSelect,
+      })
+    : await prisma.workspaceMember.create({
+        data: { workspaceId: actor.workspaceId, userId: user.id, role },
+        select: memberSelect,
+      });
 
   // The membership alone does not let anybody in: an account created here has
   // no password. The link in this message is the only way to get one, so an
