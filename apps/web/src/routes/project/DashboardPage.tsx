@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -6,7 +6,6 @@ import type { DashboardDto } from '@flowdesk/contracts';
 import { AlertTriangle, CheckCircle2, CircleDot, UserX } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
-import { useUiStore } from '~/app/uiStore';
 import { PRIORITY_META } from '~/components/IssueMeta';
 import { Avatar } from '~/ui/Avatar';
 import { SegmentedControl } from '~/ui/Tabs';

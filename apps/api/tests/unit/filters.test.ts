@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ISSUE_PRIORITIES, ISSUE_TYPES } from '@flowdesk/contracts';
-import { buildIssueWhere, cursorFieldFor, orderByFor } from '../../src/domain/filters';
+import { buildIssueWhere, orderByFor } from '../../src/domain/filters';
 import type { FilterScope } from '../../src/domain/filters';
 
 const opts = { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES };
@@ -114,12 +114,5 @@ describe('ordering', () => {
 
   it('sends issues with no due date to the end', () => {
     expect(JSON.stringify(orderByFor('dueDate', 'asc'))).toContain('"nulls":"last"');
-  });
-
-  it('maps each sort key to the column its cursor encodes', () => {
-    expect(cursorFieldFor('created')).toBe('createdAt');
-    expect(cursorFieldFor('updated')).toBe('updatedAt');
-    expect(cursorFieldFor('rank')).toBe('rank');
-    expect(cursorFieldFor('title')).toBe('title');
   });
 });

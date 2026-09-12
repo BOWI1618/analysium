@@ -34,7 +34,6 @@ export interface IssueFilters {
   order?: IssueFilterInput['order'];
 }
 
-export const EMPTY_FILTERS: IssueFilters = {};
 
 /** Count of active filters — drives the "Filters (3)" affordance. */
 export function activeFilterCount(filters: IssueFilters): number {

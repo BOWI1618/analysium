@@ -38,5 +38,3 @@ export const qk = {
     ['workspace', workspaceId, 'user', userId] as const,
 } as const;
 
-/** Every key that shows issue data — invalidated together after a mutation. */
-export const ISSUE_SCOPE_KEYS = ['issues', 'issue', 'project'] as const;

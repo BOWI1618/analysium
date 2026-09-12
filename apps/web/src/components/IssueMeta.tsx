@@ -12,7 +12,7 @@ import {
   Zap,
   GitBranch,
 } from 'lucide-react';
-import { contrastText, dueDateLabel, hexWithAlpha, plural } from '~/lib/format';
+import { dueDateLabel, hexWithAlpha, plural } from '~/lib/format';
 import { Tooltip } from '~/ui/Tooltip';
 
 /* ------------------------------------------------------------ issue type */
@@ -238,24 +238,6 @@ export function DueDateChip({ value, className }: { value: string | null; classN
 
 /* ------------------------------------------------------- project & epic */
 
-export function ProjectBadge({
-  project,
-  className,
-}: {
-  project: { key: string; name: string; color: string; icon: string };
-  className?: string;
-}) {
-  return (
-    <span
-      className={clsx('fd-key inline-flex items-center gap-1', className)}
-      title={project.name}
-    >
-      <span aria-hidden="true">{project.icon}</span>
-      {project.key}
-    </span>
-  );
-}
-
 export function EpicChip({
   epic,
   className,
@@ -291,8 +273,4 @@ export function StoryPoints({ points, className }: { points: number | null; clas
       {points}
     </span>
   );
-}
-
-export function projectTextColor(hex: string): string {
-  return contrastText(hex);
 }

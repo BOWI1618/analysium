@@ -37,7 +37,7 @@ import { badRequest, conflict, notFound, AppError } from '../../lib/errors';
 import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
 import { audit } from '../../lib/audit';
-import { buildIssueWhere, cursorFieldFor, orderByFor } from '../../domain/filters';
+import { buildIssueWhere, orderByFor } from '../../domain/filters';
 import {
   HIERARCHY_MESSAGES,
   diffIssue,
@@ -64,7 +64,6 @@ export async function listIssues(
   }, { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES });
 
   const orderBy = orderByFor(filter.sort, filter.order);
-  const cursorField = cursorFieldFor(filter.sort);
 
   const rows = await prisma.issue.findMany({
     where,
@@ -76,7 +75,6 @@ export async function listIssues(
 
   const hasMore = rows.length > filter.limit;
   const items = hasMore ? rows.slice(0, filter.limit) : rows;
-  void cursorField;
 
   return {
     items: items.map(toIssueSummary),

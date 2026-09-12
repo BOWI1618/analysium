@@ -20,7 +20,7 @@ import { useSearch } from '~/features/search/hooks';
 import { Avatar } from '~/ui/Avatar';
 import { Kbd } from '~/ui/Tooltip';
 import { Spinner } from '~/ui/Spinner';
-import { IssueTypeIcon, PriorityIcon } from './IssueMeta';
+import { IssueTypeIcon } from './IssueMeta';
 
 interface Command {
   id: string;

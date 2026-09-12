@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { Permission } from '@flowdesk/contracts';
 import { Archive, LayoutGrid, Plus, Star, StarOff } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useProjects, useToggleFavorite } from '~/features/projects/hooks';

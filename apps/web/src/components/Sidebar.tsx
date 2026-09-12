@@ -11,7 +11,6 @@ import {
   Settings,
   Star,
   UserRound,
-  Check,
   ChevronDown,
   LogOut,
   Keyboard,
@@ -357,5 +356,3 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     </aside>
   );
 }
-
-export { Check };

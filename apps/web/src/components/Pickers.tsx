@@ -9,10 +9,10 @@ import {
   type StatusDto,
   type UserSummaryDto,
 } from '@flowdesk/contracts';
-import { Check, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Avatar } from '~/ui/Avatar';
-import { IssueTypeIcon, LabelChip, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
+import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 
 /**
  * Inline pickers used all over the product (issue detail sidebar, board card
@@ -401,6 +401,3 @@ export function DateField({
   );
 }
 
-export function CheckIcon() {
-  return <Check className="size-3.5" />;
-}

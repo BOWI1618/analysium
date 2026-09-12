@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, Link2, Unlink } from 'lucide-react';
 import type { DependencyDto, GanttRowDto, GanttScale } from '@flowdesk/contracts';
 import { Avatar } from '~/ui/Avatar';
 import { Tooltip } from '~/ui/Tooltip';
-import { IssueTypeIcon, StatusDot } from '~/components/IssueMeta';
+import { IssueTypeIcon } from '~/components/IssueMeta';
 import {
   ROW_HEIGHT,
   barGeometry,

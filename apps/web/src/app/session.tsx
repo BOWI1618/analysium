@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LoginInput, RegisterInput, SessionDto, UserDto, WorkspaceDto } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
@@ -107,12 +107,4 @@ export function useWorkspace(): WorkspaceDto {
   return workspace;
 }
 
-/** Guards a callback behind an active workspace. */
-export function useWorkspaceId(): string {
-  return useWorkspace().id;
-}
 
-export function useLogout(): () => Promise<void> {
-  const { logout } = useSession();
-  return useCallback(() => logout(), [logout]);
-}

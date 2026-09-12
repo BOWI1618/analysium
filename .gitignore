@@ -15,3 +15,7 @@ playwright/.cache
 !.env.example
 *.tsbuildinfo
 coverage/
+
+# Design reference keeps the mockup, not the screenshot sweeps taken from it
+design/*.png
+design/audit/

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import type { IssueDetailDto, IssuePriority, IssueType, UserSummaryDto } from '@flowdesk/contracts';
+import type { IssueDetailDto, UserSummaryDto } from '@flowdesk/contracts';
 import { Permission } from '@flowdesk/contracts';
 import {
   ChevronDown,

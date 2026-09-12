@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
-import type { IssueSummaryDto, StatusDto } from '@flowdesk/contracts';
+import type { IssueSummaryDto } from '@flowdesk/contracts';
 import { Permission, StatusCategory } from '@flowdesk/contracts';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useSession } from '~/app/session';
@@ -347,5 +347,3 @@ function SortableIssueCard({
     </div>
   );
 }
-
-export type { StatusDto };

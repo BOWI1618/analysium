@@ -74,10 +74,6 @@ export function shortDate(value: string | Date | null | undefined): string {
   return format(date, isThisYear(date) ? 'd MMM' : 'd MMM yy', { locale });
 }
 
-export function dateInputValue(value: string | Date | null | undefined): string {
-  const date = toDate(value);
-  return date ? format(date, 'yyyy-MM-dd') : '';
-}
 
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -129,17 +125,6 @@ export function pluralize(count: number, forms: [string, string, string]): strin
   return `${count} ${plural(count, forms)}`;
 }
 
-/** Readable text colour for an arbitrary background (labels, project colours). */
-export function contrastText(hex: string): string {
-  const value = hex.replace('#', '');
-  if (value.length !== 6) return '#ffffff';
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  // Relative luminance, sRGB weights.
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? '#1c1917' : '#ffffff';
-}
 
 export function hexWithAlpha(hex: string, alpha: number): string {
   const value = hex.replace('#', '');

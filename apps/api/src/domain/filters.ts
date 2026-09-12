@@ -179,20 +179,3 @@ export function orderByFor(sort: SortKey, order: 'asc' | 'desc'): Prisma.IssueOr
   }
 }
 
-/** Field a cursor encodes for a given sort key. */
-export function cursorFieldFor(sort: SortKey): 'rank' | 'createdAt' | 'updatedAt' | 'title' | 'dueDate' | 'priority' {
-  switch (sort) {
-    case 'created':
-      return 'createdAt';
-    case 'updated':
-      return 'updatedAt';
-    case 'title':
-      return 'title';
-    case 'dueDate':
-      return 'dueDate';
-    case 'priority':
-      return 'priority';
-    default:
-      return 'rank';
-  }
-}
