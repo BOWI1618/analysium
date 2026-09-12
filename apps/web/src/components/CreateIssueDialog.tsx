@@ -214,7 +214,7 @@ export function CreateIssueDialog() {
             value={projectId}
             onChange={(event) => setProjectId(event.target.value)}
             aria-label="Проект"
-            className="h-7 rounded-md border border-border bg-surface px-2 text-sm hover:bg-surface-hover focus:border-accent focus:outline-none"
+            className="h-7 rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -226,7 +226,7 @@ export function CreateIssueDialog() {
           <TypePicker value={type} onChange={setType}>
             <button
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-sm hover:bg-surface-hover"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover hover:shadow-xs"
             >
               <IssueTypeIcon type={type} withTooltip={false} className="size-3.5" />
               {ISSUE_TYPE_META[type].label}
@@ -238,7 +238,7 @@ export function CreateIssueDialog() {
             <StatusPicker statuses={statuses} value={selectedStatus.id} onChange={setStatusId}>
               <button
                 type="button"
-                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-sm hover:bg-surface-hover"
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover hover:shadow-xs"
               >
                 <StatusDot status={selectedStatus} className="size-3" />
                 {selectedStatus.name}
@@ -262,7 +262,7 @@ export function CreateIssueDialog() {
           placeholder="Название задачи"
           inputSize="lg"
           aria-label="Название задачи"
-          className="font-medium"
+          className="font-bold"
           maxLength={300}
         />
 
@@ -276,11 +276,11 @@ export function CreateIssueDialog() {
         />
 
         {/* Secondary fields */}
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-1.5 border-t-2 border-border-strong pt-3">
           <PriorityPicker value={priority} onChange={setPriority}>
             <button
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-surface-hover"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs"
             >
               <PriorityIcon priority={priority} withTooltip={false} className="size-3.5" />
               {PRIORITY_META[priority].label}
@@ -290,7 +290,7 @@ export function CreateIssueDialog() {
           <UserPicker users={members} value={assigneeId} onChange={setAssigneeId}>
             <button
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-surface-hover"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs"
             >
               <Avatar user={members.find((m) => m.id === assigneeId) ?? null} size="sm" />
               {members.find((m) => m.id === assigneeId)?.name ?? 'Исполнитель'}
@@ -300,7 +300,7 @@ export function CreateIssueDialog() {
           <LabelPicker labels={project?.labels ?? []} value={labelIds} onChange={setLabelIds}>
             <button
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-xs hover:bg-surface-hover"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs"
             >
               {labelIds.length === 0 ? (
                 'Метки'
@@ -323,7 +323,7 @@ export function CreateIssueDialog() {
               value={sprintId ?? ''}
               onChange={(event) => setSprintId(event.target.value || null)}
               aria-label="Спринт"
-              className="h-7 rounded-md border border-border bg-surface px-2 text-xs hover:bg-surface-hover focus:border-accent focus:outline-none"
+              className="h-7 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
             >
               <option value="">Бэклог</option>
               {sprints
@@ -341,7 +341,7 @@ export function CreateIssueDialog() {
               value={epicId ?? ''}
               onChange={(event) => setEpicId(event.target.value || null)}
               aria-label="Эпик"
-              className="h-7 max-w-40 rounded-md border border-border bg-surface px-2 text-xs hover:bg-surface-hover focus:border-accent focus:outline-none"
+              className="h-7 max-w-40 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
             >
               <option value="">Без эпика</option>
               {epics.map((epic) => (
@@ -360,7 +360,7 @@ export function CreateIssueDialog() {
             onChange={(event) => setStoryPoints(event.target.value)}
             placeholder="СП"
             aria-label="Стори-поинты"
-            className="h-7 w-16 rounded-md border border-border bg-surface px-2 text-xs hover:bg-surface-hover focus:border-accent focus:outline-none"
+            className="h-7 w-16 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
           />
 
           <div className="w-36">

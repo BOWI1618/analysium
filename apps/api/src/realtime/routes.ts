@@ -9,10 +9,12 @@ import type { FastifyInstance } from 'fastify';
 import { RealtimeEventType, eventRecipient, type RealtimeEvent } from '@flowdesk/contracts';
 import { eventBus, emit } from './eventBus';
 import { presence } from './presence';
-import { workspaceContext } from '../lib/context';
+import { workspaceContext, visibleProjectIds } from '../lib/context';
 import { currentUser, requireAuth } from '../plugins/auth';
 
 const HEARTBEAT_MS = 25_000;
+/** How long a guest's visible-project list is cached on the connection. */
+const GUEST_PROJECTS_TTL_MS = 30_000;
 
 export async function realtimeRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { workspaceId: string } }>(
@@ -38,10 +40,26 @@ export async function realtimeRoutes(app: FastifyInstance): Promise<void> {
 
       write('ready', { workspaceId: actor.workspaceId, userId: user.id });
 
+      // Guests may only receive events for projects they belong to. The list
+      // is cached on the connection and refreshed periodically; until the
+      // first load completes no project-scoped event is sent.
+      const isGuest = actor.workspaceRole === 'GUEST';
+      let guestProjectIds = new Set<string>();
+      const refreshGuestProjects = async () => {
+        const allowed = await visibleProjectIds(actor);
+        guestProjectIds = new Set(allowed === 'ALL' ? [] : allowed);
+      };
+      if (isGuest) void refreshGuestProjects();
+      const guestRefresh = isGuest ? setInterval(() => void refreshGuestProjects(), GUEST_PROJECTS_TTL_MS) : null;
+
       const unsubscribe = eventBus.subscribe(actor.workspaceId, (event: RealtimeEvent) => {
         // Notifications are private: only their recipient may see them.
         const recipient = eventRecipient(event);
         if (recipient && recipient !== user.id) return;
+        // Project-scoped events (issue, comment, sprint, project) must not
+        // leak across projects to guests.
+        const projectId = 'projectId' in event.payload ? event.payload.projectId : null;
+        if (isGuest && projectId && !guestProjectIds.has(projectId)) return;
         write(event.type, event, event.id);
       });
 
@@ -59,8 +77,13 @@ export async function realtimeRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      let cleaned = false;
       const cleanup = () => {
+        // Both 'close' and 'error' can fire for one connection — run once.
+        if (cleaned) return;
+        cleaned = true;
         clearInterval(heartbeat);
+        if (guestRefresh) clearInterval(guestRefresh);
         unsubscribe();
         const wentOffline = presence.remove(actor.workspaceId, user.id);
         if (wentOffline) {
@@ -73,6 +96,9 @@ export async function realtimeRoutes(app: FastifyInstance): Promise<void> {
       };
 
       req.raw.on('close', cleanup);
+      // A dead socket (EPIPE) surfaces as an 'error' on the raw stream; without
+      // a listener it would become an uncaught exception.
+      reply.raw.on('error', cleanup);
       req.raw.on('error', cleanup);
 
       // Returning the reply object would end the response — keep it open.

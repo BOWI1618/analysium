@@ -24,7 +24,11 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   HOST: z.string().default('0.0.0.0'),
   DATABASE_URL: z.string().min(1),
-  SESSION_SECRET: z.string().min(24, 'SESSION_SECRET must be at least 24 characters'),
+  SESSION_SECRET: z
+    .string()
+    .min(24, 'SESSION_SECRET must be at least 24 characters')
+    // A placeholder passes the length check too — reject the obvious ones.
+    .refine((s) => !/^(replace-me|changeme|secret|password)/i.test(s), 'SESSION_SECRET looks like a placeholder'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   UPLOAD_DIR: z.string().default('./uploads'),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
@@ -38,6 +42,14 @@ const schema = z.object({
    * Test runs raise it via the environment.
    */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(30),
+  /**
+   * Which proxies to trust when deriving the client IP from X-Forwarded-For.
+   * Empty (default) trusts no proxy: the header is ignored and the socket
+   * address is used, so a client cannot spoof its IP past the rate limiter.
+   * A bare integer means that many proxy hops; anything else is a
+   * comma-separated list of trusted proxy IPs/CIDRs.
+   */
+  TRUST_PROXY: z.string().default(''),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 
@@ -54,5 +66,33 @@ export const env = load();
 export const isProd = env.NODE_ENV === 'production';
 export const isTest = env.NODE_ENV === 'test';
 
-/** Origins allowed to call the API with credentials. */
-export const allowedOrigins = env.WEB_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
+/** `trustProxy` option for Fastify, parsed from TRUST_PROXY. */
+export const trustProxy: boolean | number | string[] = (() => {
+  const raw = env.TRUST_PROXY.trim();
+  if (!raw) return false;
+  if (/^\d+$/.test(raw)) return Number.parseInt(raw, 10);
+  return raw.split(',').map((entry) => entry.trim()).filter(Boolean);
+})();
+
+/**
+ * Origins allowed to call the API with credentials.
+ *
+ * Outside production the loopback dev server is also trusted on whatever port
+ * it ended up on: Vite moves to 5174, 5175… when 5173 is already taken, and
+ * without this a developer whose 5173 is busy gets an opaque 403 on every
+ * write. Production trusts only what WEB_ORIGIN names.
+ */
+const configuredOrigins = env.WEB_ORIGIN.split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+export const allowedOrigins: (string | RegExp)[] = isProd
+  ? configuredOrigins
+  : [...configuredOrigins, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
+
+/** Whether a browser Origin header is allowed to make a credentialed call. */
+export function isAllowedOrigin(origin: string): boolean {
+  return allowedOrigins.some((allowed) =>
+    typeof allowed === 'string' ? allowed === origin : allowed.test(origin),
+  );
+}

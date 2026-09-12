@@ -6,12 +6,13 @@ import type {
   ProjectRole,
 } from '@flowdesk/contracts';
 import { AuditAction, Permission, RealtimeEventType, permissionsFor } from '@flowdesk/contracts';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { assertCan, projectContext, visibleProjectIds } from '../../lib/context';
 import { conflict, forbidden, notFound, badRequest } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { emit } from '../../realtime/eventBus';
-import { DEFAULT_LABELS, DEFAULT_STATUSES } from '../../domain/issueRules';
+import { DEFAULT_LABELS, DEFAULT_STATUSES, isDoneCategory, nextCompletedAt } from '../../domain/issueRules';
 import { labelSelect, statusSelect, toLabel, toSprint, toStatus, toUserSummary, sprintInclude } from '../../lib/serialize';
 
 const projectSelect = {
@@ -100,6 +101,7 @@ export async function createProject(
     select: { id: true },
   });
   if (existing) throw conflict('Такой ключ проекта уже занят', { key: 'Такой ключ уже занят' });
+  if (input.leadId) await assertLeadIsMember(actor.workspaceId, input.leadId);
 
   const project = await prisma.$transaction(async (tx) => {
     const created = await tx.project.create({
@@ -228,6 +230,7 @@ export async function updateProject(
   ip?: string,
 ): Promise<ProjectDetailDto> {
   assertCan(actor, Permission.PROJECT_UPDATE);
+  if (typeof patch.leadId === 'string') await assertLeadIsMember(actor.workspaceId, patch.leadId);
   await prisma.project.update({ where: { id: projectId }, data: patch as never });
   audit({
     workspaceId: actor.workspaceId,
@@ -296,7 +299,7 @@ export async function updateStatus(
   assertCan(actor, Permission.PROJECT_MANAGE_WORKFLOW);
   const existing = await prisma.workflowStatus.findFirst({
     where: { id: statusId, projectId },
-    select: { id: true },
+    select: { id: true, category: true },
   });
   if (!existing) throw notFound('Статус');
   const status = await prisma.workflowStatus.update({
@@ -304,6 +307,19 @@ export async function updateStatus(
     data: patch as never,
     select: statusSelect,
   });
+  // The category drives completedAt — resync the column's issues like issue
+  // moves do, so done timestamps never survive a category change.
+  if (patch.category !== undefined && patch.category !== existing.category) {
+    const category = patch.category as never;
+    if (isDoneCategory(category)) {
+      await prisma.issue.updateMany({
+        where: { statusId, completedAt: null },
+        data: { completedAt: nextCompletedAt(category, null) },
+      });
+    } else {
+      await prisma.issue.updateMany({ where: { statusId }, data: { completedAt: null } });
+    }
+  }
   auditWorkflow(actor, projectId, { updated: status.name, patch });
   return toStatus(status);
 }
@@ -323,7 +339,7 @@ export async function deleteStatus(
   const statuses = await prisma.workflowStatus.findMany({
     where: { projectId },
     orderBy: { position: 'asc' },
-    select: { id: true, name: true, isDefault: true },
+    select: { id: true, name: true, category: true, isDefault: true },
   });
   if (statuses.length <= 1) throw badRequest('В проекте должен остаться хотя бы один статус');
 
@@ -337,6 +353,16 @@ export async function deleteStatus(
 
   await prisma.$transaction(async (tx) => {
     await tx.issue.updateMany({ where: { statusId }, data: { statusId: fallback.id } });
+    // The replacement column's category re-derives completedAt for the moved
+    // issues — exactly what an issue move through the same column would do.
+    if (isDoneCategory(fallback.category as never)) {
+      await tx.issue.updateMany({
+        where: { statusId: fallback.id, completedAt: null },
+        data: { completedAt: nextCompletedAt(fallback.category as never, null) },
+      });
+    } else {
+      await tx.issue.updateMany({ where: { statusId: fallback.id }, data: { completedAt: null } });
+    }
     await tx.workflowStatus.delete({ where: { id: statusId } });
   });
 
@@ -412,6 +438,15 @@ export async function deleteLabel(actor: ActorContext, projectId: string, labelI
 
 /* -------------------------------------------------------- project members */
 
+/** The lead must be a workspace member — the same rule as addProjectMember. */
+async function assertLeadIsMember(workspaceId: string, leadId: string): Promise<void> {
+  const member = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId: leadId } },
+    select: { id: true },
+  });
+  if (!member) throw badRequest('Этот пользователь не состоит в пространстве');
+}
+
 export async function addProjectMember(
   actor: ActorContext,
   projectId: string,
@@ -440,16 +475,22 @@ export async function removeProjectMember(actor: ActorContext, projectId: string
 
 export async function toggleFavorite(userId: string, projectId: string): Promise<boolean> {
   const key = { userId, entityType: 'project', entityId: projectId };
-  const existing = await prisma.favorite.findUnique({
-    where: { userId_entityType_entityId: key },
-    select: { id: true },
-  });
-  if (existing) {
-    await prisma.favorite.delete({ where: { id: existing.id } });
-    return false;
+  // deleteMany-then-create makes the toggle idempotent under concurrency: two
+  // racing toggles collapse into one (either both delete, or one create wins
+  // and the loser's P2002 is resolved by deleting) — no 409, final state off.
+  const removed = await prisma.favorite.deleteMany({ where: key });
+  if (removed.count > 0) return false;
+  try {
+    await prisma.favorite.create({ data: key });
+    return true;
+  } catch (error) {
+    // A concurrent toggle inserted the row first — delete it instead.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      await prisma.favorite.deleteMany({ where: key });
+      return false;
+    }
+    throw error;
   }
-  await prisma.favorite.create({ data: key });
-  return true;
 }
 
 export { projectContext, forbidden };

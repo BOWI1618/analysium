@@ -97,7 +97,11 @@ test.describe('основной сценарий', () => {
       await editor.fill('Воспроизвёл на стенде, чиню.');
 
       await panel.getByRole('button', { name: 'Отправить' }).click();
-      await expect(panel.getByText('Воспроизвёл на стенде, чиню.')).toBeVisible({ timeout: 15_000 });
+      // Scoped to the posted list: for a moment after the click the same text
+      // also sits in the draft editor, which would make a panel-wide lookup
+      // ambiguous rather than merely slow.
+      const posted = panel.getByRole('list', { name: 'Комментарии' });
+      await expect(posted.getByText('Воспроизвёл на стенде, чиню.')).toBeVisible({ timeout: 15_000 });
     });
 
     await test.step('задача завершается и уходит в «Готово»', async () => {

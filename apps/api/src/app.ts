@@ -1,10 +1,11 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
-import { env, allowedOrigins, isTest } from './config/env';
-import { authPlugin } from './plugins/auth';
+import { env, allowedOrigins, isTest, trustProxy } from './config/env';
+import { authPlugin, SESSION_COOKIE } from './plugins/auth';
 import { registerErrorHandler } from './plugins/errorHandler';
 import { authRoutes } from './modules/auth/routes';
 import { workspaceRoutes } from './modules/workspaces/routes';
@@ -35,7 +36,9 @@ export async function buildApp(): Promise<FastifyInstance> {
               ? { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } }
               : undefined,
         },
-    trustProxy: true,
+    // The runtime accepts a hop count here, but Fastify's public type omits
+    // `number` — trustProxy may be boolean | number | string[] from env.
+    trustProxy: trustProxy as boolean | string | string[],
     bodyLimit: 2 * 1024 * 1024,
   });
 
@@ -53,8 +56,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     global: true,
     max: env.RATE_LIMIT_MAX,
     timeWindow: '1 minute',
-    // Authenticated users are limited per account, anonymous traffic per IP.
-    keyGenerator: (req) => req.currentUser?.id ?? req.ip,
+    // The limiter runs at onRequest, before the auth hook fills
+    // req.currentUser at preHandler — so the account key is derived from the
+    // raw session cookie header; cookieless traffic falls back to the IP.
+    keyGenerator: (req) => {
+      const match = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`).exec(req.headers.cookie ?? '');
+      const token = match?.[1];
+      if (token) return `acct:${createHash('sha256').update(token).digest('hex').slice(0, 8)}`;
+      return `ip:${req.ip}`;
+    },
     enableDraftSpec: true,
   });
 

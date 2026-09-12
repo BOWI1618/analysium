@@ -39,7 +39,7 @@ export function useBoard(projectId: string | undefined, filters: IssueFilters) {
 export function useIssueList(
   scope: { workspaceId?: string; projectId?: string },
   filters: IssueFilters,
-  options: { enabled?: boolean; limit?: number } = {},
+  options: { enabled?: boolean; limit?: number; refetchInterval?: number | false } = {},
 ) {
   const path = scope.projectId
     ? `/projects/${scope.projectId}/issues`
@@ -56,6 +56,7 @@ export function useIssueList(
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: (options.enabled ?? true) && Boolean(scopeKey),
     staleTime: 10_000,
+    refetchInterval: options.refetchInterval,
     placeholderData: (prev) => prev,
   });
 }
@@ -115,8 +116,9 @@ export function useCreateIssue() {
 }
 
 /**
- * Inline field edits. Applies an optimistic patch to the issue detail and to
- * every cached board/list entry, then reconciles with the server response.
+ * Inline field edits. Applies an optimistic patch to the cached issue detail,
+ * then reconciles with the server response; board and list views catch up
+ * through the invalidation in onSuccess.
  */
 export function useUpdateIssue(issueId: string) {
   const queryClient = useQueryClient();

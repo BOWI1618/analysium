@@ -4,7 +4,8 @@
  * Tests run against a real PostgreSQL database in its own schema, so the
  * queries, constraints and transactions under test are the ones that run in
  * production — an in-memory fake would not catch a broken foreign key or a
- * unique-index race. The schema is created once per run and dropped at the end.
+ * unique-index race. The test database is dropped and recreated at the start
+ * of every run, and the app's connection to it is closed at the end.
  */
 import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -63,10 +64,11 @@ export async function migrateTestSchema(): Promise<void> {
     await target.$disconnect();
   }
 
-  execSync('npx prisma db push --skip-generate', { stdio: 'pipe', env: { ...process.env } });
+  execSync('npx prisma db push --skip-generate', { stdio: 'inherit', env: { ...process.env } });
 }
 
-export async function dropTestSchema(): Promise<void> {
+/** Closes the app's Prisma connection so the test process can exit cleanly. */
+export async function disconnectTestDb(): Promise<void> {
   const { prisma } = await import('../src/lib/prisma');
   await prisma.$disconnect();
 }

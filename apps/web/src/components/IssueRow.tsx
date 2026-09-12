@@ -87,8 +87,8 @@ export const IssueRow = memo(function IssueRow({
         }
       }}
       className={clsx(
-        'group flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 transition-colors',
-        selected ? 'bg-accent-subtle' : 'hover:bg-surface-hover',
+        'group flex cursor-pointer items-center gap-2 border-b-2 border-border-strong px-3 py-2 transition-colors',
+        selected ? 'bg-marker-subtle' : 'hover:bg-surface-hover',
         focused && 'ring-1 ring-accent ring-inset',
       )}
     >
@@ -113,7 +113,7 @@ export const IssueRow = memo(function IssueRow({
         {issue.issueKey}
       </span>
 
-      <span className="min-w-40 flex-1 truncate text-sm font-medium text-text group-hover:text-accent">
+      <span className="min-w-40 flex-1 truncate text-sm font-bold text-text group-hover:text-accent">
         {issue.title}
         {issue.subtaskCount > 0 && (
           <span className="fd-num ml-2 text-2xs font-normal text-text-subtle">
@@ -167,7 +167,7 @@ export const IssueRow = memo(function IssueRow({
               align="end"
               onChange={(statusId) => onPatch({ statusId })}
             >
-              <button type="button" className="rounded-full hover:opacity-80">
+              <button type="button" className="hover:opacity-80">
                 <StatusPill status={issue.status} size="sm" />
               </button>
             </StatusPicker>
@@ -206,7 +206,7 @@ export const IssueRow = memo(function IssueRow({
               align="end"
               onChange={(assigneeId) => onPatch({ assigneeId })}
             >
-              <button type="button" className="inline-flex rounded-full hover:opacity-80">
+              <button type="button" className="inline-flex hover:opacity-80">
                 <Avatar user={issue.assignee} size="md" />
               </button>
             </UserPicker>
@@ -226,7 +226,7 @@ export function IssueRowHeader({ columns }: { columns: ListColumn[] }) {
   return (
     <div
       role="row"
-      className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface-sunken px-3 py-1.5 text-2xs font-semibold tracking-wide text-text-subtle uppercase"
+      className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-border-strong bg-surface-sunken px-3 py-1.5 text-2xs font-bold tracking-wide text-text-subtle uppercase"
     >
       <span className="size-3.5 shrink-0" />
       <span className="size-3.5 shrink-0" />

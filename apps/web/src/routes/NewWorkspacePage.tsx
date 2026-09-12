@@ -39,24 +39,26 @@ export function NewWorkspacePage() {
         }}
       >
         <header>
-          <h1 className="text-xl font-semibold tracking-tight">
+          <h1 className="fd-display text-[clamp(1.5rem,2.6vw,2.125rem)]">
             {workspaces.length === 0 ? 'Создайте пространство' : 'Новое пространство'}
           </h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-3 border-t-2 border-border-strong pt-3 font-mono text-2xs leading-relaxed text-text-muted">
             В пространстве живут ваша команда, её проекты и всё, что она ведёт.
           </p>
         </header>
 
-        <Input
-          label="Название пространства"
-          autoFocus
-          required
-          inputSize="lg"
-          value={name}
-          error={fieldErrors.name ?? fieldErrors.slug}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Acme"
-        />
+        <div className="border-2 border-border-strong bg-surface p-4 shadow-lg">
+          <Input
+            label="Название пространства"
+            autoFocus
+            required
+            inputSize="lg"
+            value={name}
+            error={fieldErrors.name ?? fieldErrors.slug}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Acme"
+          />
+        </div>
 
         <div className="flex gap-2">
           {workspaces.length > 0 && (

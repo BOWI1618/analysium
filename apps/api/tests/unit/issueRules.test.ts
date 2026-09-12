@@ -9,6 +9,7 @@ import {
   isDoneCategory,
   nextCompletedAt,
   validateHierarchy,
+  wouldCreateParentCycle,
 } from '../../src/domain/issueRules';
 
 describe('completedAt derivation', () => {
@@ -83,6 +84,37 @@ describe('hierarchy rules', () => {
   it('rejects self-references', () => {
     expect(validateHierarchy({ issueId: 'i1', type: IssueType.TASK, parentId: 'i1' })).toBe('SELF_REFERENCE');
     expect(validateHierarchy({ issueId: 'i1', type: IssueType.TASK, epicId: 'i1' })).toBe('SELF_REFERENCE');
+  });
+});
+
+describe('parent cycle detection', () => {
+  const chainOf = (pairs: Record<string, string>) => {
+    const parentOf = new Map(Object.entries(pairs));
+    return async (id: string) => parentOf.get(id) ?? null;
+  };
+
+  it('rejects closing a two-issue cycle (A→B, then B→A)', async () => {
+    // B is already a child of A; making B the parent of A would close the loop.
+    expect(await wouldCreateParentCycle('a', 'b', chainOf({ b: 'a' }))).toBe(true);
+  });
+
+  it('rejects a cycle through a longer ancestor chain', async () => {
+    // c → b → a: making c the parent of a would close the loop.
+    expect(await wouldCreateParentCycle('a', 'c', chainOf({ c: 'b', b: 'a' }))).toBe(true);
+  });
+
+  it('allows reparenting onto an unrelated branch', async () => {
+    expect(await wouldCreateParentCycle('a', 'd', chainOf({ d: 'e', e: 'f' }))).toBe(false);
+  });
+
+  it('treats a missing parent as the end of the chain', async () => {
+    expect(await wouldCreateParentCycle('a', 'b', chainOf({}))).toBe(false);
+  });
+
+  it('terminates on a pre-existing cycle via the depth limit', async () => {
+    // Corrupt data: b and c point at each other and neither leads to a.
+    const cyclic = async (id: string) => (id === 'b' ? 'c' : 'b');
+    expect(await wouldCreateParentCycle('a', 'b', cyclic)).toBe(false);
   });
 });
 

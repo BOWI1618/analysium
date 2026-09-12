@@ -53,13 +53,19 @@ export function Menu({ children, open: controlledOpen, onOpenChange }: MenuProps
   return <MenuContext.Provider value={value}>{children}</MenuContext.Provider>;
 }
 
-export function MenuTrigger({ children, asChild }: { children: ReactNode; asChild?: boolean }) {
+/**
+ * The trigger keeps a box of its own even when it only wraps a single child:
+ * the menu is positioned from this element's rect, and `display: contents`
+ * would measure as zero. Callers that need the child to fill the row stretch
+ * it from the container instead.
+ */
+export function MenuTrigger({ children }: { children: ReactNode }) {
   const { open, setOpen, triggerRef, menuId } = useMenu();
 
   return (
     <span
       ref={triggerRef as React.RefObject<HTMLSpanElement>}
-      className={clsx('inline-flex', asChild && 'contents')}
+      className="inline-flex"
       onClick={(event) => {
         event.stopPropagation();
         setOpen(!open);
@@ -191,7 +197,7 @@ export function MenuContent({
       role="menu"
       aria-label={label}
       className={clsx(
-        'fixed z-[var(--z-menu)] min-w-40 overflow-hidden rounded-lg border border-border bg-surface-raised p-1 shadow-lg',
+        'fixed z-[var(--z-menu)] min-w-40 overflow-hidden rounded-md border-2 border-border-strong bg-surface p-1 shadow-lg',
         'animate-scale-in origin-top scrollbar-thin max-h-[min(28rem,80vh)] overflow-y-auto',
         className,
       )}
@@ -246,23 +252,24 @@ export function MenuItem({
         if (!keepOpen) setOpen(false);
       }}
       className={clsx(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+        'flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm font-medium',
         'transition-colors duration-75 outline-none',
-        'hover:bg-surface-hover focus:bg-surface-hover',
+        'hover:bg-surface-active focus:bg-surface-active',
         disabled && 'cursor-not-allowed opacity-40',
         danger && 'text-danger hover:bg-danger-subtle focus:bg-danger-subtle',
+        selected && 'bg-marker font-bold text-ink',
       )}
     >
       {icon && <span className="flex size-4 shrink-0 items-center justify-center text-text-subtle">{icon}</span>}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {selected && <Check className="size-3.5 shrink-0 text-accent" />}
+      {selected && <Check className="size-3.5 shrink-0" />}
       {shortcut && <span className="shrink-0 text-text-subtle">{shortcut}</span>}
     </button>
   );
 }
 
 export function MenuSeparator() {
-  return <div role="separator" className="my-1 h-px bg-border" />;
+  return <div role="separator" className="my-1 h-0.5 bg-border-strong" />;
 }
 
 export function MenuLabel({ children }: { children: ReactNode }) {

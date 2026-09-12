@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { X } from 'lucide-react';
-import { IconButton } from './Button';
+import { Button, IconButton } from './Button';
 
 export interface DialogProps {
   open: boolean;
@@ -105,25 +105,25 @@ export function Dialog({
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : undefined}
         className={clsx(
-          'relative z-10 my-auto w-full rounded-xl border border-border bg-surface-raised shadow-lg',
+          'relative z-10 my-auto w-full rounded-lg border-2 border-border-strong bg-surface shadow-xl',
           'animate-slide-up',
           SIZES[size],
         )}
       >
         {title && (
-          <header className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
+          <header className="flex items-start justify-between gap-4 border-b-2 border-border-strong bg-surface-raised px-4 py-3">
             <div className="min-w-0">
               <h2 className="text-md font-semibold text-text">{title}</h2>
               {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
             </div>
-            <IconButton label="Закрыть" size="sm" onClick={onClose}>
+            <IconButton label="Закрыть" size="sm" variant="secondary" onClick={onClose}>
               <X className="size-4" />
             </IconButton>
           </header>
         )}
         <div className="px-4 py-4">{children}</div>
         {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+          <footer className="flex items-center justify-end gap-2 border-t-2 border-border-strong bg-surface-raised px-4 py-3">
             {footer}
           </footer>
         )}
@@ -163,25 +163,19 @@ export function ConfirmDialog({
       closeOnOverlay={!loading}
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-surface-hover"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onClose}>
             Отмена
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             data-autofocus="true"
+            variant={danger ? 'danger' : 'primary'}
+            size="sm"
+            loading={loading}
             onClick={onConfirm}
-            disabled={loading}
-            className={clsx(
-              'inline-flex h-8 items-center rounded-md px-3 text-sm font-medium text-white disabled:opacity-50',
-              danger ? 'bg-danger hover:opacity-90' : 'bg-accent hover:bg-accent-hover',
-            )}
           >
             {loading ? 'Выполняем…' : confirmLabel}
-          </button>
+          </Button>
         </>
       }
     >

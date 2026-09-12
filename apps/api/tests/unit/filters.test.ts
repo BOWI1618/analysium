@@ -52,6 +52,18 @@ describe('facet filters', () => {
     });
   });
 
+  it('supports an explicit no-reporter bucket alongside real users', () => {
+    const where = buildIssueWhere({ reporterId: ['u1', 'none'] }, scope, opts);
+    expect(clauses(where)).toContainEqual({
+      OR: [{ reporterId: { in: ['u1'] } }, { reporterId: null }],
+    });
+  });
+
+  it('filters to issues without a reporter when only none is selected', () => {
+    const where = buildIssueWhere({ reporterId: ['none'] }, scope, opts);
+    expect(clauses(where)).toContainEqual({ OR: [{ reporterId: null }] });
+  });
+
   it('requires every selected label (AND, not OR)', () => {
     const flat = clauses(buildIssueWhere({ labelId: ['l1', 'l2'] }, scope, opts));
     expect(flat).toContainEqual({ labels: { some: { labelId: 'l1' } } });
@@ -63,9 +75,9 @@ describe('facet filters', () => {
     expect(clauses(where)).toContainEqual({ priority: { in: ['URGENT'] } });
   });
 
-  it('ignores an enum filter whose values are all invalid', () => {
+  it('narrows an enum filter whose values are all invalid to nothing', () => {
     const where = buildIssueWhere({ type: ['nope'] }, scope, opts);
-    expect(clauses(where).some((c) => 'type' in c)).toBe(false);
+    expect(clauses(where)).toContainEqual({ id: { in: [] } });
   });
 
   it('searches title, description text and key together', () => {

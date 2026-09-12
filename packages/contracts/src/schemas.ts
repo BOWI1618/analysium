@@ -80,7 +80,13 @@ export type LoginInput = z.infer<typeof loginSchema>;
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
-  avatarUrl: z.string().url().max(500).nullable().optional(),
+  avatarUrl: z
+    .string()
+    .url()
+    .regex(/^https?:\/\//, 'Только http(s) URL')
+    .max(500)
+    .nullable()
+    .optional(),
   timezone: z.string().max(60).optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
@@ -309,7 +315,7 @@ export const updateCommentSchema = createCommentSchema;
 /* ----------------------------------------------------------------- gantt */
 
 export const ganttQuerySchema = z.object({
-  /** Optional window; the server clamps it so one request cannot scan a decade. */
+  /** Optional window: scheduled issues are clipped to those overlapping [from, to]; unscheduled ones are always returned for planning. */
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   includeDone: z.coerce.boolean().default(true),
@@ -352,7 +358,13 @@ export const createSprintSchema = z.object({
 });
 export type CreateSprintInput = z.infer<typeof createSprintSchema>;
 
-export const updateSprintSchema = createSprintSchema.partial();
+export const updateSprintSchema = createSprintSchema
+  .partial()
+  .refine(
+    (v) =>
+      !v.startDate || !v.endDate || new Date(v.startDate).getTime() <= new Date(v.endDate).getTime(),
+    { message: 'Дата начала должна быть не позже даты окончания', path: ['startDate'] },
+  );
 
 export const completeSprintSchema = z.object({
   /** Where unfinished issues go: back to backlog or into another sprint. */

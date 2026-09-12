@@ -241,7 +241,7 @@ describe('suggestDependentShifts', () => {
     expect(suggestDependentShifts(bars, [edge('a', 'b')], 'a')).toEqual([]);
   });
 
-  it('cascades down a chain', () => {
+  it('cascades down a chain, measuring each link against the shifted dates', () => {
     const bars = rollUpSchedule([
       node({ id: 'a', startDate: d('2026-03-01'), dueDate: d('2026-03-10') }),
       node({ id: 'b', startDate: d('2026-03-02'), dueDate: d('2026-03-04') }),
@@ -249,6 +249,10 @@ describe('suggestDependentShifts', () => {
     ]);
     const shifts = suggestDependentShifts(bars, [edge('a', 'b'), edge('b', 'c')], 'a');
     expect(shifts.map((s) => s.issueId)).toEqual(['b', 'c']);
+    // b moves off a's new finish; c must be measured against b's shifted
+    // finish, so the b→c constraint still holds once the shifts are applied.
+    expect(shifts[0]).toMatchObject({ issueId: 'b', days: 8, toStart: d('2026-03-10') });
+    expect(shifts[1]).toMatchObject({ issueId: 'c', days: 9, toStart: d('2026-03-12') });
   });
 
   it('does not revisit a node twice in a diamond', () => {

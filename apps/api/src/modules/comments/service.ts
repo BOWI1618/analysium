@@ -14,6 +14,7 @@ import {
 import { prisma } from '../../lib/prisma';
 import { assertCan } from '../../lib/context';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
 import { commentSelect, toComment } from '../../lib/serialize';
 import { filterWorkspaceMembers, issueWatchers, notify } from '../notifications/service';
@@ -64,35 +65,41 @@ export async function createComment(
     payload: { issueId: issue.id, commentId: comment.id, projectId: issue.projectId },
   });
 
-  const [watchers, mentioned] = await Promise.all([
-    issueWatchers(issue.id),
-    filterWorkspaceMembers(actor.workspaceId, collectMentions(doc)),
-  ]);
+  try {
+    const [watchers, mentioned] = await Promise.all([
+      issueWatchers(issue.id),
+      filterWorkspaceMembers(actor.workspaceId, collectMentions(doc)),
+    ]);
 
-  const mentionedSet = new Set(mentioned);
-  await Promise.all([
-    notify({
-      userIds: mentioned,
-      workspaceId: actor.workspaceId,
-      actorId: actor.userId,
-      type: NotificationType.ISSUE_MENTIONED,
-      title: `You were mentioned in ${issue.issueKey}`,
-      body: docToText(doc).slice(0, 160),
-      issueId: issue.id,
-      commentId: comment.id,
-    }),
-    // A mention already notified them — don't send a second "commented" ping.
-    notify({
-      userIds: watchers.filter((id) => !mentionedSet.has(id)),
-      workspaceId: actor.workspaceId,
-      actorId: actor.userId,
-      type: NotificationType.ISSUE_COMMENTED,
-      title: `New comment on ${issue.issueKey}`,
-      body: docToText(doc).slice(0, 160),
-      issueId: issue.id,
-      commentId: comment.id,
-    }),
-  ]);
+    const mentionedSet = new Set(mentioned);
+    await Promise.all([
+      notify({
+        userIds: mentioned,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        type: NotificationType.ISSUE_MENTIONED,
+        title: `Вас упомянули в ${issue.issueKey}`,
+        body: docToText(doc).slice(0, 160),
+        issueId: issue.id,
+        commentId: comment.id,
+      }),
+      // A mention already notified them — don't send a second "commented" ping.
+      notify({
+        userIds: watchers.filter((id) => !mentionedSet.has(id)),
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        type: NotificationType.ISSUE_COMMENTED,
+        title: `Новый комментарий в ${issue.issueKey}`,
+        body: docToText(doc).slice(0, 160),
+        issueId: issue.id,
+        commentId: comment.id,
+      }),
+    ]);
+  } catch (error) {
+    // A failed notification must not fail the comment — the client would retry
+    // and duplicate it.
+    log.warn(error, 'comment notification fan-out failed');
+  }
 
   return toComment(comment, { canEdit: true, canDelete: true });
 }

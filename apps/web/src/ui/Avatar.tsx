@@ -28,7 +28,7 @@ export function Avatar({ user, size = 'md', className, showEmpty = true, title }
     return (
       <span
         className={clsx(
-          'inline-flex items-center justify-center rounded-full border border-dashed border-border-strong text-text-subtle',
+          'inline-flex items-center justify-center border-2 border-dashed border-border-strong text-text-subtle',
           SIZES[size],
           className,
         )}
@@ -48,7 +48,7 @@ export function Avatar({ user, size = 'md', className, showEmpty = true, title }
   return (
     <span
       className={clsx(
-        'inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white select-none overflow-hidden',
+        'inline-flex shrink-0 items-center justify-center font-display font-extrabold text-white select-none overflow-hidden border-2 border-border-strong',
         SIZES[size],
         className,
       )}
@@ -100,7 +100,7 @@ export function AvatarGroup({ users, max = 4, size = 'md' }: AvatarGroupProps) {
       {overflow > 0 && (
         <span
           className={clsx(
-            'inline-flex items-center justify-center rounded-full bg-surface-active font-semibold text-text-muted ring-2 ring-[var(--surface)]',
+            'inline-flex items-center justify-center border-2 border-border-strong bg-surface-active font-semibold text-text-muted ring-2 ring-[var(--surface)]',
             SIZES[size],
           )}
           title={real

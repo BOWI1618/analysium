@@ -1,9 +1,10 @@
+import { randomBytes } from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
  * E2E runs against the real stack — the Vite dev server talking to the Fastify
  * API talking to PostgreSQL. Start both with `npm run dev` before running, or
- * let Playwright start the web server itself.
+ * let Playwright start the dev and API servers itself.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -34,13 +35,27 @@ export default defineConfig({
   ],
   webServer: process.env.E2E_NO_SERVER
     ? undefined
-    : {
-        command: 'npm run dev',
-        url: 'http://localhost:5173',
-        reuseExistingServer: true,
-        timeout: 120_000,
-        // The suite registers several accounts per run, which would otherwise
-        // trip the credential rate limit part-way through.
-        env: { ...process.env, AUTH_RATE_LIMIT_MAX: '500' },
-      },
+    : [
+        {
+          command: 'npm run dev:web',
+          url: 'http://localhost:5173',
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+        {
+          command: 'npm run dev:api',
+          url: 'http://localhost:4000/health',
+          reuseExistingServer: true,
+          timeout: 120_000,
+          // The suite registers several accounts per run, which would otherwise
+          // trip the credential rate limit part-way through. A local dev
+          // .env may legitimately lack SESSION_SECRET (it is validated at boot),
+          // so e2e generates a throwaway one unless the environment provides it.
+          env: {
+            ...process.env,
+            AUTH_RATE_LIMIT_MAX: '500',
+            SESSION_SECRET: process.env.SESSION_SECRET ?? randomBytes(32).toString('hex'),
+          },
+        },
+      ],
 });

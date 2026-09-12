@@ -9,7 +9,7 @@ import { Button } from './Button';
 export function Skeleton({ className, style }: { className?: string; style?: CSSProperties }) {
   return (
     <div
-      className={clsx('animate-shimmer rounded-md bg-surface-active', className)}
+      className={clsx('animate-shimmer bg-surface-active', className)}
       style={style}
       aria-hidden="true"
     />
@@ -28,12 +28,12 @@ export function SkeletonText({ lines = 3, className }: { lines?: number; classNa
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-lg border border-border bg-surface p-3">
+    <div className="border-2 border-border-strong bg-surface p-3 shadow-sm">
       <Skeleton className="h-3 w-16" />
       <Skeleton className="mt-2 h-3.5 w-full" />
       <Skeleton className="mt-1.5 h-3.5 w-3/5" />
       <div className="mt-3 flex items-center gap-2">
-        <Skeleton className="size-5 rounded-full" />
+        <Skeleton className="size-5" />
         <Skeleton className="h-3 w-12" />
       </div>
     </div>
@@ -42,13 +42,13 @@ export function SkeletonCard() {
 
 export function SkeletonRows({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="divide-y divide-border" aria-hidden="true">
+    <div className="divide-y-2 divide-border-strong" aria-hidden="true">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-          <Skeleton className="size-3.5 rounded-xs" />
+          <Skeleton className="size-3.5" />
           <Skeleton className="h-3 w-14" />
           <Skeleton className="h-3 flex-1" style={{ maxWidth: `${40 + ((i * 13) % 40)}%` }} />
-          <Skeleton className="ml-auto size-5 rounded-full" />
+          <Skeleton className="ml-auto size-5" />
         </div>
       ))}
     </div>
@@ -77,7 +77,7 @@ export function EmptyState({ icon, title, description, action, className, compac
     >
       <div
         className={clsx(
-          'flex items-center justify-center rounded-xl bg-surface-active text-text-subtle',
+          'flex items-center justify-center border-2 border-border-strong bg-surface-active text-text-subtle',
           compact ? 'size-8' : 'size-12',
         )}
       >
@@ -192,13 +192,13 @@ export function ProgressBar({
       // utilities on one element, so the caller owns the width and the default
       // below only applies when none was given.
       className={clsx(
-        'h-1.5 overflow-hidden rounded-full bg-surface-active',
+        'h-2 overflow-hidden border-2 border-border-strong bg-surface-sunken',
         /\bw-/.test(className ?? '') ? undefined : 'w-full',
         className,
       )}
     >
       <div
-        className={clsx('h-full rounded-full transition-[width] duration-300', colors[tone])}
+        className={clsx('h-full transition-[width] duration-300', colors[tone])}
         style={{ width: `${percent}%` }}
       />
     </div>

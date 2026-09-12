@@ -2,10 +2,10 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Texta
 import clsx from 'clsx';
 
 const FIELD_BASE =
-  'w-full bg-surface text-text placeholder:text-text-subtle border border-border rounded-md ' +
-  'transition-colors duration-100 hover:border-border-strong ' +
-  'focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ' +
-  'disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-surface-sunken';
+  'w-full bg-surface text-text placeholder:text-text-subtle border-2 border-border-strong rounded-md ' +
+  'transition-[color,background-color,border-color,box-shadow,transform] duration-100 hover:shadow-xs ' +
+  'focus:outline-none focus:border-accent focus:shadow-sm focus:-translate-x-px focus:-translate-y-px ' +
+  'disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:shadow-none';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -33,7 +33,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={inputId} className="mb-1 block text-xs font-medium text-text-muted">
+        <label htmlFor={inputId} className="mb-1 block text-xs font-bold text-text">
           {label}
         </label>
       )}
@@ -53,7 +53,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             SIZES[inputSize],
             iconLeft && 'pl-8',
             iconRight && 'pr-8',
-            error && 'border-danger focus:border-danger focus:ring-danger/20',
+            error && 'border-danger focus:border-danger focus:shadow-sm',
             className,
           )}
           {...rest}
@@ -63,7 +63,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         )}
       </div>
       {error ? (
-        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-danger">
+        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-danger font-medium">
           {error}
         </p>
       ) : hint ? (
@@ -91,7 +91,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={fieldId} className="mb-1 block text-xs font-medium text-text-muted">
+        <label htmlFor={fieldId} className="mb-1 block text-xs font-bold text-text">
           {label}
         </label>
       )}
@@ -103,7 +103,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         {...rest}
       />
       {error ? (
-        <p role="alert" className="mt-1 text-xs text-danger">
+        <p role="alert" className="mt-1 text-xs text-danger font-medium">
           {error}
         </p>
       ) : hint ? (
@@ -130,7 +130,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={fieldId} className="mb-1 block text-xs font-medium text-text-muted">
+        <label htmlFor={fieldId} className="mb-1 block text-xs font-bold text-text">
           {label}
         </label>
       )}
@@ -149,7 +149,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         {children}
       </select>
       {error && (
-        <p role="alert" className="mt-1 text-xs text-danger">
+        <p role="alert" className="mt-1 text-xs text-danger font-medium">
           {error}
         </p>
       )}
@@ -175,14 +175,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         id={fieldId}
         type="checkbox"
         className={clsx(
-          'size-3.5 rounded-xs border border-border-strong bg-surface cursor-pointer',
-          'accent-[var(--accent)] transition-colors',
+          'size-4 rounded-xs border-2 border-border-strong bg-surface cursor-pointer accent-[var(--accent)] transition-colors',
           className,
         )}
         {...rest}
       />
       {label && (
-        <label htmlFor={fieldId} className="cursor-pointer text-sm select-none">
+        <label htmlFor={fieldId} className="cursor-pointer text-sm font-medium select-none">
           {label}
         </label>
       )}

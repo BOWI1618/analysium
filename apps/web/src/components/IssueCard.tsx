@@ -45,29 +45,30 @@ export const IssueCard = memo(function IssueCard({
       role="button"
       aria-label={`${issue.issueKey}: ${issue.title}`}
       className={clsx(
-        'group cursor-pointer rounded-lg border bg-surface p-2.5 text-left transition-colors',
-        'hover:border-border-strong hover:bg-surface-hover',
-        isSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border',
-        isDragging && 'opacity-40',
+        'group cursor-grab border-2 bg-surface p-3 text-left shadow-sm',
+        'transition-[background-color,border-color,box-shadow,translate] duration-100',
+        'hover:-translate-x-px hover:-translate-y-px hover:shadow-md active:translate-x-px active:translate-y-px active:shadow-none',
+        isSelected ? 'border-accent shadow-md' : 'border-border-strong',
+        isDragging && 'opacity-40 shadow-drag',
         className,
       )}
     >
-      {/* Header: key + priority */}
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <IssueTypeIcon type={issue.type} className="size-3.5" />
-        <span className="fd-key">{issue.issueKey}</span>
+      {/* Header: the key leads, because a column is read as an index */}
+      <div className="flex items-center gap-1.5">
+        <span className="fd-key font-bold text-text">{issue.issueKey}</span>
         {showProject && (
           <span className="truncate text-2xs text-text-subtle" title={issue.project.name}>
             · {issue.project.name}
           </span>
         )}
-        <span className="ml-auto flex items-center gap-1">
+        <span className="ml-auto flex items-center gap-1.5">
           {issue.priority !== 'NONE' && <PriorityIcon priority={issue.priority} className="size-3.5" />}
+          <IssueTypeIcon type={issue.type} className="size-3.5" />
         </span>
       </div>
 
       {/* Title */}
-      <h3 className="line-clamp-3 text-sm leading-snug font-medium text-text group-hover:text-accent">
+      <h3 className="mt-1.5 line-clamp-3 text-sm leading-snug font-semibold text-text group-hover:text-accent">
         {issue.title}
       </h3>
 
@@ -85,7 +86,7 @@ export const IssueCard = memo(function IssueCard({
       )}
 
       {/* Footer */}
-      <div className="mt-2.5 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2">
         {issue.dueDate && <DueDateChip value={issue.dueDate} />}
 
         {hasFooterMeta && (

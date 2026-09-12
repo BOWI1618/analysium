@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { changePasswordSchema, updateProfileSchema } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
 import { prisma } from '../../lib/prisma';
-import { workspaceContext } from '../../lib/context';
+import { workspaceContext, visibleProjectIds } from '../../lib/context';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { badRequest, notFound } from '../../lib/errors';
@@ -66,7 +66,12 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!member) throw notFound('Пользователь');
 
-      const scope = { project: { workspaceId: actor.workspaceId }, archivedAt: null };
+      const allowed = await visibleProjectIds(actor);
+      const scope = {
+        project: { workspaceId: actor.workspaceId },
+        archivedAt: null,
+        ...(allowed === 'ALL' ? {} : { projectId: { in: allowed } }),
+      };
       const [assigned, created, completedCount, recentActivity] = await Promise.all([
         prisma.issue.findMany({
           where: { ...scope, assigneeId: req.params.userId, status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
@@ -82,7 +87,15 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         }),
         prisma.issue.count({ where: { ...scope, assigneeId: req.params.userId, completedAt: { not: null } } }),
         prisma.activityEvent.findMany({
-          where: { actorId: req.params.userId, issue: { project: { workspaceId: actor.workspaceId } } },
+          where: {
+            actorId: req.params.userId,
+            issue: {
+              project: {
+                workspaceId: actor.workspaceId,
+                ...(allowed === 'ALL' ? {} : { id: { in: allowed } }),
+              },
+            },
+          },
           orderBy: { createdAt: 'desc' },
           take: 25,
           select: {

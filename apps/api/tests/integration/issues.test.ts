@@ -4,7 +4,7 @@ import {
   addMember,
   createIssue,
   createProject,
-  dropTestSchema,
+  disconnectTestDb,
   login,
   migrateTestSchema,
   registerUser,
@@ -25,7 +25,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
-  await dropTestSchema();
+  await disconnectTestDb();
 });
 
 const statusNamed = (name: string) => project.statuses.find((s) => s.name === name)!;

@@ -4,6 +4,7 @@ import { useIssueByKey } from '~/features/issues/hooks';
 import { IssueDetail } from '~/features/issues/IssueDetail';
 import { Topbar } from '~/components/Topbar';
 import { ErrorState, SkeletonText } from '~/ui/Feedback';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 
 /** Standalone issue route, so an issue link opens correctly from anywhere. */
 export function IssuePage() {
@@ -21,7 +22,7 @@ export function IssuePage() {
                 {
                   label: issue.project.name,
                   to: `/projects/${issue.projectId}`,
-                  icon: <span aria-hidden="true">{issue.project.icon}</span>,
+                  icon: <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />,
                 },
                 { label: issue.issueKey },
               ]
@@ -29,7 +30,7 @@ export function IssuePage() {
         ]}
       />
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden bg-bg">
         {isLoading ? (
           <div className="mx-auto max-w-4xl space-y-4 p-6">
             <SkeletonText lines={2} />

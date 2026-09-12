@@ -300,7 +300,7 @@ export interface DashboardDto {
   byAssignee: { user: UserSummaryDto | null; count: number; completed: number }[];
   byType: { type: IssueType; count: number }[];
   activity: { date: string; created: number; completed: number }[];
-  sprint: (SprintDto & { burndown: { date: string; remaining: number; ideal: number }[] }) | null;
+  sprint: (SprintDto & { burndown: { date: string; remaining: number | null; ideal: number }[] }) | null;
   velocity: { sprintId: string; name: string; committed: number; completed: number }[];
 }
 

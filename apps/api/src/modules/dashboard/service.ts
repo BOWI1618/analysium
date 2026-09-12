@@ -141,7 +141,7 @@ export async function projectDashboard(
       return {
         sprintId: s.id,
         name: s.name,
-        committed: s.committedPoints || dto.totalPoints,
+        committed: s.committedPoints ?? dto.totalPoints,
         completed: dto.completedPoints,
       };
     }),
@@ -153,7 +153,7 @@ export async function projectDashboard(
  * straight line. Derived from `completedAt`, so it stays correct even if an
  * issue is completed and then reopened.
  */
-async function burndown(sprintId: string): Promise<{ date: string; remaining: number; ideal: number }[]> {
+async function burndown(sprintId: string): Promise<{ date: string; remaining: number | null; ideal: number }[]> {
   const sprint = await prisma.sprint.findUnique({
     where: { id: sprintId },
     select: {
@@ -169,11 +169,12 @@ async function burndown(sprintId: string): Promise<{ date: string; remaining: nu
   const totalPoints = sprint.issues.reduce((sum, i) => sum + (i.storyPoints ?? 1), 0);
   const dayCount = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / DAY_MS));
 
-  const points: { date: string; remaining: number; ideal: number }[] = [];
+  const points: { date: string; remaining: number | null; ideal: number }[] = [];
   for (let i = 0; i <= dayCount; i += 1) {
     const day = new Date(start.getTime() + i * DAY_MS);
     if (day.getTime() > Date.now() + DAY_MS) {
-      points.push({ date: dayKey(day), remaining: Number.NaN, ideal: totalPoints * (1 - i / dayCount) });
+      // Future days have no observable value — the contract carries null.
+      points.push({ date: dayKey(day), remaining: null, ideal: totalPoints * (1 - i / dayCount) });
       continue;
     }
     const burned = sprint.issues

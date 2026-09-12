@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { dropTestSchema, login, migrateTestSchema, registerUser } from '../setup';
+import { disconnectTestDb, login, migrateTestSchema, registerUser } from '../setup';
 
 let app: FastifyInstance;
 
@@ -12,7 +12,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
-  await dropTestSchema();
+  await disconnectTestDb();
 });
 
 describe('POST /auth/register', () => {

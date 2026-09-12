@@ -39,11 +39,11 @@ export function NotificationBell() {
           type="button"
           onClick={toggle}
           aria-label={unread > 0 ? `Уведомления, ${unread} непрочитанных` : 'Уведомления'}
-          className="relative inline-flex size-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-hover hover:text-text"
+          className="relative inline-flex size-8 items-center justify-center border-2 border-transparent text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text hover:shadow-xs"
         >
           <Bell className="size-4" />
           {unread > 0 && (
-            <span className="absolute top-1 right-1 flex size-2 rounded-full bg-accent ring-2 ring-[var(--surface)]" />
+            <span className="absolute top-1 right-1 flex size-2 bg-accent ring-2 ring-[var(--surface)]" />
           )}
         </button>
       )}
@@ -83,8 +83,8 @@ export function NotificationList({
 
   return (
     <div className="flex flex-col">
-      <header className="flex items-center justify-between border-b border-border px-3 py-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
+      <header className="flex items-center justify-between border-b-2 border-border-strong bg-surface-raised px-3 py-2">
+        <h2 className="flex items-center gap-2 text-sm font-bold">
           Уведомления
           <CountBadge count={unread} tone="accent" />
         </h2>
@@ -92,7 +92,7 @@ export function NotificationList({
           <button
             type="button"
             onClick={() => markAllRead.mutate()}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-text-muted hover:bg-surface-hover hover:text-text"
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-text-muted hover:bg-surface-hover hover:text-text"
           >
             <CheckCheck className="size-3.5" />
             Прочитать все
@@ -113,7 +113,7 @@ export function NotificationList({
             description="Здесь появятся упоминания, назначения и смены статусов."
           />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y-2 divide-border-strong">
             {items.map((notification) => (
               <li key={notification.id}>
                 <button
@@ -121,20 +121,20 @@ export function NotificationList({
                   onClick={() => handleClick(notification)}
                   className={clsx(
                     'flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover',
-                    !notification.readAt && 'bg-accent-subtle/40',
+                    !notification.readAt && 'bg-accent-subtle',
                   )}
                 >
                   <Avatar user={notification.actor} size="md" className="mt-0.5" />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-medium text-text">{notification.title}</span>
-                      {!notification.readAt && <span className="size-1.5 shrink-0 rounded-full bg-accent" />}
+                      <span className="truncate text-sm font-bold text-text">{notification.title}</span>
+                      {!notification.readAt && <span className="size-1.5 shrink-0 bg-accent" />}
                     </p>
                     {notification.body && (
                       <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">{notification.body}</p>
                     )}
                     <p className="mt-1 flex items-center gap-1.5 text-2xs text-text-subtle">
-                      <span className="rounded-full bg-surface-active px-1.5 py-px">
+                      <span className="fd-num border border-border-strong bg-surface-active px-1.5 py-px">
                         {TYPE_LABEL[notification.type] ?? 'Обновление'}
                       </span>
                       {relativeTime(notification.createdAt)}

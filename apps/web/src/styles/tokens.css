@@ -1,86 +1,94 @@
 /**
  * FlowDesk design tokens.
  *
- * Direction: "terminal-adjacent precision". The atom of this product is the
- * issue key (WEB-42) — an identifier — so identifiers, counts and dates are set
- * in a monospace face with tabular figures, and the chrome stays quiet so the
- * status colours can carry meaning.
- *
- * The accent is violet rather than blue/green/amber on purpose: those hues are
- * already spoken for by status and priority, and an accent that collides with
- * them makes the interface ambiguous at a glance.
+ * Direction: neo-brutalist editorial. Warm paper surfaces, ink-black hard
+ * borders and solid offset shadows instead of blur; the accent is signal
+ * orange, highlight is marker yellow. Identifiers, counts and dates stay in
+ * a monospace face with tabular figures.
  *
  * Every colour in the product resolves through a semantic token — no component
- * hard-codes a hex value — so light and dark are one value swap apart.
+ * hard-codes a hex value, so the palette is changed in one place.
+ *
+ * The product ships light only: this is a paper-and-ink direction, and a dark
+ * inversion of it would be a different design rather than the same one dimmed.
  */
 
 :root {
   color-scheme: light;
 
-  /* Surfaces — cool graphite, from furthest back to closest to the reader */
-  --bg: #f6f7f9;
-  --bg-subtle: #f0f2f5;
-  --surface: #ffffff;
-  --surface-raised: #ffffff;
-  --surface-hover: #f3f5f8;
-  --surface-active: #e8ebf0;
-  --surface-sunken: #fafbfc;
-  --overlay: rgb(15 18 25 / 0.42);
+  /* The colour that draws hard borders and offset shadows. */
+  --ink: #171512;
+
+  /* Surfaces — warm paper, from furthest back to closest to the reader */
+  --bg: #f4f1ea;
+  --bg-subtle: #ede9df;
+  --surface: #fcfbf5;
+  --surface-raised: #fffef9;
+  --surface-hover: #f2eee1;
+  --surface-active: #e8e2d0;
+  --surface-sunken: #efeade;
+  --overlay: rgb(23 21 18 / 0.48);
 
   /* Lines */
-  --border: #e3e7ed;
-  --border-strong: #cdd3dd;
-  --border-focus: #7b5cff;
+  --border: #d9d1bf;
+  --border-strong: var(--ink);
+  --border-focus: #ff4d00;
 
   /* Text */
-  --text: #14171f;
-  --text-muted: #545c6b;
-  --text-subtle: #858e9f;
-  --text-inverted: #f8fafc;
+  --text: #171512;
+  --text-muted: #4a453c;
+  --text-subtle: #7d7666;
+  --text-inverted: #f4f1ea;
 
-  /* Accent */
-  --accent: #6b46f5;
-  --accent-hover: #5c34ee;
-  --accent-active: #4f27dd;
-  --accent-fg: #ffffff;
-  --accent-subtle: #f1edff;
-  --accent-subtle-hover: #e6dfff;
-  --accent-border: #cbbcff;
+  /* Accent — signal orange */
+  --accent: #ff4d00;
+  --accent-hover: #e84500;
+  --accent-active: #c93a00;
+  --accent-fg: #fff8f2;
+  --accent-subtle: #ffe8da;
+  --accent-subtle-hover: #ffd9c2;
+  --accent-border: #ffb28c;
+
+  /* Marker — the yellow highlighter of the editorial layer */
+  --marker: #ffd600;
+  --marker-subtle: #fff3b8;
 
   /* Status */
-  --success: #12784a;
-  --success-subtle: #dcfaea;
-  --success-border: #9fe6c4;
-  --warning: #9a5b06;
-  --warning-subtle: #fdf1d6;
-  --warning-border: #f6cf85;
-  --danger: #c01543;
-  --danger-subtle: #ffe4ea;
-  --danger-border: #f9b4c5;
-  --info: #0a6aa8;
-  --info-subtle: #e0f1fd;
-  --info-border: #a3d6f5;
+  --success: #0f7a44;
+  --success-subtle: #dff2e2;
+  --success-border: #9ad5b2;
+  --warning: #b57a00;
+  --warning-subtle: #fcefc9;
+  --warning-border: #ebd27e;
+  --danger: #c22e1f;
+  --danger-subtle: #fce3de;
+  --danger-border: #f2a79b;
+  --info: #1d5fd0;
+  --info-subtle: #e2ecfb;
+  --info-border: #a9c5f0;
 
   /* Priority ramp — distinct hues, still legible at 12px */
-  --priority-urgent: #d62839;
+  --priority-urgent: #c22e1f;
   --priority-high: #e06412;
-  --priority-medium: #b8860b;
+  --priority-medium: #b57a00;
   --priority-low: #0b8ba8;
-  --priority-none: #9aa2b1;
+  --priority-none: #8a8273;
 
-  /* Elevation — restrained; borders do most of the separating */
-  --shadow-xs: 0 1px 2px rgb(15 18 25 / 0.05);
-  --shadow-sm: 0 1px 3px rgb(15 18 25 / 0.07), 0 1px 2px rgb(15 18 25 / 0.04);
-  --shadow-md: 0 4px 12px rgb(15 18 25 / 0.08), 0 2px 4px rgb(15 18 25 / 0.04);
-  --shadow-lg: 0 14px 36px rgb(15 18 25 / 0.13), 0 4px 10px rgb(15 18 25 / 0.06);
-  --shadow-drag: 0 18px 34px rgb(15 18 25 / 0.18), 0 0 0 1px var(--accent-border);
+  /* Elevation — solid offset shadows; blur does not belong to this direction */
+  --shadow-color: var(--ink);
+  --shadow-xs: 1px 1px 0 var(--shadow-color);
+  --shadow-sm: 2px 2px 0 var(--shadow-color);
+  --shadow-md: 3px 3px 0 var(--shadow-color);
+  --shadow-lg: 5px 5px 0 var(--shadow-color);
+  --shadow-xl: 7px 7px 0 var(--shadow-color);
+  --shadow-drag: 6px 6px 0 var(--accent);
 
-  /* Geometry */
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 7px;
-  --radius-lg: 11px;
-  --radius-xl: 15px;
+  /* Geometry — near-square corners */
+  --radius-xs: 0;
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
   --radius-full: 9999px;
 
   /* Spacing scale — a strict 4px base. Components use these, never ad-hoc values. */
@@ -102,6 +110,7 @@
   --z-dialog: 80;
   --z-menu: 90;
   --z-tooltip: 100;
+  --z-toast: 110;
 
   /* Layout */
   --sidebar-width: 244px;
@@ -110,59 +119,4 @@
   /* Fixed rail so issue keys align vertically down a list. */
   --key-rail: 4.25rem;
   --row-height: 2.25rem;
-}
-
-.dark {
-  color-scheme: dark;
-
-  --bg: #0e1014;
-  --bg-subtle: #14171d;
-  --surface: #181b22;
-  --surface-raised: #1f232b;
-  --surface-hover: #222630;
-  --surface-active: #2b313c;
-  --surface-sunken: #121419;
-  --overlay: rgb(0 0 0 / 0.62);
-
-  --border: #282d38;
-  --border-strong: #3a414f;
-  --border-focus: #9b83ff;
-
-  --text: #eef1f6;
-  --text-muted: #a2abbb;
-  --text-subtle: #6f7889;
-  --text-inverted: #14171f;
-
-  --accent: #9b83ff;
-  --accent-hover: #ab96ff;
-  --accent-active: #bcabff;
-  --accent-fg: #14101f;
-  --accent-subtle: #241f3d;
-  --accent-subtle-hover: #2f2851;
-  --accent-border: #423769;
-
-  --success: #4ade80;
-  --success-subtle: #0d2619;
-  --success-border: #1b4a2f;
-  --warning: #fbbf24;
-  --warning-subtle: #2a1e08;
-  --warning-border: #4d3910;
-  --danger: #fb7185;
-  --danger-subtle: #2c1117;
-  --danger-border: #56212d;
-  --info: #38bdf8;
-  --info-subtle: #0a2333;
-  --info-border: #16445e;
-
-  --priority-urgent: #f87171;
-  --priority-high: #fb923c;
-  --priority-medium: #facc15;
-  --priority-low: #22d3ee;
-  --priority-none: #6f7889;
-
-  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.45);
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.55), 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.55), 0 2px 4px rgb(0 0 0 / 0.35);
-  --shadow-lg: 0 14px 36px rgb(0 0 0 / 0.65), 0 4px 10px rgb(0 0 0 / 0.45);
-  --shadow-drag: 0 18px 34px rgb(0 0 0 / 0.72), 0 0 0 1px var(--accent-border);
 }

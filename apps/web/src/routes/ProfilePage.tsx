@@ -55,7 +55,7 @@ export function ProfilePage() {
     <>
       <Topbar breadcrumbs={[{ label: isMe ? 'Мой профиль' : (data?.user.name ?? 'Профиль') }]} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
         <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
           {error ? (
             <ErrorState error={error} onRetry={() => void refetch()} />
@@ -66,10 +66,10 @@ export function ProfilePage() {
             </>
           ) : (
             <>
-              <header className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface p-4">
+              <header className="flex flex-wrap items-center gap-4 border-2 border-border-strong bg-surface p-4 shadow-lg">
                 <Avatar user={data.user} size="xl" />
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-lg font-semibold">{data.user.name}</h1>
+                  <h1 className="fd-display text-[clamp(1.25rem,2vw,1.75rem)]">{data.user.name}</h1>
                   <p className="text-sm text-text-muted">{data.user.email}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-2">
                     <Badge tone={data.role === 'OWNER' ? 'accent' : 'neutral'}>{ROLE_LABEL[data.role as WorkspaceRole]}</Badge>
@@ -85,13 +85,16 @@ export function ProfilePage() {
                   </p>
                 </div>
 
-                <dl className="flex gap-5">
+                <dl className="flex gap-2">
                   {[
                     ['В работе', data.stats.assigned],
                     ['Создано', data.stats.created],
                     ['Завершено', data.stats.completed],
                   ].map(([label, value]) => (
-                    <div key={label as string}>
+                    <div
+                      key={label as string}
+                      className="border-2 border-border-strong bg-surface-sunken px-3 py-1.5 text-center shadow-sm"
+                    >
                       <dd className="fd-num text-xl font-semibold">{value}</dd>
                       <dt className="text-2xs text-text-subtle">{label}</dt>
                     </div>
@@ -99,7 +102,7 @@ export function ProfilePage() {
                 </dl>
               </header>
 
-              <div className="flex items-center gap-1 border-b border-border">
+              <div className="flex items-center gap-1 border-b-2 border-border-strong">
                 {TABS.map((item) => (
                   <button
                     key={item}
@@ -108,7 +111,7 @@ export function ProfilePage() {
                     aria-selected={tab === item}
                     role="tab"
                     className={clsx(
-                      '-mb-px border-b-2 px-2.5 py-1.5 text-sm font-medium transition-colors',
+                      '-mb-0.5 border-b-2 px-3 py-1.5 text-sm font-bold transition-colors',
                       tab === item ? 'border-accent text-text' : 'border-transparent text-text-muted hover:text-text',
                     )}
                   >
@@ -117,12 +120,12 @@ export function ProfilePage() {
                 ))}
               </div>
 
-              <div className="overflow-hidden rounded-lg border border-border bg-surface">
+              <div className="border-2 border-border-strong bg-surface shadow-sm">
                 {tab === 'activity' ? (
                   data.activity.length === 0 ? (
                     <EmptyState compact title="Истории пока нет" />
                   ) : (
-                    <ul className="divide-y divide-border">
+                    <ul className="divide-y-2 divide-border-strong">
                       {data.activity.map((event) => (
                         <li key={event.id}>
                           <button
@@ -156,7 +159,7 @@ export function ProfilePage() {
                           description={
                             tab === 'assigned'
                               ? 'На этого человека нет открытых задач.'
-                              : 'Этот человек пока не создавал задач.'
+                              : 'Этот человек пока не создавал задачи.'
                           }
                         />
                       );

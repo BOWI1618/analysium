@@ -64,22 +64,22 @@ function MentionList({ items, command }: MentionListProps) {
 
   if (items.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-surface-raised p-2 text-xs text-text-subtle shadow-lg">
-        No matching people
+      <div className="border-2 border-border-strong bg-surface p-2 text-xs text-text-subtle shadow-lg">
+        Нет совпадений
       </div>
     );
   }
 
   return (
-    <div className="max-h-56 w-56 overflow-y-auto rounded-lg border border-border bg-surface-raised p-1 shadow-lg scrollbar-thin">
+    <div className="max-h-56 w-56 overflow-y-auto border-2 border-border-strong bg-surface p-1 shadow-lg scrollbar-thin">
       {items.map((item, i) => (
         <button
           key={item.id}
           type="button"
           onClick={() => command({ id: item.id, label: item.name })}
           className={clsx(
-            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
-            i === index ? 'bg-surface-hover' : 'hover:bg-surface-hover',
+            'flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm',
+            i === index ? 'bg-surface-active' : 'hover:bg-surface-hover',
           )}
         >
           <Avatar user={item} size="sm" />
@@ -170,6 +170,8 @@ export interface RichTextEditorProps {
   value: unknown;
   onChange?: (value: unknown) => void;
   onBlur?: (value: unknown) => void;
+  /** Called with the current document when the editor takes focus. */
+  onFocus?: (value: unknown) => void;
   placeholder?: string;
   users?: UserSummaryDto[];
   editable?: boolean;
@@ -186,6 +188,7 @@ export function RichTextEditor({
   value,
   onChange,
   onBlur,
+  onFocus,
   placeholder = 'Напишите что-нибудь…',
   users = [],
   editable = true,
@@ -222,6 +225,7 @@ export function RichTextEditor({
       },
     },
     onUpdate: ({ editor: instance }) => onChange?.(instance.getJSON()),
+    onFocus: ({ editor: instance }) => onFocus?.(instance.getJSON()),
     onBlur: ({ editor: instance }) => onBlur?.(instance.getJSON()),
   });
 
@@ -239,13 +243,13 @@ export function RichTextEditor({
     editor?.setEditable(editable);
   }, [editor, editable]);
 
-  if (!editor) return <div className="h-20 animate-shimmer rounded-md bg-surface-active" />;
+  if (!editor) return <div className="h-20 animate-shimmer border-2 border-border-strong bg-surface-active" />;
 
   return (
     <div
       className={clsx(
-        'fd-editor rounded-lg border border-border bg-surface transition-colors',
-        'focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20',
+        'fd-editor border-2 border-border-strong bg-surface transition-colors',
+        'focus-within:border-accent focus-within:shadow-sm focus-within:-translate-x-px focus-within:-translate-y-px',
         !editable && 'border-transparent bg-transparent',
         className,
       )}
@@ -254,7 +258,7 @@ export function RichTextEditor({
       <div className="px-3 py-2">
         <EditorContent editor={editor} />
       </div>
-      {footer && <div className="border-t border-border px-3 py-2">{footer}</div>}
+      {footer && <div className="border-t-2 border-border-strong bg-surface-raised px-3 py-2">{footer}</div>}
     </div>
   );
 }
@@ -279,8 +283,8 @@ function ToolbarButton({
         aria-label={label}
         aria-pressed={active}
         className={clsx(
-          'inline-flex size-6 items-center justify-center rounded-sm transition-colors',
-          active ? 'bg-accent-subtle text-accent' : 'text-text-muted hover:bg-surface-hover hover:text-text',
+          'inline-flex size-6 items-center justify-center border-2 transition-colors',
+          active ? 'border-accent-border bg-accent-subtle text-accent' : 'border-transparent text-text-muted hover:bg-surface-hover hover:text-text',
         )}
       >
         {children}
@@ -306,7 +310,7 @@ function EditorToolbar({ editor }: { editor: Editor }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-2 py-1">
+    <div className="flex flex-wrap items-center gap-0.5 border-b-2 border-border-strong bg-surface-raised px-2 py-1">
       <ToolbarButton label="Полужирный" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
         <Bold className="size-3.5" />
       </ToolbarButton>
@@ -324,7 +328,7 @@ function EditorToolbar({ editor }: { editor: Editor }) {
         <Code className="size-3.5" />
       </ToolbarButton>
 
-      <span className="mx-1 h-4 w-px bg-border" />
+      <span className="mx-1 h-4 w-px bg-border-strong" />
 
       <ToolbarButton
         label="Заголовок"
@@ -369,7 +373,7 @@ function EditorToolbar({ editor }: { editor: Editor }) {
         <Code2 className="size-3.5" />
       </ToolbarButton>
 
-      <span className="mx-1 h-4 w-px bg-border" />
+      <span className="mx-1 h-4 w-px bg-border-strong" />
 
       <ToolbarButton label="Ссылка" active={editor.isActive('link')} onClick={setLink}>
         <Link2 className="size-3.5" />

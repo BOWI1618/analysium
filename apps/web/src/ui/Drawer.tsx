@@ -26,8 +26,10 @@ export function Drawer({ open, onClose, children, width = 'max-w-[42rem]', label
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        // Let a nested dialog or menu handle Escape first.
-        const hasNestedLayer = document.querySelector('[role="dialog"][aria-modal="true"], [role="menu"]');
+        // Let a nested dialog or menu handle Escape first. This panel itself
+        // matches the dialog selector, so anything inside it does not count.
+        const layers = document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]');
+        const hasNestedLayer = Array.from(layers).some((el) => !panelRef.current?.contains(el));
         if (hasNestedLayer) return;
         event.stopPropagation();
         onClose();
@@ -52,8 +54,8 @@ export function Drawer({ open, onClose, children, width = 'max-w-[42rem]', label
         aria-modal="true"
         aria-label={label}
         className={clsx(
-          'relative z-10 flex h-full w-full flex-col bg-surface shadow-lg animate-slide-left',
-          'border-l border-border',
+          'relative z-10 flex h-full w-full flex-col bg-surface animate-slide-left',
+          'border-l-2 border-border-strong shadow-xl',
           width,
         )}
       >

@@ -46,7 +46,7 @@ export function LoginPage() {
       footer={
         <>
           Впервые здесь?{' '}
-          <Link to="/register" className="font-medium text-accent hover:underline">
+          <Link to="/register" className="font-bold text-accent hover:underline">
             Создать аккаунт
           </Link>
         </>
@@ -60,7 +60,7 @@ export function LoginPage() {
         }}
       >
         {error && (
-          <div role="alert" className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger">
+          <div role="alert" className="rounded-md border-2 border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger font-medium">
             {error}
           </div>
         )}
@@ -94,8 +94,8 @@ export function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-4 rounded-lg border border-border bg-surface-sunken p-3">
-        <p className="text-xs font-medium">Демо-пространство</p>
+      <div className="mt-4 rounded-lg border-2 border-border-strong bg-surface-raised p-3 shadow-xs">
+        <p className="text-xs font-bold">Демо-пространство</p>
         <p className="mt-0.5 text-xs text-text-muted">
           Готовое пространство с проектами, спринтами и 70+ задачами.
         </p>

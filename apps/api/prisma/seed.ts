@@ -200,6 +200,13 @@ function issueDescription(title: string): Prisma.InputJsonValue {
 }
 
 async function main(): Promise<void> {
+  // Dev-only: rerunning wipes the demo workspace and resets demo users'
+  // passwords, which must never happen against a production database.
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Seed is dev-only: refusing to run with NODE_ENV=production.');
+    process.exit(1);
+  }
+
   console.log('Заполняем демо-данные FlowDesk…');
 
   const existing = await prisma.workspace.findUnique({ where: { slug: DEMO_SLUG }, select: { id: true } });

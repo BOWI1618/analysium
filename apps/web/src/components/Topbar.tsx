@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Menu as MenuIcon, Plus, Search } from 'lucide-react';
+import { ChevronRight, Menu as MenuIcon, Plus, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useUiStore } from '~/app/uiStore';
 import { Button, IconButton } from '~/ui/Button';
@@ -23,62 +23,81 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
 
   return (
     <header
-      className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3"
+      className="flex shrink-0 items-stretch border-b-2 border-border-strong bg-surface"
       style={{ height: 'var(--topbar-height)' }}
     >
-      <IconButton
-        label="Открыть меню"
-        size="sm"
-        className="md:hidden"
-        onClick={() => setMobileNavOpen(true)}
-      >
-        <MenuIcon className="size-4" />
-      </IconButton>
+      <div className="flex shrink-0 items-center gap-2 px-2 md:hidden">
+        <IconButton
+          label="Открыть меню"
+          size="sm"
+          variant="secondary"
+          onClick={() => setMobileNavOpen(true)}
+        >
+          <MenuIcon className="size-4" />
+        </IconButton>
+      </div>
 
-      <nav aria-label="Навигационная цепочка" className="min-w-0 flex-1">
-        <ol className="flex min-w-0 items-center gap-1 text-sm">
-          {breadcrumbs.map((crumb, index) => (
-            <li key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-1">
-              {index > 0 && <span className="shrink-0 text-text-subtle">/</span>}
-              {crumb.to ? (
-                <Link
-                  to={crumb.to}
-                  className="flex min-w-0 items-center gap-1.5 truncate rounded-sm px-1 py-0.5 text-text-muted hover:bg-surface-hover hover:text-text"
-                >
-                  {crumb.icon}
-                  <span className="truncate">{crumb.label}</span>
-                </Link>
-              ) : (
-                <span
-                  className="flex min-w-0 items-center gap-1.5 truncate px-1 py-0.5 font-medium text-text"
-                  aria-current="page"
-                >
-                  {crumb.icon}
-                  <span className="truncate">{crumb.label}</span>
-                </span>
-              )}
-            </li>
-          ))}
+      {/* Dateline: everything but the last crumb is set small and quiet, the
+          current page is the only thing in the display face. */}
+      <nav
+        aria-label="Навигационная цепочка"
+        className="flex min-w-0 flex-1 items-center gap-2 border-r-2 border-border-strong px-3 sm:flex-none sm:px-4"
+      >
+        <ol className="flex min-w-0 items-center gap-2">
+          {breadcrumbs.map((crumb, index) => {
+            const isLast = index === breadcrumbs.length - 1;
+            return (
+              <li key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-2">
+                {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-text-subtle" />}
+                {crumb.to && !isLast ? (
+                  <Link
+                    to={crumb.to}
+                    className="fd-kicker flex min-w-0 items-center gap-1.5 truncate hover:text-text"
+                  >
+                    {crumb.icon}
+                    <span className="truncate">{crumb.label}</span>
+                  </Link>
+                ) : isLast ? (
+                  <span
+                    className="flex min-w-0 items-center gap-1.5 truncate font-display text-xs font-extrabold uppercase"
+                    aria-current="page"
+                  >
+                    {crumb.icon}
+                    <span className="truncate">{crumb.label}</span>
+                  </span>
+                ) : (
+                  <span className="fd-kicker flex min-w-0 items-center gap-1.5 truncate">
+                    {crumb.icon}
+                    <span className="truncate">{crumb.label}</span>
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ol>
       </nav>
 
-      <div className="flex shrink-0 items-center gap-1.5">
-        {actions}
-
+      {/* Search sits in the open middle of the plate, like a newspaper index. */}
+      <div className="hidden min-w-0 flex-1 items-center px-4 sm:flex">
         <button
           type="button"
           onClick={() => setCommandPaletteOpen(true)}
-          className="hidden items-center gap-2 rounded-md border border-border bg-surface-sunken px-2 py-1 text-xs text-text-subtle hover:bg-surface-hover sm:flex"
+          className="flex w-full max-w-[20rem] items-center gap-2 border-2 border-border-strong bg-surface px-2.5 py-1 text-xs text-text-subtle transition-[box-shadow,translate] duration-100 hover:-translate-x-px hover:-translate-y-px hover:shadow-sm"
           aria-label="Поиск — Cmd или Ctrl + K"
         >
-          <Search className="size-3.5" />
-          <span className="hidden lg:inline">Поиск…</span>
-          <Kbd className="ml-2">⌘K</Kbd>
+          <Search className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-left">Поиск: ключ, слово, @человек…</span>
+          <Kbd>⌘K</Kbd>
         </button>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1.5 border-l-2 border-border-strong px-2 sm:px-3">
+        {actions}
 
         <IconButton
           label="Поиск"
           size="sm"
+          variant="secondary"
           className="sm:hidden"
           onClick={() => setCommandPaletteOpen(true)}
         >

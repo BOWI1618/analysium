@@ -71,7 +71,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {createPortal(
         <div
-          className="pointer-events-none fixed bottom-4 left-1/2 z-[200] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4 sm:left-auto sm:right-4 sm:translate-x-0"
+          className="pointer-events-none fixed bottom-4 left-1/2 z-[var(--z-toast)] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4 sm:left-auto sm:right-4 sm:translate-x-0"
           role="region"
           aria-label="Уведомления"
         >
@@ -97,13 +97,13 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       role="status"
       aria-live={toast.tone === 'error' ? 'assertive' : 'polite'}
       className={clsx(
-        'pointer-events-auto flex items-start gap-2.5 rounded-lg border border-border bg-surface-raised p-3 shadow-lg',
+        'pointer-events-auto flex items-start gap-2.5 rounded-lg border-2 border-border-strong bg-surface p-3 shadow-xl',
         'animate-slide-up',
       )}
     >
       <span className="mt-0.5 shrink-0">{ICONS[toast.tone]}</span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-text">{toast.title}</p>
+        <p className="text-sm font-bold text-text">{toast.title}</p>
         {toast.description && <p className="mt-0.5 text-xs text-text-muted">{toast.description}</p>}
       </div>
       {toast.action && (
@@ -113,7 +113,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
             toast.action!.onClick();
             onDismiss();
           }}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-accent hover:bg-accent-subtle"
+          className="inline-flex shrink-0 items-center gap-1 border-2 border-border-strong bg-accent px-2 py-0.5 text-xs font-bold text-accent-fg shadow-xs"
         >
           <Undo2 className="size-3" />
           {toast.action.label}
@@ -123,7 +123,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         type="button"
         onClick={onDismiss}
         aria-label="Закрыть"
-        className="shrink-0 rounded-sm p-0.5 text-text-subtle hover:bg-surface-hover hover:text-text"
+        className="shrink-0 p-0.5 text-text-subtle hover:bg-surface-hover hover:text-text"
       >
         <X className="size-3.5" />
       </button>

@@ -394,6 +394,10 @@ export function suggestDependentShifts(
   const shifts: SuggestedShift[] = [];
   const seen = new Set<string>([movedId]);
   const queue: string[] = [movedId];
+  // Virtual shift accumulated by each task the cascade has already moved.
+  // Successors must be measured against these shifted dates, not the stored
+  // ones, or a chain a→b→c would leave b→c violated after applying the shifts.
+  const deltaMs = new Map<string, number>([[movedId, 0]]);
 
   const outgoing = new Map<string, ScheduleEdge[]>();
   for (const edge of edges) {
@@ -403,6 +407,7 @@ export function suggestDependentShifts(
   while (queue.length > 0) {
     const currentId = queue.shift()!;
     const current = bars.get(currentId);
+    const currentDelta = deltaMs.get(currentId) ?? 0;
     if (!current?.start || !current.end) continue;
 
     for (const edge of outgoing.get(currentId) ?? []) {
@@ -413,9 +418,9 @@ export function suggestDependentShifts(
 
       const required =
         edge.type === DependencyType.FINISH_TO_START
-          ? current.end.getTime() + edge.lagDays * DAY_MS
+          ? current.end.getTime() + currentDelta + edge.lagDays * DAY_MS
           : edge.type === DependencyType.START_TO_START
-            ? current.start.getTime() + edge.lagDays * DAY_MS
+            ? current.start.getTime() + currentDelta + edge.lagDays * DAY_MS
             : null;
 
       // Only the two relations that constrain the successor's *start* produce a
@@ -431,6 +436,7 @@ export function suggestDependentShifts(
         days,
       });
 
+      deltaMs.set(edge.successorId, required - successor.start.getTime());
       seen.add(edge.successorId);
       queue.push(edge.successorId);
     }

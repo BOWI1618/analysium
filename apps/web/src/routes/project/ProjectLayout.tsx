@@ -17,6 +17,7 @@ import { Topbar } from '~/components/Topbar';
 import { RouteTabs, type TabItem } from '~/ui/Tabs';
 import { ErrorState, Skeleton } from '~/ui/Feedback';
 import { IconButton } from '~/ui/Button';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 
 /**
  * Project chrome: breadcrumbs, favourite toggle and the view tabs. The views
@@ -32,7 +33,7 @@ export function ProjectLayout() {
     return (
       <>
         <Topbar breadcrumbs={[{ label: 'Проекты', to: '/projects' }, { label: '…' }]} />
-        <div className="space-y-3 p-4">
+        <div className="space-y-3 bg-bg p-4">
           <Skeleton className="h-6 w-48" />
           <Skeleton className="h-8 w-full max-w-md" />
           <Skeleton className="h-64 w-full" />
@@ -45,7 +46,9 @@ export function ProjectLayout() {
     return (
       <>
         <Topbar breadcrumbs={[{ label: 'Проекты', to: '/projects' }, { label: 'Не найден' }]} />
-        <ErrorState error={error} onRetry={() => void refetch()} />
+        <div className="bg-bg">
+          <ErrorState error={error} onRetry={() => void refetch()} />
+        </div>
       </>
     );
   }
@@ -70,7 +73,7 @@ export function ProjectLayout() {
       <Topbar
         breadcrumbs={[
           { label: 'Проекты', to: '/projects' },
-          { label: project.name, icon: <span aria-hidden="true">{project.icon}</span> },
+          { label: project.name, icon: <ProjectIcon icon={project.icon} color={project.color} size="sm" /> },
         ]}
         actions={
           <IconButton
@@ -87,8 +90,10 @@ export function ProjectLayout() {
         }
       />
 
-      <div className="flex items-center gap-3 border-b border-border bg-surface px-3 py-1.5">
-        <span className="fd-key hidden shrink-0 sm:inline">{project.key}</span>
+      <div className="flex items-stretch border-b-2 border-border-strong bg-bg-subtle">
+        <span className="fd-eyebrow hidden shrink-0 items-center border-r-2 border-border-strong px-4 sm:flex">
+          {project.key}
+        </span>
         <RouteTabs items={tabs} />
       </div>
 

@@ -50,7 +50,7 @@ export function RegisterPage() {
       footer={
         <>
           Уже есть аккаунт?{' '}
-          <Link to="/login" className="font-medium text-accent hover:underline">
+          <Link to="/login" className="font-bold text-accent hover:underline">
             Войти
           </Link>
         </>
@@ -58,7 +58,7 @@ export function RegisterPage() {
     >
       <form className="space-y-3" onSubmit={submit}>
         {error && (
-          <div role="alert" className="rounded-md border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger">
+          <div role="alert" className="rounded-md border-2 border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger font-medium">
             {error}
           </div>
         )}

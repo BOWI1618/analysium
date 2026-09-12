@@ -107,7 +107,7 @@ export function ListPage() {
         }}
         trailing={
           <Menu>
-            <MenuTrigger asChild>
+            <MenuTrigger>
               <Button size="xs" variant="ghost" iconLeft={<Columns3 className="size-3" />}>
                 Колонки
               </Button>

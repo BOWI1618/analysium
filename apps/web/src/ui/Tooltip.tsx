@@ -73,8 +73,8 @@ export function Tooltip({ content, children, side = 'top', delay = 350, disabled
           <div
             role="tooltip"
             className={clsx(
-              'pointer-events-none fixed z-[var(--z-tooltip)] max-w-64 rounded-md px-2 py-1',
-              'bg-[var(--text)] text-[var(--text-inverted)] text-xs font-medium shadow-md',
+              'pointer-events-none fixed z-[var(--z-tooltip)] max-w-64 rounded-sm px-2 py-1',
+              'bg-[var(--text)] text-[var(--text-inverted)] text-xs font-medium border border-border-strong shadow-sm',
               'animate-in',
             )}
             style={{ top: position.top, left: position.left, transform: transforms[side] }}
@@ -107,8 +107,8 @@ export function Kbd({
     <kbd
       aria-hidden={ariaHidden || undefined}
       className={clsx(
-        'inline-flex h-4 min-w-4 items-center justify-center rounded-xs border border-border-strong',
-        'bg-surface-sunken px-1 font-sans text-[10px] font-medium text-text-subtle',
+        'inline-flex h-4 min-w-4 items-center justify-center rounded-sm border-2 border-border-strong',
+        'bg-surface px-1 font-mono text-[10px] font-semibold text-text shadow-xs',
         className,
       )}
     >

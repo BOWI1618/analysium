@@ -225,9 +225,9 @@ export function GanttChart({
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Work-breakdown tree */}
-      <div className="flex w-40 shrink-0 flex-col border-r border-border bg-surface sm:w-64 lg:w-80">
+      <div className="flex w-40 shrink-0 flex-col border-r-2 border-border-strong bg-surface sm:w-64 lg:w-80">
         <div
-          className="sticky top-0 z-20 flex shrink-0 items-end border-b border-border bg-surface-sunken px-2 pb-1 text-2xs font-semibold tracking-wide text-text-subtle uppercase"
+          className="fd-eyebrow sticky top-0 z-20 flex shrink-0 items-end border-b-2 border-border-strong bg-surface-sunken px-3 pb-1"
           style={{ height: 52 }}
         >
           Декомпозиция
@@ -322,7 +322,7 @@ function TreeRow({
           onClick={onToggle}
           aria-expanded={!collapsed}
           aria-label={collapsed ? `Развернуть ${row.issueKey}` : `Свернуть ${row.issueKey}`}
-          className="shrink-0 rounded-sm p-0.5 text-text-subtle hover:bg-surface-active hover:text-text"
+          className="shrink-0 p-0.5 text-text-subtle hover:bg-surface-active hover:text-text"
         >
           {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
         </button>
@@ -364,11 +364,11 @@ function TreeRow({
 function TimelineHeader({ timeline }: { timeline: Timeline }) {
   return (
     <div className="sticky top-0 z-20 bg-surface-sunken" style={{ height: 52 }}>
-      <div className="relative border-b border-border" style={{ height: 26 }}>
+      <div className="relative border-b-2 border-border-strong" style={{ height: 26 }}>
         {timeline.majorTicks.map((tick) => (
           <div
             key={tick.key}
-            className="absolute top-0 flex h-full items-center border-l border-border px-1.5 text-2xs font-semibold whitespace-nowrap text-text-muted"
+            className="fd-eyebrow absolute top-0 flex h-full items-center border-l-2 border-border-strong px-2 whitespace-nowrap"
             style={{ left: tick.x, width: tick.width }}
           >
             {tick.label}
@@ -376,14 +376,14 @@ function TimelineHeader({ timeline }: { timeline: Timeline }) {
         ))}
       </div>
 
-      <div className="relative border-b border-border" style={{ height: 26 }}>
+      <div className="relative border-b-2 border-border-strong" style={{ height: 26 }}>
         {timeline.minorTicks.map((tick) => (
           <div
             key={tick.key}
             className={clsx(
-              'fd-num absolute top-0 flex h-full items-center justify-center border-l border-border/60 text-2xs',
-              tick.isToday ? 'font-semibold text-accent' : 'text-text-subtle',
-              tick.isWeekend && 'bg-surface-active/40',
+              'fd-num absolute top-0 flex h-full items-center justify-center border-l border-border text-2xs',
+              tick.isToday ? 'bg-marker font-bold text-ink' : 'text-text-subtle',
+              tick.isWeekend && !tick.isToday && 'bg-surface-active/50',
             )}
             style={{ left: tick.x, width: tick.width }}
           >
@@ -416,9 +416,16 @@ function Background({ timeline, rowCount }: { timeline: Timeline; rowCount: numb
         />
       ))}
 
+      {/* Today is the one rule on the chart that has to be read from across the
+          room, so it is drawn thick and in the alarm colour, flagged at the top. */}
       {timeline.todayX !== null && (
-        <div className="absolute top-0 bottom-0 w-px bg-accent" style={{ left: timeline.todayX }}>
-          <span className="absolute -top-px -left-[3px] size-[7px] rotate-45 bg-accent" />
+        <div
+          className="absolute top-0 bottom-0 z-10 w-[3px] bg-danger"
+          style={{ left: timeline.todayX - 1 }}
+        >
+          <span className="fd-num absolute -top-0.5 -left-px bg-danger px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent-fg">
+            сегодня
+          </span>
         </div>
       )}
     </div>
@@ -485,7 +492,7 @@ function Bar({
             data-bar-id={row.id}
             onClick={onOpen}
             aria-label={`Веха ${row.issueKey}: ${row.title}, ${dateLabel}`}
-            className="absolute size-3 rotate-45 rounded-xs border-2 border-surface bg-accent hover:scale-125"
+            className="absolute size-3.5 rotate-45 border-2 border-border-strong bg-marker hover:scale-125"
             style={{ left: adjusted.x + timeline.dayWidth / 2 - 6, top: ROW_HEIGHT / 2 - 6 }}
           />
         </Tooltip>
@@ -504,7 +511,7 @@ function Bar({
     <div className="absolute" style={{ top, height: ROW_HEIGHT, left: 0, right: 0 }}>
       {baseline && (
         <div
-          className="absolute rounded-xs border border-dashed border-border-strong"
+          className="absolute border-2 border-dashed border-border-strong"
           style={{ left: baseline.x, width: baseline.width, top: ROW_HEIGHT - 9, height: 5 }}
           aria-hidden="true"
         />
@@ -539,14 +546,17 @@ function Bar({
             onStartDrag('move', event.clientX);
           }}
           className={clsx(
-            'group absolute flex items-center rounded-md border transition-shadow focus:ring-2 focus:ring-accent/40 focus:outline-none',
+            // Bars are printed plates like everything else: a hard ink rule
+            // around a flat fill, so the chart reads as one drawing rather
+            // than a pastel timeline pasted into the product.
+            'group absolute flex items-center border-2 border-border-strong shadow-xs transition-shadow focus:ring-2 focus:ring-accent/40 focus:outline-none',
             row.isSummary
-              ? 'border-transparent bg-text-subtle/70'
+              ? 'bg-ink'
               : row.isCritical
-                ? 'border-danger-border bg-danger-subtle'
+                ? 'bg-accent text-accent-fg'
                 : row.isOverdue
-                  ? 'border-warning-border bg-warning-subtle'
-                  : 'border-accent-border bg-accent-subtle',
+                  ? 'bg-danger text-accent-fg'
+                  : 'bg-surface',
             editable && !row.isSummary && 'cursor-grab active:cursor-grabbing',
             drag && 'shadow-md',
           )}
@@ -561,9 +571,9 @@ function Bar({
           {!row.isSummary && (
             <div
               className={clsx(
-                'absolute inset-y-0 left-0 rounded-l-md',
-                row.isCritical ? 'bg-danger/30' : 'bg-accent/35',
-                progressPercent >= 100 && 'rounded-r-md',
+                'absolute inset-y-0 left-0 border-r-2 border-border-strong last:border-r-0',
+                progressPercent >= 100 ? 'bg-success' : 'bg-ink/20',
+                progressPercent >= 100 && 'border-r-0',
               )}
               style={{ width: `${progressPercent}%` }}
               aria-hidden="true"
@@ -571,7 +581,7 @@ function Bar({
           )}
 
           {!row.isSummary && adjusted.width > 60 && (
-            <span className="relative z-10 truncate px-2 text-2xs font-medium text-text">
+            <span className="relative z-10 truncate px-2 text-2xs font-semibold">
               {row.title}
             </span>
           )}
@@ -592,7 +602,7 @@ function Bar({
                   event.preventDefault();
                   onStartDrag('resize-start', event.clientX);
                 }}
-                className="absolute top-0 bottom-0 left-0 w-1.5 cursor-ew-resize rounded-l-md opacity-0 group-hover:bg-accent/50 group-hover:opacity-100"
+                className="absolute top-0 bottom-0 left-0 w-1.5 cursor-ew-resize opacity-0 group-hover:bg-accent/50 group-hover:opacity-100"
               />
               <span
                 role="presentation"
@@ -601,7 +611,7 @@ function Bar({
                   event.preventDefault();
                   onStartDrag('resize-end', event.clientX);
                 }}
-                className="absolute top-0 right-0 bottom-0 w-1.5 cursor-ew-resize rounded-r-md opacity-0 group-hover:bg-accent/50 group-hover:opacity-100"
+                className="absolute top-0 right-0 bottom-0 w-1.5 cursor-ew-resize opacity-0 group-hover:bg-accent/50 group-hover:opacity-100"
               />
 
               {/* Drag from here to another bar to create a dependency. */}
@@ -613,7 +623,7 @@ function Bar({
                   event.preventDefault();
                   onStartLink(adjusted.x + adjusted.width, top + ROW_HEIGHT / 2);
                 }}
-                className="absolute top-1/2 -right-4 -translate-y-1/2 rounded-full bg-surface p-0.5 text-text-subtle opacity-0 shadow-xs group-hover:opacity-100 hover:text-accent"
+                className="absolute top-1/2 -right-4 -translate-y-1/2 border-2 border-border-strong bg-surface p-0.5 text-text-subtle opacity-0 group-hover:opacity-100 hover:text-accent"
               >
                 <Link2 className="size-3" />
               </button>
@@ -659,7 +669,7 @@ function Bar({
 
       {drag && (
         <span
-          className="fd-num pointer-events-none absolute z-30 rounded-md bg-surface-raised px-1.5 py-0.5 text-2xs shadow-md"
+          className="fd-num pointer-events-none absolute z-30 border-2 border-border-strong bg-surface-raised px-1.5 py-0.5 text-2xs shadow-sm"
           style={{ left: adjusted.x, top: -4 }}
         >
           {drag.deltaDays > 0 ? `+${drag.deltaDays}` : drag.deltaDays} дн

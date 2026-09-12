@@ -75,6 +75,30 @@ export async function getGantt(
     where.assigneeId = { in: resolved };
   }
 
+  if (query.from || query.to) {
+    // Scheduled issues are clipped to those overlapping the requested window;
+    // unscheduled ones are always returned — the client needs them for
+    // planning. A single date pins the issue to that day on the timeline.
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? new Date(query.to) : null;
+    const span = (field: 'startDate' | 'dueDate'): Prisma.DateTimeFilter => ({
+      ...(from ? { gte: from } : {}),
+      ...(to ? { lte: to } : {}),
+    });
+    where.AND = [
+      {
+        OR: [
+          { startDate: null, dueDate: null },
+          { AND: [{ startDate: span('startDate') }, { dueDate: span('dueDate') }] },
+          { AND: [{ startDate: null }, { dueDate: span('dueDate') }] },
+          { AND: [{ dueDate: null }, { startDate: span('startDate') }] },
+        ],
+      },
+    ];
+  }
+
+  // Deliberate cap: the chart stops being readable long before this, and the
+  // from/to window is what keeps huge projects queryable.
   const issues = await prisma.issue.findMany({
     where,
     orderBy: [{ startDate: { sort: 'asc', nulls: 'last' } }, { rank: 'asc' }],
@@ -82,10 +106,10 @@ export async function getGantt(
     take: 2000,
   });
 
-  const ids = issues.map((i) => i.id);
-  const dependencyRows = ids.length
+  const idSet = new Set(issues.map((i) => i.id));
+  const dependencyRows = idSet.size
     ? await prisma.issueDependency.findMany({
-        where: { predecessorId: { in: ids }, successorId: { in: ids } },
+        where: { predecessorId: { in: [...idSet] }, successorId: { in: [...idSet] } },
         select: { id: true, predecessorId: true, successorId: true, type: true, lagDays: true },
       })
     : [];
@@ -93,13 +117,15 @@ export async function getGantt(
   const nodes: ScheduleNode[] = issues.map((issue) => ({
     id: issue.id,
     // A parent outside the filtered set must not orphan its child's indentation.
-    parentId: issue.parentId && ids.includes(issue.parentId) ? issue.parentId : null,
+    parentId: issue.parentId && idSet.has(issue.parentId) ? issue.parentId : null,
     startDate: issue.startDate,
     dueDate: issue.dueDate,
     isMilestone: issue.isMilestone,
     storyPoints: issue.storyPoints,
     isComplete: issue.status.category === 'COMPLETED',
   }));
+
+  const parentOf = new Map(nodes.map((n) => [n.id, n.parentId]));
 
   const edges: ScheduleEdge[] = dependencyRows.map((d) => ({
     predecessorId: d.predecessorId,
@@ -132,7 +158,7 @@ export async function getGantt(
       priority: issue.priority,
       status: toStatus(issue.status),
       assignee: toUserSummary(issue.assignee),
-      parentId: nodes.find((n) => n.id === issue.id)!.parentId,
+      parentId: parentOf.get(issue.id) ?? null,
       depth: depthOf.get(issue.id) ?? 0,
       hasChildren: (childCount.get(issue.id) ?? 0) > 0,
       storyPoints: issue.storyPoints,
@@ -215,16 +241,18 @@ function orderForDisplay(
   }
 
   const ordered: GanttIssueRow[] = [];
+  const orderedIds = new Set<string>();
   const visit = (id: string) => {
     const issue = byId.get(id);
-    if (!issue || ordered.includes(issue)) return;
+    if (!issue || orderedIds.has(id)) return;
     ordered.push(issue);
+    orderedIds.add(id);
     for (const childId of children.get(id) ?? []) visit(childId);
   };
 
   for (const id of children.get(null) ?? []) visit(id);
   // Anything unreachable from a root (filtered-out parent) still gets rendered.
-  for (const issue of issues) if (!ordered.includes(issue)) ordered.push(issue);
+  for (const issue of issues) if (!orderedIds.has(issue.id)) visit(issue.id);
 
   void depths;
   return ordered;
@@ -289,20 +317,62 @@ export async function rescheduleIssue(
 
   let appliedShifts = 0;
   if (input.cascade && shifts.length > 0) {
-    await prisma.$transaction(
-      shifts.map((shift) => {
-        const row = rowsById.get(shift.issueId)!;
-        const delta = shift.toStart.getTime() - shift.fromStart.getTime();
-        return prisma.issue.update({
+    const applied = shifts.map((shift) => {
+      const row = rowsById.get(shift.issueId)!;
+      const delta = shift.toStart.getTime() - shift.fromStart.getTime();
+      return {
+        shift,
+        row,
+        nextStart: shift.toStart,
+        nextDue: row.dueDate ? new Date(row.dueDate.getTime() + delta) : null,
+      };
+    });
+
+    await prisma.$transaction(async (tx) => {
+      const entries: Prisma.ActivityEventCreateManyInput[] = [];
+      for (const { shift, row, nextStart, nextDue } of applied) {
+        await tx.issue.update({
           where: { id: shift.issueId },
-          data: {
-            startDate: shift.toStart,
-            dueDate: row.dueDate ? new Date(row.dueDate.getTime() + delta) : null,
-          },
+          data: { startDate: nextStart, dueDate: nextDue },
         });
-      }),
-    );
+        // History mirrors rescheduleIssue: one event per changed date field.
+        if (iso(row.startDate) !== iso(nextStart)) {
+          entries.push({
+            issueId: shift.issueId,
+            actorId: actor.userId,
+            type: ActivityType.DUE_DATE_CHANGED,
+            field: 'startDate',
+            fromValue: iso(row.startDate),
+            toValue: iso(nextStart),
+          });
+        }
+        if (iso(row.dueDate) !== iso(nextDue)) {
+          entries.push({
+            issueId: shift.issueId,
+            actorId: actor.userId,
+            type: ActivityType.DUE_DATE_CHANGED,
+            field: 'dueDate',
+            fromValue: iso(row.dueDate),
+            toValue: iso(nextDue),
+          });
+        }
+      }
+      if (entries.length) await tx.activityEvent.createMany({ data: entries });
+    });
     appliedShifts = shifts.length;
+
+    for (const { shift, row, nextStart, nextDue } of applied) {
+      emit(RealtimeEventType.ISSUE_UPDATED, {
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        payload: {
+          issueId: shift.issueId,
+          issueKey: row.issueKey,
+          projectId: issue.projectId,
+          patch: { startDate: iso(nextStart), dueDate: iso(nextDue) },
+        },
+      });
+    }
   }
 
   emit(RealtimeEventType.ISSUE_UPDATED, {
@@ -392,38 +462,46 @@ export async function createDependency(
   });
   if (issues.length !== 2) throw badRequest('Обе задачи должны быть в одном проекте');
 
-  const existing = await prisma.issueDependency.findMany({
-    where: { predecessor: { projectId } },
-    select: { predecessorId: true, successorId: true, type: true, lagDays: true },
-  });
+  // Check and insert in one transaction: the row locks on both issues
+  // serialize concurrent creates, so the cycle re-check inside the transaction
+  // sees every edge a competing request may have just committed.
+  const created = await prisma.$transaction(async (tx) => {
+    const [first, second] = [input.predecessorId, input.successorId].sort();
+    await tx.$queryRaw`SELECT id FROM "issues" WHERE id IN (${first}, ${second}) FOR UPDATE`;
 
-  const cycle = findCycle(existing as ScheduleEdge[], {
-    predecessorId: input.predecessorId,
-    successorId: input.successorId,
-    type: input.type as never,
-    lagDays: input.lagDays,
-  });
-  if (cycle) {
-    const keys = cycle
-      .map((id) => issues.find((i) => i.id === id)?.issueKey)
-      .filter(Boolean)
-      .join(' → ');
-    throw badRequest(
-      keys
-        ? `Связь образует цикл: ${keys}`
-        : 'Связь образует цикл — задача в итоге зависела бы сама от себя',
-    );
-  }
+    const existing = await tx.issueDependency.findMany({
+      where: { predecessor: { projectId } },
+      select: { predecessorId: true, successorId: true, type: true, lagDays: true },
+    });
 
-  const created = await prisma.issueDependency.create({
-    data: {
+    const cycle = findCycle(existing as ScheduleEdge[], {
       predecessorId: input.predecessorId,
       successorId: input.successorId,
       type: input.type as never,
       lagDays: input.lagDays,
-      createdById: actor.userId,
-    },
-    select: { id: true, predecessorId: true, successorId: true, type: true, lagDays: true },
+    });
+    if (cycle) {
+      const keys = cycle
+        .map((id) => issues.find((i) => i.id === id)?.issueKey)
+        .filter(Boolean)
+        .join(' → ');
+      throw badRequest(
+        keys
+          ? `Связь образует цикл: ${keys}`
+          : 'Связь образует цикл — задача в итоге зависела бы сама от себя',
+      );
+    }
+
+    return tx.issueDependency.create({
+      data: {
+        predecessorId: input.predecessorId,
+        successorId: input.successorId,
+        type: input.type as never,
+        lagDays: input.lagDays,
+        createdById: actor.userId,
+      },
+      select: { id: true, predecessorId: true, successorId: true, type: true, lagDays: true },
+    });
   });
 
   emit(RealtimeEventType.ISSUE_UPDATED, {

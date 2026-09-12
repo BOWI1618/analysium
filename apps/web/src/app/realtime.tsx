@@ -56,6 +56,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           void queryClient.invalidateQueries({ queryKey: ['project', event.payload.projectId] });
           void queryClient.invalidateQueries({ queryKey: ['issues'] });
           void queryClient.invalidateQueries({ queryKey: qk.issue(event.payload.issueId) });
+          // The standalone /issue/:key page reads through its own key.
+          void queryClient.invalidateQueries({ queryKey: ['issue-by-key'] });
           break;
         }
         case RealtimeEventType.COMMENT_CREATED:

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowDesk — редизайн: типографский планшет</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800;900&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper: '#F4F1EA',
+          'paper-dim': '#EDE9DF',
+          ink: '#171512',
+          accent: '#FF4D00',
+          'accent-deep': '#C93A00',
+          marker: '#FFD600',
+          ok: '#0F7A44',
+          bad: '#C22E1F',
+        },
+        fontFamily: {
+          display: ['Unbounded', 'sans-serif'],
+          body: ['Manrope', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+        boxShadow: {
+          hard: '4px 4px 0 #171512',
+          'hard-sm': '2px 2px 0 #171512',
+          'hard-lg': '7px 7px 0 #171512',
+          'hard-accent': '4px 4px 0 #FF4D00',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  :root { --ink: #171512; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background-color: #F4F1EA;
+    background-image: radial-gradient(#17151212 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .b2 { border: 2px solid var(--ink); }
+  .b2-t { border-top: 2px solid var(--ink); }
+  .b2-b { border-bottom: 2px solid var(--ink); }
+  .b2-r { border-right: 2px solid var(--ink); }
+  .lift { transition: transform 120ms ease, box-shadow 120ms ease; }
+  .lift:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
+  .press:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .marker-hl { background: linear-gradient(180deg, transparent 58%, #FFD600 58%, #FFD600 92%, transparent 92%); }
+  .vert-label { writing-mode: vertical-rl; text-orientation: mixed; }
+  .tab-btn { position: relative; }
+  .tab-btn.active { background: #171512; color: #F4F1EA; }
+  .tab-btn.active .tab-num { color: #FF4D00; }
+  .card-done { opacity: .55; }
+  .tick { width: 2px; background: #171512; }
+  .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: #171512; border: 2px solid #F4F1EA; }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  @keyframes stripe { from { background-position: 0 0; } to { background-position: 28px 0; } }
+  .progress-stripe {
+    background-image: repeating-linear-gradient(-45deg, #171512 0 6px, transparent 6px 14px);
+    animation: stripe 1.4s linear infinite;
+  }
+  .page-fade { animation: fadeUp .35s ease both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body class="font-body text-ink min-h-screen">
+
+<div class="flex min-h-screen">
+
+  <!-- ═══════════ NAV RAIL ═══════════ -->
+  <aside class="w-[248px] shrink-0 b2-r bg-paper flex flex-col sticky top-0 h-screen">
+    <div class="b2-b px-5 py-4 flex items-center gap-3">
+      <div class="w-9 h-9 b2 bg-accent shadow-hard-sm grid place-items-center">
+        <i data-lucide="zap" class="w-5 h-5 text-paper"></i>
+      </div>
+      <div>
+        <div class="font-display font-800 text-sm leading-none">FlowDesk</div>
+        <div class="font-mono text-[10px] text-ink/60 mt-1">acme · v1.0</div>
+      </div>
+    </div>
+
+    <nav class="px-4 py-5 space-y-1 text-sm font-semibold">
+      <div class="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50 px-2 pb-2">Рубрики</div>
+      <a href="#" class="flex items-center gap-3 px-2 py-2 b2 bg-ink text-paper shadow-hard-sm">
+        <i data-lucide="house" class="w-4 h-4"></i><span>Главная</span>
+        <span class="ml-auto font-mono text-[10px] opacity-70">01</span>
+      </a>
+      <a href="#" class="flex items-center gap-3 px-2 py-2 hover:bg-paper-dim lift">
+        <i data-lucide="briefcase" class="w-4 h-4"></i><span>Мои задачи</span>
+        <span class="ml-auto font-mono text-[10px] opacity-70">02</span>
+      </a>
+      <a href="#" class="flex items-center gap-3 px-2 py-2 hover:bg-paper-dim lift">
+        <i data-lucide="inbox" class="w-4 h-4"></i><span>Входящие</span>
+        <span class="ml-auto font-mono text-[10px] bg-accent text-paper px-1.5 py-0.5">1</span>
+      </a>
+      <a href="#" class="flex items-center gap-3 px-2 py-2 hover:bg-paper-dim lift">
+        <i data-lucide="layout-grid" class="w-4 h-4"></i><span>Проекты</span>
+        <span class="ml-auto font-mono text-[10px] opacity-70">04</span>
+      </a>
+    </nav>
+
+    <div class="px-4 pt-2">
+      <div class="b2-t pt-4">
+        <div class="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/50 px-2 pb-3">Проекты</div>
+        <div class="space-y-1 text-sm">
+          <a href="#" class="flex items-center gap-2.5 px-2 py-1.5 hover:bg-paper-dim lift">
+            <span class="w-3 h-3 b2 bg-accent inline-block"></span>Сайт
+            <span class="ml-auto font-mono text-[10px]">20</span>
+          </a>
+          <a href="#" class="flex items-center gap-2.5 px-2 py-1.5 hover:bg-paper-dim lift">
+            <span class="w-3 h-3 b2 bg-marker inline-block"></span>Мобильное приложение
+            <span class="ml-auto font-mono text-[10px]">19</span>
+          </a>
+          <a href="#" class="flex items-center gap-2.5 px-2 py-1.5 hover:bg-paper-dim lift">
+            <span class="w-3 h-3 b2 bg-ok inline-block"></span>Внутренние сервисы
+            <span class="ml-auto font-mono text-[10px]">10</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-auto">
+      <div class="b2-t px-4 py-3 flex items-center gap-2.5">
+        <div class="w-8 h-8 b2 bg-marker shadow-hard-sm grid place-items-center font-display font-800 text-xs">АР</div>
+        <div class="min-w-0">
+          <div class="text-sm font-bold truncate">Алексей Рябов</div>
+          <div class="font-mono text-[10px] text-ink/60">alex@acme.test</div>
+        </div>
+        <i data-lucide="settings-2" class="w-4 h-4 ml-auto opacity-60"></i>
+      </div>
+      <div class="b2-t vert-label font-mono text-[9px] tracking-[0.35em] text-ink/40 px-3 py-3 uppercase">типографский планшет — макет 01</div>
+    </div>
+  </aside>
+
+  <!-- ═══════════ MAIN ═══════════ -->
+  <main class="flex-1 min-w-0 flex flex-col">
+
+    <!-- topbar -->
+    <header class="b2-b bg-paper/90 backdrop-blur sticky top-0 z-20 flex items-stretch">
+      <div class="px-6 flex items-center gap-3 b2-r">
+        <span class="font-mono text-[11px] uppercase tracking-[0.25em] text-ink/60">acme</span>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+        <span id="crumb" class="font-display font-800 text-xs">ГЛАВНАЯ</span>
+      </div>
+      <div class="flex-1 px-6 flex items-center">
+        <div class="b2 bg-paper flex items-center gap-2 px-3 py-1.5 w-[300px] shadow-hard-sm">
+          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+          <input placeholder="Поиск: ключ, слово, @человек…" class="bg-transparent outline-none text-sm w-full font-body">
+          <span class="font-mono text-[10px] border border-ink/40 px-1">⌘K</span>
+        </div>
+      </div>
+      <div class="px-6 flex items-center gap-3 b2-l">
+        <button class="b2 bg-paper p-2 shadow-hard-sm press lift"><i data-lucide="bell" class="w-4 h-4"></i></button>
+        <button class="b2 bg-accent text-paper font-bold text-sm px-4 py-2 shadow-hard press flex items-center gap-2">
+          <i data-lucide="plus" class="w-4 h-4"></i>Создать
+        </button>
+      </div>
+    </header>
+
+    <!-- screen tabs -->
+    <div class="b2-b bg-paper-dim px-6 flex gap-0 overflow-x-auto scroll-thin">
+      <button data-screen="home" class="tab-btn active flex items-center gap-2 px-5 py-3 b2-r text-sm font-bold whitespace-nowrap">
+        <span class="tab-num font-mono text-[10px]">S.1</span>Главная
+      </button>
+      <button data-screen="board" class="tab-btn flex items-center gap-2 px-5 py-3 b2-r text-sm font-bold whitespace-nowrap">
+        <span class="tab-num font-mono text-[10px]">S.2</span>Доска
+      </button>
+      <button data-screen="gantt" class="tab-btn flex items-center gap-2 px-5 py-3 b2-r text-sm font-bold whitespace-nowrap">
+        <span class="tab-num font-mono text-[10px]">S.3</span>Гантт
+      </button>
+      <button data-screen="issue" class="tab-btn flex items-center gap-2 px-5 py-3 text-sm font-bold whitespace-nowrap">
+        <span class="tab-num font-mono text-[10px]">S.4</span>Задача
+      </button>
+    </div>
+
+    <!-- ═══════════ SCREEN 1: ГЛАВНАЯ ═══════════ -->
+    <section id="screen-home" class="screen page-fade px-8 py-8 max-w-[1180px]">
+
+      <!-- masthead -->
+      <div class="flex items-end justify-between gap-8 pb-6 b2-b">
+        <div>
+          <div class="font-mono text-[11px] uppercase tracking-[0.3em] text-ink/60 mb-3">пятница · 12 сент · неделя 37</div>
+          <h1 class="font-display font-900 text-[44px] leading-[1.02] uppercase">
+            Ещё не<br>спите, <span class="marker-hl">Алексей</span>
+          </h1>
+        </div>
+        <div class="hidden lg:block text-right max-w-[300px]">
+          <p class="font-mono text-[11px] leading-relaxed text-ink/70">
+            На вас <b>14 открытых задач</b>, одна просрочена. Спринт «37» закрывается через 3 дня.
+          </p>
+        </div>
+      </div>
+
+      <!-- stat plates — ступенчатый ряд, не симметричная сетка -->
+      <div class="grid grid-cols-12 gap-5 pt-7 pb-2">
+        <div class="col-span-12 sm:col-span-5 lg:col-span-3">
+          <div class="b2 bg-ink text-paper shadow-hard p-5 lift">
+            <div class="flex items-center justify-between">
+              <i data-lucide="circle-user-round" class="w-5 h-5"></i>
+              <span class="font-mono text-[10px] uppercase tracking-widest opacity-60">на мне</span>
+            </div>
+            <div class="font-display font-900 text-5xl mt-3">14</div>
+            <div class="font-mono text-[10px] uppercase tracking-widest mt-2 opacity-70">назначено</div>
+          </div>
+        </div>
+        <div class="col-span-12 sm:col-span-5 lg:col-span-3 lg:translate-y-4">
+          <div class="b2 bg-bad text-paper shadow-hard-accent p-5 lift">
+            <div class="flex items-center justify-between">
+              <i data-lucide="triangle-alert" class="w-5 h-5"></i>
+              <span class="font-mono text-[10px] uppercase tracking-widest opacity-70">срочно</span>
+            </div>
+            <div class="font-display font-900 text-5xl mt-3">1</div>
+            <div class="font-mono text-[10px] uppercase tracking-widest mt-2 opacity-80">просрочено</div>
+          </div>
+        </div>
+        <div class="col-span-12 sm:col-span-6 lg:col-span-3">
+          <div class="b2 bg-marker shadow-hard p-5 lift">
+            <div class="flex items-center justify-between">
+              <i data-lucide="alarm-clock" class="w-5 h-5"></i>
+              <span class="font-mono text-[10px] uppercase tracking-widest opacity-60">дедлайны</span>
+            </div>
+            <div class="font-display font-900 text-5xl mt-3">2</div>
+            <div class="font-mono text-[10px] uppercase tracking-widest mt-2 opacity-70">срок на неделе</div>
+          </div>
+        </div>
+        <div class="col-span-12 sm:col-span-6 lg:col-span-3 lg:translate-y-6">
+          <div class="b2 bg-paper shadow-hard p-5 lift">
+            <div class="flex items-center justify-between">
+              <i data-lucide="check-check" class="w-5 h-5"></i>
+              <span class="font-mono text-[10px] uppercase tracking-widest opacity-50">неделя 37</span>
+            </div>
+            <div class="font-display font-900 text-5xl mt-3">0</div>
+            <div class="font-mono text-[10px] uppercase tracking-widest mt-2 opacity-60">сделано за неделю</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- queue + projects -->
+      <div class="grid grid-cols-12 gap-6 pt-8">
+        <div class="col-span-12 lg:col-span-8">
+          <div class="flex items-baseline justify-between pb-3">
+            <h2 class="font-display font-800 text-xl uppercase">Ваша очередь</h2>
+            <a href="#" class="font-mono text-[11px] underline underline-offset-4 decoration-2 decoration-accent">все мои задачи →</a>
+          </div>
+
+          <div class="b2 bg-paper shadow-hard-lg">
+            <div class="divide-y-2 divide-ink">
+              <!-- row -->
+              <a href="#" class="flex items-center gap-4 px-4 py-3 hover:bg-paper-dim transition-colors group">
+                <span class="font-mono text-[11px] font-bold w-14 shrink-0">OPS-5</span>
+                <i data-lucide="check-square" class="w-4 h-4 shrink-0 text-ink/60"></i>
+                <span class="text-sm font-semibold truncate">Перенести стоп-задачи в сервис планировщика</span>
+                <span class="ml-auto flex items-center gap-3 shrink-0">
+                  <span class="font-mono text-[10px] bg-bad text-paper px-1.5 py-0.5 font-bold">просрочено</span>
+                  <span class="font-mono text-[10px] text-ink/60">6 сент</span>
+                  <i data-lucide="chevrons-up" class="w-4 h-4 text-bad"></i>
+                </span>
+              </a>
+              <a href="#" class="flex items-center gap-4 px-4 py-3 hover:bg-paper-dim transition-colors">
+                <span class="font-mono text-[11px] font-bold w-14 shrink-0">WEB-1</span>
+                <i data-lucide="zap" class="w-4 h-4 shrink-0 text-accent"></i>
+                <span class="text-sm font-semibold truncate">Обновление дизайн-системы</span>
+                <span class="ml-auto flex items-center gap-3 shrink-0">
+                  <span class="font-mono text-[10px] bg-marker px-1.5 py-0.5 font-bold">в работе</span>
+                  <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                </span>
+              </a>
+              <a href="#" class="flex items-center gap-4 px-4 py-3 hover:bg-paper-dim transition-colors">
+                <span class="font-mono text-[11px] font-bold w-14 shrink-0">MOB-2</span>
+                <i data-lucide="zap" class="w-4 h-4 shrink-0 text-accent"></i>
+                <span class="text-sm font-semibold truncate">Push-уведомления</span>
+                <span class="ml-auto flex items-center gap-3 shrink-0">
+                  <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                </span>
+              </a>
+              <a href="#" class="flex items-center gap-4 px-4 py-3 hover:bg-paper-dim transition-colors">
+                <span class="font-mono text-[11px] font-bold w-14 shrink-0">OPS-15</span>
+                <i data-lucide="check-square" class="w-4 h-4 shrink-0 text-ink/60"></i>
+                <span class="text-sm font-semibold truncate">Релиз: Внутренние сервисы</span>
+                <span class="ml-auto flex items-center gap-3 shrink-0">
+                  <span class="font-mono text-[10px] text-ink/60">2 окт</span>
+                  <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                </span>
+              </a>
+              <a href="#" class="flex items-center gap-4 px-4 py-3 hover:bg-paper-dim transition-colors">
+                <span class="font-mono text-[11px] font-bold w-14 shrink-0">OPS-3</span>
+                <i data-lucide="check-square" class="w-4 h-4 shrink-0 text-ink/60"></i>
+                <span class="text-sm font-semibold truncate">Автоматизировать выставление счетов за месяц</span>
+                <span class="ml-auto flex items-center gap-3 shrink-0">
+                  <span class="font-mono text-[10px] text-ink/60">25 сент</span>
+                  <i data-lucide="equal" class="w-4 h-4"></i>
+                </span>
+              </a>
+              <a href="#" class="flex items-center gap-4 px-4 py-3 hover:bg-paper-dim transition-colors">
+                <span class="font-mono text-[11px] font-bold w-14 shrink-0">WEB-14</span>
+                <i data-lucide="bookmark" class="w-4 h-4 shrink-0 text-ok"></i>
+                <span class="text-sm font-semibold truncate">Неверные canonical на страницах с пагинацией</span>
+                <span class="ml-auto flex items-center gap-3 shrink-0">
+                  <span class="font-mono text-[10px] text-ink/60">пн, 14 сент</span>
+                  <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                </span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- projects column — смещена вниз -->
+        <div class="col-span-12 lg:col-span-4 lg:translate-y-8">
+          <div class="flex items-baseline justify-between pb-3">
+            <h2 class="font-display font-800 text-xl uppercase">Проекты</h2>
+            <a href="#" class="font-mono text-[11px] underline underline-offset-4 decoration-2 decoration-accent">все →</a>
+          </div>
+          <div class="space-y-4">
+            <a href="#" class="block b2 bg-paper shadow-hard p-4 lift">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-sm">Внутренние сервисы</span>
+                <span class="font-mono text-[10px] font-bold bg-ink text-paper px-1.5 py-0.5">OPS</span>
+              </div>
+              <div class="b2 mt-3 h-3 bg-paper-dim overflow-hidden">
+                <div class="h-full bg-ok" style="width: 33%"></div>
+              </div>
+              <div class="font-mono text-[10px] mt-2 text-ink/60">10 в работе · 5 готово</div>
+            </a>
+            <a href="#" class="block b2 bg-paper shadow-hard p-4 lift">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-sm">Мобильное приложение</span>
+                <span class="font-mono text-[10px] font-bold bg-ink text-paper px-1.5 py-0.5">MOB</span>
+              </div>
+              <div class="b2 mt-3 h-3 bg-paper-dim overflow-hidden">
+                <div class="h-full bg-marker" style="width: 34%"></div>
+              </div>
+              <div class="font-mono text-[10px] mt-2 text-ink/60">19 в работе · 10 готово</div>
+            </a>
+            <a href="#" class="block b2 bg-paper shadow-hard p-4 lift">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-sm">Сайт</span>
+                <span class="font-mono text-[10px] font-bold bg-ink text-paper px-1.5 py-0.5">WEB</span>
+              </div>
+              <div class="b2 mt-3 h-3 bg-paper-dim overflow-hidden">
+                <div class="h-full bg-accent" style="width: 26%"></div>
+              </div>
+              <div class="font-mono text-[10px] mt-2 text-ink/60">20 в работе · 7 готово</div>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ SCREEN 2: ДОСКА ═══════════ -->
+    <section id="screen-board" class="screen hidden px-8 py-8">
+      <div class="flex items-end justify-between pb-6 b2-b">
+        <div>
+          <div class="font-mono text-[11px] uppercase tracking-[0.3em] text-ink/60 mb-2">проект <b class="text-ink">WEB</b> · спринт 37</div>
+          <h1 class="font-display font-900 text-[38px] leading-none uppercase">Доска <span class="marker-hl">Сайта</span></h1>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <button class="b2 bg-paper px-3 py-2 text-sm font-bold shadow-hard-sm press lift flex items-center gap-2"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>Фильтры</button>
+          <button class="b2 bg-paper px-3 py-2 text-sm font-bold shadow-hard-sm press lift flex items-center gap-2"><i data-lucide="group" class="w-4 h-4"></i>Группировка</button>
+        </div>
+      </div>
+
+      <div class="flex gap-5 pt-7 overflow-x-auto scroll-thin pb-6 items-start">
+        <!-- колонка: бэклог -->
+        <div class="w-[290px] shrink-0">
+          <div class="b2 bg-paper-dim shadow-hard">
+            <div class="b2-b px-4 py-2.5 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-ink inline-block"></span>
+              <span class="font-mono text-[11px] font-bold uppercase tracking-widest">Бэклог</span>
+              <span class="ml-auto font-mono text-[11px]">7</span>
+            </div>
+            <div class="p-3 space-y-3">
+              <div class="b2 bg-paper shadow-hard-sm p-3 lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold">WEB-14</span>
+                  <i data-lucide="bookmark" class="w-3.5 h-3.5 text-ok"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">Неверные canonical на страницах с пагинацией</div>
+                <div class="flex items-center gap-2 mt-3">
+                  <span class="font-mono text-[10px] b2 px-1.5 py-0.5 bg-paper-dim">seo</span>
+                  <span class="ml-auto w-6 h-6 b2 bg-marker grid place-items-center font-display text-[9px] font-800">МЧ</span>
+                </div>
+              </div>
+              <div class="b2 bg-paper shadow-hard-sm p-3 lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold">WEB-19</span>
+                  <i data-lucide="check-square" class="w-3.5 h-3.5 text-ink/50"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">Сжать изображения первого экрана в WebP</div>
+                <div class="flex items-center gap-2 mt-3">
+                  <span class="font-mono text-[10px] bg-bad text-paper px-1.5 py-0.5 font-bold">просрочено</span>
+                  <span class="ml-auto w-6 h-6 b2 bg-accent grid place-items-center font-display text-[9px] font-800 text-paper">ИО</span>
+                </div>
+              </div>
+              <button class="w-full b2 border-dashed! bg-transparent py-2 font-mono text-[11px] uppercase tracking-widest text-ink/60 hover:text-ink hover:bg-paper-dim transition-colors" style="border-style:dashed">+ новая задача</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- колонка: в работе — приподнята -->
+        <div class="w-[290px] shrink-0 -translate-y-3">
+          <div class="b2 bg-paper shadow-hard-lg">
+            <div class="b2-b px-4 py-2.5 flex items-center gap-2 bg-accent text-paper">
+              <span class="w-2.5 h-2.5 bg-paper inline-block"></span>
+              <span class="font-mono text-[11px] font-bold uppercase tracking-widest">В работе</span>
+              <span class="ml-auto font-mono text-[11px]">4 / 6</span>
+            </div>
+            <div class="p-3 space-y-3">
+              <div class="b2 bg-marker shadow-hard-sm p-3 lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold">WEB-1</span>
+                  <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                </div>
+                <div class="text-sm font-bold leading-snug mt-1.5">Обновление дизайн-системы</div>
+                <div class="flex items-center gap-2 mt-3">
+                  <span class="font-mono text-[10px] b2 px-1.5 py-0.5 bg-paper">epic</span>
+                  <span class="ml-auto w-6 h-6 b2 bg-paper grid place-items-center font-display text-[9px] font-800">АР</span>
+                </div>
+              </div>
+              <div class="b2 bg-paper shadow-hard-sm p-3 lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold">WEB-11</span>
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-accent"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">Добавить ролевой доступ в админ-панель</div>
+                <div class="flex items-center gap-2 mt-3">
+                  <span class="font-mono text-[10px] text-ink/60">28 сент</span>
+                  <span class="ml-auto w-6 h-6 b2 bg-marker grid place-items-center font-display text-[9px] font-800">ПН</span>
+                </div>
+              </div>
+              <div class="b2 bg-paper shadow-hard-sm p-3 lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold">WEB-22</span>
+                  <i data-lucide="check-square" class="w-3.5 h-3.5 text-ink/50"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">Оптимизация LCP на главной до 1.8s</div>
+                <div class="flex items-center gap-2 mt-3">
+                  <span class="font-mono text-[10px] b2 px-1.5 py-0.5 bg-paper-dim">perf</span>
+                  <span class="ml-auto w-6 h-6 b2 bg-ok grid place-items-center font-display text-[9px] font-800 text-paper">ТЛ</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- колонка: ревью -->
+        <div class="w-[290px] shrink-0">
+          <div class="b2 bg-paper-dim shadow-hard">
+            <div class="b2-b px-4 py-2.5 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-marker inline-block"></span>
+              <span class="font-mono text-[11px] font-bold uppercase tracking-widest">Ревью</span>
+              <span class="ml-auto font-mono text-[11px]">2</span>
+            </div>
+            <div class="p-3 space-y-3">
+              <div class="b2 bg-paper shadow-hard-sm p-3 lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold">WEB-17</span>
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-accent"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">A/B тест нового лендинга</div>
+                <div class="flex items-center gap-2 mt-3">
+                  <span class="ml-auto w-6 h-6 b2 bg-marker grid place-items-center font-display text-[9px] font-800">ДВ</span>
+                </div>
+              </div>
+              <div class="b2 bg-paper shadow-hard-sm p-3 lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold">WEB-20</span>
+                  <i data-lucide="check-square" class="w-3.5 h-3.5 text-ink/50"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">Поправить сетку цен на 768px</div>
+                <div class="flex items-center gap-2 mt-3">
+                  <span class="ml-auto w-6 h-6 b2 bg-accent grid place-items-center font-display text-[9px] font-800 text-paper">МЧ</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- колонка: готово -->
+        <div class="w-[290px] shrink-0 translate-y-4">
+          <div class="b2 bg-paper-dim shadow-hard">
+            <div class="b2-b px-4 py-2.5 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-ok inline-block"></span>
+              <span class="font-mono text-[11px] font-bold uppercase tracking-widest">Готово</span>
+              <span class="ml-auto font-mono text-[11px]">7</span>
+            </div>
+            <div class="p-3 space-y-3">
+              <div class="b2 bg-paper shadow-hard-sm p-3 card-done lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold line-through">WEB-9</span>
+                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-ok"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">Миграция метрик на новый счётчик</div>
+              </div>
+              <div class="b2 bg-paper shadow-hard-sm p-3 card-done lift press cursor-grab">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[11px] font-bold line-through">WEB-8</span>
+                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-ok"></i>
+                </div>
+                <div class="text-sm font-semibold leading-snug mt-1.5">Sitemap для блога</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ SCREEN 3: ГАНТТ ═══════════ -->
+    <section id="screen-gantt" class="screen hidden px-8 py-8">
+      <div class="flex items-end justify-between pb-6 b2-b">
+        <div>
+          <div class="font-mono text-[11px] uppercase tracking-[0.3em] text-ink/60 mb-2">проект <b class="text-ink">WEB</b> · сентябрь–октябрь</div>
+          <h1 class="font-display font-900 text-[38px] leading-none uppercase">План <span class="marker-hl">релиза</span></h1>
+        </div>
+        <div class="hidden md:flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 b2 bg-accent inline-block"></span>крит. путь</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 b2 bg-ok inline-block"></span>готово</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 b2 bg-paper inline-block"></span>план</span>
+        </div>
+      </div>
+
+      <div class="b2 bg-paper shadow-hard-lg mt-7 overflow-hidden">
+        <!-- scale -->
+        <div class="grid b2-b bg-paper-dim" style="grid-template-columns: 240px repeat(21, 1fr)">
+          <div class="font-mono text-[10px] uppercase tracking-widest px-4 py-2.5 b2-r">задача</div>
+          <div class="col-span-7 b2-r relative">
+            <div class="absolute inset-0 grid grid-cols-7 divide-x divide-ink/20 font-mono text-[10px] text-ink/60">
+              <div class="px-2 py-2.5">пн 7</div><div class="px-2 py-2.5">8</div><div class="px-2 py-2.5">9</div><div class="px-2 py-2.5">10</div><div class="px-2 py-2.5">11</div><div class="px-2 py-2.5 bg-marker/50 font-bold text-ink">сб 12</div><div class="px-2 py-2.5">13</div>
+            </div>
+          </div>
+          <div class="col-span-7 b2-r relative">
+            <div class="absolute inset-0 grid grid-cols-7 divide-x divide-ink/20 font-mono text-[10px] text-ink/60">
+              <div class="px-2 py-2.5">14</div><div class="px-2 py-2.5">15</div><div class="px-2 py-2.5">16</div><div class="px-2 py-2.5">17</div><div class="px-2 py-2.5">18</div><div class="px-2 py-2.5">19</div><div class="px-2 py-2.5">20</div>
+            </div>
+          </div>
+          <div class="col-span-7 relative">
+            <div class="absolute inset-0 grid grid-cols-7 divide-x divide-ink/20 font-mono text-[10px] text-ink/60">
+              <div class="px-2 py-2.5">21</div><div class="px-2 py-2.5">22</div><div class="px-2 py-2.5">23</div><div class="px-2 py-2.5">24</div><div class="px-2 py-2.5">25</div><div class="px-2 py-2.5">26</div><div class="px-2 py-2.5">27</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- rows: 240px label + 21 day-cells -->
+        <div class="relative">
+          <!-- today line -->
+          <div class="absolute top-0 bottom-0 w-[3px] bg-bad z-10" style="left: calc(240px + (100% - 240px) * 6 / 21)">
+            <span class="absolute -top-1 -left-[5px] font-mono text-[9px] font-bold bg-bad text-paper px-1 py-0.5">сегодня</span>
+          </div>
+
+          <div class="divide-y-2 divide-ink/15 font-mono text-[11px]">
+            <div class="flex items-center h-[46px] group hover:bg-paper-dim">
+              <div class="w-[240px] shrink-0 px-4 flex items-center gap-2"><span class="font-bold">WEB-1</span><span class="font-body text-[13px] font-semibold truncate">Дизайн-система</span></div>
+              <div class="relative flex-1 h-full">
+                <div class="absolute top-1/2 -translate-y-1/2 h-[22px] b2 bg-accent shadow-hard-sm lift" style="left: 0%; width: calc(100% * 6 / 21)"></div>
+              </div>
+            </div>
+            <div class="flex items-center h-[46px] group hover:bg-paper-dim">
+              <div class="w-[240px] shrink-0 px-4 flex items-center gap-2"><span class="font-bold">WEB-11</span><span class="font-body text-[13px] font-semibold truncate">Ролевой доступ</span></div>
+              <div class="relative flex-1 h-full">
+                <div class="absolute top-1/2 -translate-y-1/2 h-[22px] b2 bg-accent shadow-hard-sm lift" style="left: calc(100% * 7 / 21); width: calc(100% * 4 / 21)"></div>
+                <!-- связь WEB-1 → WEB-11 -->
+                <div class="absolute top-1/2 h-[2px] bg-ink" style="left: calc(100% * 6 / 21); width: calc(100% * 1 / 21)"></div>
+              </div>
+            </div>
+            <div class="flex items-center h-[46px] group hover:bg-paper-dim">
+              <div class="w-[240px] shrink-0 px-4 flex items-center gap-2"><span class="font-bold">WEB-22</span><span class="font-body text-[13px] font-semibold truncate">LCP до 1.8s</span></div>
+              <div class="relative flex-1 h-full">
+                <div class="absolute top-1/2 -translate-y-1/2 h-[22px] b2 bg-paper shadow-hard-sm lift" style="left: calc(100% * 12 / 21); width: calc(100% * 4 / 21)"></div>
+                <div class="absolute top-1/2 h-[2px] bg-ink" style="left: calc(100% * 11 / 21); width: calc(100% * 1 / 21)"></div>
+              </div>
+            </div>
+            <div class="flex items-center h-[46px] group hover:bg-paper-dim">
+              <div class="w-[240px] shrink-0 px-4 flex items-center gap-2"><span class="font-bold">WEB-17</span><span class="font-body text-[13px] font-semibold truncate">A/B лендинг</span></div>
+              <div class="relative flex-1 h-full">
+                <div class="absolute top-1/2 -translate-y-1/2 h-[22px] b2 bg-paper shadow-hard-sm lift" style="left: calc(100% * 3 / 21); width: calc(100% * 5 / 21)"></div>
+              </div>
+            </div>
+            <div class="flex items-center h-[46px] group hover:bg-paper-dim">
+              <div class="w-[240px] shrink-0 px-4 flex items-center gap-2"><span class="font-bold">WEB-9</span><span class="font-body text-[13px] font-semibold truncate">Миграция метрик</span></div>
+              <div class="relative flex-1 h-full">
+                <div class="absolute top-1/2 -translate-y-1/2 h-[22px] b2 bg-ok shadow-hard-sm lift" style="left: calc(100% * 1 / 21); width: calc(100% * 3 / 21)"></div>
+              </div>
+            </div>
+            <div class="flex items-center h-[46px] group hover:bg-paper-dim">
+              <div class="w-[240px] shrink-0 px-4 flex items-center gap-2"><span class="font-bold">WEB-24</span><span class="font-body text-[13px] font-semibold truncate">Релиз 1.4</span></div>
+              <div class="relative flex-1 h-full">
+                <!-- майлстоун: ромб -->
+                <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[18px] h-[18px] b2 bg-marker rotate-45 shadow-hard-sm" style="left: calc(100% * 18 / 21)"></div>
+                <div class="absolute top-1/2 h-[2px] bg-ink border-t border-dashed" style="left: calc(100% * 16 / 21); width: calc(100% * 2 / 21)"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- banner: каскад -->
+          <div class="b2-t bg-marker px-4 py-3 flex items-center gap-3">
+            <i data-lucide="move-right" class="w-4 h-4 shrink-0"></i>
+            <span class="text-sm font-bold">Перенос WEB-1 сдвинет 2 зависимые задачи</span>
+            <span class="font-mono text-[10px]">WEB-11 +2д · WEB-22 +2д</span>
+            <button class="ml-auto b2 bg-ink text-paper font-bold text-xs px-3 py-1.5 shadow-hard-sm press">Сдвинуть</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ SCREEN 4: ЗАДАЧА ═══════════ -->
+    <section id="screen-issue" class="screen hidden px-8 py-8 max-w-[1180px]">
+      <div class="font-mono text-[11px] uppercase tracking-[0.3em] text-ink/60 pb-3">
+        <a href="#" class="underline underline-offset-4 decoration-2 decoration-accent">web</a> / <span class="text-ink font-bold">web-1</span>
+      </div>
+
+      <div class="grid grid-cols-12 gap-8">
+        <!-- content -->
+        <div class="col-span-12 lg:col-span-8">
+          <h1 class="font-display font-900 text-[34px] leading-[1.05] uppercase">
+            Обновление<br><span class="marker-hl">дизайн-системы</span>
+          </h1>
+
+          <div class="flex flex-wrap items-center gap-2.5 mt-5">
+            <span class="font-mono text-[10px] font-bold uppercase tracking-widest bg-accent text-paper px-2 py-1 b2 shadow-hard-sm">в работе</span>
+            <span class="font-mono text-[10px] font-bold uppercase tracking-widest bg-paper px-2 py-1 b2 shadow-hard-sm">эпик</span>
+            <span class="font-mono text-[10px] uppercase tracking-widest bg-paper px-2 py-1 b2">дизайн</span>
+            <span class="font-mono text-[10px] uppercase tracking-widest bg-paper px-2 py-1 b2">система</span>
+            <span class="font-mono text-[10px] text-ink/60 px-2">спринт 37 · 8 SP</span>
+          </div>
+
+          <div class="b2 bg-paper shadow-hard-lg mt-8">
+            <div class="b2-b bg-paper-dim px-4 py-2 font-mono text-[10px] uppercase tracking-widest flex items-center gap-2">
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i> описание
+            </div>
+            <div class="px-5 py-5 text-[15px] leading-relaxed space-y-4">
+              <p>Сводим компоненты на единые токены: цвета, типографика, отступы. Старые стили удаляем, не поддерживаем вечно две системы.</p>
+              <p><b>Проверить:</b> тёмная тема редактора, таблицы в аналитике, пустые состояния на узких экранах.</p>
+              <ul class="space-y-2">
+                <li class="flex gap-2.5 items-start"><i data-lucide="square-check" class="w-4 h-4 mt-1 text-ok"></i><span>Инвентаризация всех hex в коде</span></li>
+                <li class="flex gap-2.5 items-start"><i data-lucide="square-check" class="w-4 h-4 mt-1 text-ok"></i><span>Токены цветов и состояний</span></li>
+                <li class="flex gap-2.5 items-start"><i data-lucide="square" class="w-4 h-4 mt-1"></i><span>Перевод борда и панели задачи</span></li>
+                <li class="flex gap-2.5 items-start"><i data-lucide="square" class="w-4 h-4 mt-1"></i><span>Регрессия по e2e-сценариям</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- комментарии -->
+          <div class="mt-8">
+            <div class="flex items-baseline gap-3 pb-3">
+              <h2 class="font-display font-800 text-xl uppercase">Обсуждение</h2>
+              <span class="font-mono text-[10px] bg-ink text-paper px-1.5 py-0.5">3</span>
+            </div>
+            <div class="space-y-5">
+              <div class="flex gap-3">
+                <div class="w-8 h-8 b2 bg-marker shadow-hard-sm grid place-items-center font-display text-[10px] font-800 shrink-0">МЧ</div>
+                <div class="b2 bg-paper shadow-hard px-4 py-3 flex-1">
+                  <div class="flex items-baseline gap-2"><b class="text-sm">Мария Чен</b><span class="font-mono text-[10px] text-ink/50">вчера 18:42</span></div>
+                  <p class="text-sm mt-1.5 leading-relaxed">Токены готовы в ветке <code class="font-mono text-xs bg-paper-dim px-1">feat/tokens</code>. На борде остались две карточки со старыми цветами — глянете?</p>
+                </div>
+              </div>
+              <div class="flex gap-3 lg:ml-10">
+                <div class="w-8 h-8 b2 bg-accent shadow-hard-sm grid place-items-center font-display text-[10px] font-800 text-paper shrink-0">АР</div>
+                <div class="b2 bg-paper shadow-hard px-4 py-3 flex-1">
+                  <div class="flex items-baseline gap-2"><b class="text-sm">Алексей Рябов</b><span class="font-mono text-[10px] text-ink/50">сегодня 09:15</span></div>
+                  <p class="text-sm mt-1.5 leading-relaxed">Посмотрел — забираю. Ещё добавлю хинт про просроченные даты, иначе в новой системе незаметно.</p>
+                </div>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-8 h-8 b2 bg-paper-dim grid place-items-center shrink-0"><i data-lucide="pen-line" class="w-4 h-4"></i></div>
+                <div class="b2 bg-paper px-4 py-3 flex-1 flex items-center justify-between shadow-hard-sm">
+                  <span class="text-sm text-ink/50">Написать комментарий…</span>
+                  <span class="font-mono text-[10px] border border-ink/40 px-1">⌘⏎</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- meta rail — смещена вниз относительно заголовка -->
+        <aside class="col-span-12 lg:col-span-4 lg:translate-y-10">
+          <div class="b2 bg-paper shadow-hard-lg divide-y-2 divide-ink">
+            <div class="px-4 py-3">
+              <div class="font-mono text-[10px] uppercase tracking-widest text-ink/50">статус</div>
+              <div class="flex items-center gap-2 mt-1.5">
+                <span class="w-2.5 h-2.5 bg-accent inline-block"></span>
+                <b class="text-sm">В работе</b>
+                <i data-lucide="chevron-down" class="w-4 h-4 ml-auto opacity-60"></i>
+              </div>
+            </div>
+            <div class="px-4 py-3">
+              <div class="font-mono text-[10px] uppercase tracking-widest text-ink/50">исполнитель</div>
+              <div class="flex items-center gap-2 mt-1.5">
+                <span class="w-6 h-6 b2 bg-accent grid place-items-center font-display text-[9px] font-800 text-paper">АР</span>
+                <b class="text-sm">Алексей Рябов</b>
+              </div>
+            </div>
+            <div class="px-4 py-3">
+              <div class="font-mono text-[10px] uppercase tracking-widest text-ink/50">срок</div>
+              <div class="flex items-center gap-2 mt-1.5 font-mono text-[12px]">
+                <i data-lucide="calendar" class="w-4 h-4"></i>7 сент → 18 сент
+              </div>
+            </div>
+            <div class="px-4 py-3">
+              <div class="font-mono text-[10px] uppercase tracking-widest text-ink/50">прогресс подзадач</div>
+              <div class="b2 mt-2 h-3 bg-paper-dim overflow-hidden">
+                <div class="h-full progress-stripe bg-accent/90" style="width: 50%"></div>
+              </div>
+              <div class="font-mono text-[10px] mt-1.5 text-ink/60">2 из 4</div>
+            </div>
+            <div class="px-4 py-3 bg-paper-dim">
+              <div class="font-mono text-[10px] uppercase tracking-widest text-ink/50">история</div>
+              <div class="mt-2 space-y-2 text-[12px] leading-snug">
+                <div class="flex gap-2"><i data-lucide="git-commit-horizontal" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i><span><b>Алексей</b> сменил(а) статус: Бэклог → В работе</span></div>
+                <div class="flex gap-2"><i data-lucide="git-commit-horizontal" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i><span><b>Мария</b> добавила метку «система»</span></div>
+                <div class="flex gap-2"><i data-lucide="git-commit-horizontal" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i><span><b>Алексей</b> создал задачу</span></div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <footer class="mt-auto b2-t px-8 py-4 flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.25em] text-ink/50">
+      <span>FlowDesk · макет редизайна</span>
+      <span class="ml-auto">Unbounded / Manrope / JetBrains Mono</span>
+      <span>paper #F4F1EA · ink #171512 · accent #FF4D00</span>
+    </footer>
+  </main>
+</div>
+
+<script>
+  const crumbTitles = { home: 'ГЛАВНАЯ', board: 'ДОСКА', gantt: 'ГАНТТ', issue: 'ЗАДАЧА' };
+  document.querySelectorAll('.tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.screen').forEach((s) => s.classList.add('hidden'));
+      const target = document.getElementById('screen-' + btn.dataset.screen);
+      target.classList.remove('hidden');
+      target.classList.remove('page-fade');
+      void target.offsetWidth;
+      target.classList.add('page-fade');
+      document.getElementById('crumb').textContent = crumbTitles[btn.dataset.screen];
+      lucide.createIcons();
+    });
+  });
+  lucide.createIcons();
+</script>
+</body>
+</html>

@@ -6,11 +6,13 @@ import { Archive, LayoutGrid, Plus, Star, StarOff } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useProjects, useToggleFavorite } from '~/features/projects/hooks';
 import { Topbar } from '~/components/Topbar';
+import { Marker, Masthead } from '~/ui/Masthead';
 import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
 import { Button, IconButton } from '~/ui/Button';
 import { EmptyState, ErrorState, ProgressBar, Skeleton } from '~/ui/Feedback';
 import { Checkbox } from '~/ui/Input';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
 import { PROJECT_TYPE_LABEL } from '~/lib/labels';
 
@@ -39,21 +41,28 @@ export function ProjectsPage() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-semibold">Проекты</h1>
-              <p className="text-sm text-text-muted">
-                {projects ? `${pluralize(projects.length, ['проект', 'проекта', 'проектов'])} в «${workspace?.name}»` : 'Загружаем…'}
-              </p>
-            </div>
-            <Checkbox
-              checked={showArchived}
-              onChange={(event) => setShowArchived(event.target.checked)}
-              label={<span className="text-xs text-text-muted">Показать архивные</span>}
-            />
-          </div>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
+        <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+          <Masthead
+            kicker={workspace?.name}
+            title={
+              <>
+                Все <Marker>проекты</Marker>
+              </>
+            }
+            note={
+              projects
+                ? `${pluralize(projects.length, ['проект', 'проекта', 'проектов'])} в «${workspace?.name}»`
+                : 'Загружаем…'
+            }
+            actions={
+              <Checkbox
+                checked={showArchived}
+                onChange={(event) => setShowArchived(event.target.checked)}
+                label={<span className="text-xs text-text-muted">Показать архивные</span>}
+              />
+            }
+          />
 
           {error ? (
             <ErrorState error={error} onRetry={() => void refetch()} />
@@ -67,7 +76,7 @@ export function ProjectsPage() {
             <EmptyState
               icon={<LayoutGrid className="size-6" />}
               title="Проектов пока нет"
-description="В проекте есть доска, бэклог и собственный рабочий процесс. Создайте первый, чтобы начать."
+              description="В проекте есть доска, бэклог и собственный рабочий процесс. Создайте первый, чтобы начать."
               action={
                 canCreate ? (
                   <Link to="/projects/new">
@@ -89,18 +98,17 @@ description="В проекте есть доска, бэклог и собств
                   <li key={project.id}>
                     <div
                       className={clsx(
-                        'group relative h-full rounded-lg border border-border bg-surface p-3.5 transition-colors',
-                        'hover:border-border-strong hover:bg-surface-hover',
+                        'group relative h-full border-2 border-border-strong bg-surface p-3.5 shadow-sm transition-colors',
+                        'hover:bg-surface-hover fd-lift',
                         project.isArchived && 'opacity-60',
                       )}
                     >
                       <div className="flex items-start gap-2.5">
                         <span
-                          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-lg"
-                          style={{ backgroundColor: `${project.color}1f` }}
+                          className="flex size-9 shrink-0 items-center justify-center bg-surface-active text-text"
                           aria-hidden="true"
                         >
-                          {project.icon}
+                          <ProjectIcon icon={project.icon} color={project.color} size="md" />
                         </span>
 
                         <div className="min-w-0 flex-1">

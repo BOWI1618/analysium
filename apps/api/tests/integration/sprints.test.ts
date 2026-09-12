@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   createIssue,
   createProject,
-  dropTestSchema,
+  disconnectTestDb,
   migrateTestSchema,
   registerUser,
   type TestUser,
@@ -23,7 +23,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
-  await dropTestSchema();
+  await disconnectTestDb();
 });
 
 

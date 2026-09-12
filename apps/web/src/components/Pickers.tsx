@@ -40,7 +40,7 @@ export function StatusPicker({
 }: PickerProps<string> & { statuses: StatusDto[] }) {
   return (
     <Menu>
-      <MenuTrigger asChild>{children}</MenuTrigger>
+      <MenuTrigger>{children}</MenuTrigger>
       {!disabled && (
         <MenuContent align={align} label="Изменить статус" width={220}>
           <MenuLabel>Статус</MenuLabel>
@@ -71,7 +71,7 @@ export function PriorityPicker({
 }: PickerProps<IssuePriority>) {
   return (
     <Menu>
-      <MenuTrigger asChild>{children}</MenuTrigger>
+      <MenuTrigger>{children}</MenuTrigger>
       {!disabled && (
         <MenuContent align={align} label="Изменить приоритет" width={180}>
           <MenuLabel>Приоритет</MenuLabel>
@@ -96,7 +96,7 @@ export function PriorityPicker({
 export function TypePicker({ value, onChange, disabled, children, align = 'start' }: PickerProps<IssueType>) {
   return (
     <Menu>
-      <MenuTrigger asChild>{children}</MenuTrigger>
+      <MenuTrigger>{children}</MenuTrigger>
       {!disabled && (
         <MenuContent align={align} label="Изменить тип задачи" width={180}>
           <MenuLabel>Тип</MenuLabel>
@@ -137,7 +137,7 @@ export function UserPicker({
   children,
   align = 'start',
   allowUnassigned = true,
-  label = 'Assignee',
+  label = 'Исполнитель',
 }: UserPickerProps) {
   const [term, setTerm] = useState('');
 
@@ -149,16 +149,16 @@ export function UserPicker({
 
   return (
     <Menu onOpenChange={(open) => !open && setTerm('')}>
-      <MenuTrigger asChild>{children}</MenuTrigger>
+      <MenuTrigger>{children}</MenuTrigger>
       {!disabled && (
-        <MenuContent align={align} label={`Change ${label.toLowerCase()}`} width={240}>
-          <div className="mb-1 flex items-center gap-1.5 rounded-md bg-surface-sunken px-2 py-1">
+        <MenuContent align={align} label={`Изменить ${label.toLowerCase()}`} width={240}>
+          <div className="mb-1 flex items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface-sunken px-2 py-1">
             <Search className="size-3.5 shrink-0 text-text-subtle" />
             <input
               autoFocus
               value={term}
               onChange={(event) => setTerm(event.target.value)}
-              placeholder={`Search ${label.toLowerCase()}…`}
+              placeholder={`Поиск ${label.toLowerCase()}…`}
               className="w-full bg-transparent text-sm outline-none placeholder:text-text-subtle"
             />
           </div>
@@ -168,7 +168,7 @@ export function UserPicker({
               selected={value === null}
               onSelect={() => onChange(null)}
             >
-              Unassigned
+              Без исполнителя
             </MenuItem>
           )}
           {filtered.length === 0 ? (
@@ -222,10 +222,10 @@ export function LabelPicker({
 
   return (
     <Menu onOpenChange={(open) => !open && setTerm('')}>
-      <MenuTrigger asChild>{children}</MenuTrigger>
+      <MenuTrigger>{children}</MenuTrigger>
       {!disabled && (
         <MenuContent align={align} label="Изменить метки" width={240}>
-          <div className="mb-1 flex items-center gap-1.5 rounded-md bg-surface-sunken px-2 py-1">
+          <div className="mb-1 flex items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface-sunken px-2 py-1">
             <Search className="size-3.5 shrink-0 text-text-subtle" />
             <input
               autoFocus
@@ -239,7 +239,7 @@ export function LabelPicker({
             <MenuItem
               key={label.id}
               keepOpen
-              icon={<span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} />}
+              icon={<span className="size-2.5 border border-border-strong" style={{ backgroundColor: label.color }} />}
               selected={selected.has(label.id)}
               onSelect={() =>
                 onChange(
@@ -253,7 +253,7 @@ export function LabelPicker({
           {onCreate && term.trim() && !exactMatch && (
             <>
               <MenuSeparator />
-              <MenuItem onSelect={() => onCreate(term.trim())}>Create “{term.trim()}”</MenuItem>
+              <MenuItem onSelect={() => onCreate(term.trim())}>Создать «{term.trim()}»</MenuItem>
             </>
           )}
           {filtered.length === 0 && !onCreate && (
@@ -300,10 +300,10 @@ export function MultiSelect({
 
   return (
     <Menu onOpenChange={(open) => !open && setTerm('')}>
-      <MenuTrigger asChild>{children}</MenuTrigger>
+      <MenuTrigger>{children}</MenuTrigger>
       <MenuContent align={align} label={title} width={230}>
         <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-2xs font-semibold tracking-wide text-text-subtle uppercase">{title}</span>
+          <span className="text-2xs font-bold tracking-wide text-text-subtle uppercase">{title}</span>
           {value.length > 0 && (
             <button
               type="button"
@@ -311,12 +311,12 @@ export function MultiSelect({
               className="inline-flex items-center gap-0.5 text-2xs text-text-subtle hover:text-text"
             >
               <X className="size-2.5" />
-              Clear
+              Очистить
             </button>
           )}
         </div>
         {searchable && options.length > 7 && (
-          <div className="mb-1 flex items-center gap-1.5 rounded-md bg-surface-sunken px-2 py-1">
+          <div className="mb-1 flex items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface-sunken px-2 py-1">
             <Search className="size-3.5 shrink-0 text-text-subtle" />
             <input
               autoFocus
@@ -380,8 +380,8 @@ export function DateField({
         }}
         aria-label="Срок"
         className={clsx(
-          'h-7 w-full rounded-md border border-transparent bg-transparent px-1.5 text-sm',
-          'hover:border-border hover:bg-surface-hover focus:border-accent focus:outline-none',
+          'h-7 w-full rounded-md border-2 border-border-strong bg-surface px-1.5 text-sm',
+          'hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none',
           'disabled:cursor-not-allowed disabled:opacity-60',
           !dateValue && 'text-text-subtle',
         )}

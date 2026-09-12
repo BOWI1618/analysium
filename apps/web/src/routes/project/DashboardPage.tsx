@@ -11,6 +11,8 @@ import { PRIORITY_META } from '~/components/IssueMeta';
 import { Avatar } from '~/ui/Avatar';
 import { SegmentedControl } from '~/ui/Tabs';
 import { EmptyState, ErrorState, ProgressBar, Skeleton } from '~/ui/Feedback';
+import { Panel } from '~/ui/Panel';
+import { Marker, Masthead } from '~/ui/Masthead';
 import { shortDate } from '~/lib/format';
 
 /**
@@ -32,20 +34,28 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-      <div className="mx-auto max-w-6xl space-y-4 p-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Аналитика</h1>
-          <SegmentedControl
-            label="Период"
-            value={String(days)}
-            onChange={(value) => setDays(Number(value))}
-            options={[
-              { value: '7', label: '7 дн' },
-              { value: '30', label: '30 дн' },
-              { value: '90', label: '90 дн' },
-            ]}
-          />
-        </div>
+      <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
+        <Masthead
+          size="md"
+          kicker={`последние ${days} дн.`}
+          title={
+            <>
+              <Marker>Аналитика</Marker>
+            </>
+          }
+          actions={
+            <SegmentedControl
+              label="Период"
+              value={String(days)}
+              onChange={(value) => setDays(Number(value))}
+              options={[
+                { value: '7', label: '7 дн' },
+                { value: '30', label: '30 дн' },
+                { value: '90', label: '90 дн' },
+              ]}
+            />
+          }
+        />
 
         {isLoading || !data ? (
           <DashboardSkeleton />
@@ -85,7 +95,7 @@ export function DashboardPage() {
 
             <div className="grid gap-3 lg:grid-cols-2">
               {/* Status breakdown */}
-              <Panel title="По статусам">
+              <Panel bodyClassName="p-3.5" title="По статусам">
                 {data.byStatus.length === 0 ? (
                   <EmptyState compact title="Пока нечего показать" />
                 ) : (
@@ -94,16 +104,16 @@ export function DashboardPage() {
                       <li key={row.statusId}>
                         <div className="mb-1 flex items-center gap-2 text-xs">
                           <span
-                            className="size-2 shrink-0 rounded-full"
+                            className="size-2.5 shrink-0 border border-border-strong"
                             style={{ backgroundColor: row.color }}
                             aria-hidden="true"
                           />
                           <span className="min-w-0 flex-1 truncate">{row.name}</span>
                           <span className="fd-num text-text-subtle">{row.count}</span>
                         </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-active">
+                        <div className="h-2.5 w-full overflow-hidden border-2 border-border-strong bg-surface-sunken">
                           <div
-                            className="h-full rounded-full"
+                            className="h-full"
                             style={{
                               width: `${data.totals.total ? (row.count / data.totals.total) * 100 : 0}%`,
                               backgroundColor: row.color,
@@ -117,7 +127,7 @@ export function DashboardPage() {
               </Panel>
 
               {/* Priority breakdown */}
-              <Panel title="По приоритетам">
+              <Panel bodyClassName="p-3.5" title="По приоритетам">
                 <ul className="space-y-2.5">
                   {data.byPriority
                     .filter((row) => row.count > 0)
@@ -125,16 +135,16 @@ export function DashboardPage() {
                       <li key={row.priority}>
                         <div className="mb-1 flex items-center gap-2 text-xs">
                           <span
-                            className="size-2 shrink-0 rounded-full"
+                            className="size-2.5 shrink-0 border border-border-strong"
                             style={{ backgroundColor: `var(${PRIORITY_META[row.priority].varName})` }}
                             aria-hidden="true"
                           />
                           <span className="min-w-0 flex-1">{PRIORITY_META[row.priority].label}</span>
                           <span className="fd-num text-text-subtle">{row.count}</span>
                         </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-active">
+                        <div className="h-2.5 w-full overflow-hidden border-2 border-border-strong bg-surface-sunken">
                           <div
-                            className="h-full rounded-full"
+                            className="h-full"
                             style={{
                               width: `${data.totals.total ? (row.count / data.totals.total) * 100 : 0}%`,
                               backgroundColor: `var(${PRIORITY_META[row.priority].varName})`,
@@ -151,13 +161,13 @@ export function DashboardPage() {
             </div>
 
             {/* Created vs completed */}
-            <Panel title={`Создано и завершено — за ${days} дн.`}>
+            <Panel bodyClassName="p-3.5" title={`Создано и завершено — за ${days} дн.`}>
               <ActivityChart data={data.activity} />
             </Panel>
 
             <div className="grid gap-3 lg:grid-cols-2">
               {/* Workload */}
-              <Panel title="Нагрузка по исполнителям">
+              <Panel bodyClassName="p-3.5" title="Нагрузка по исполнителям">
                 {data.byAssignee.length === 0 ? (
                   <EmptyState compact title="Ничего не назначено" />
                 ) : (
@@ -185,7 +195,7 @@ export function DashboardPage() {
               </Panel>
 
               {/* Velocity */}
-              <Panel title="Velocity">
+              <Panel bodyClassName="p-3.5" title="Velocity">
                 {data.velocity.length === 0 ? (
                   <EmptyState
                     compact
@@ -201,6 +211,7 @@ description="Velocity появится после первого завершё�
             {/* Sprint burndown */}
             {data.sprint && (
               <Panel
+                bodyClassName="p-3.5"
                 title={`Burndown — ${data.sprint.name}`}
                 subtitle={
                   data.sprint.startDate && data.sprint.endDate
@@ -220,26 +231,6 @@ description="Velocity появится после первого завершё�
 
 /* ------------------------------------------------------------------ bits */
 
-function Panel({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-lg border border-border bg-surface p-3.5">
-      <header className="mb-3">
-        <h2 className="text-xs font-semibold tracking-wide text-text-muted uppercase">{title}</h2>
-        {subtitle && <p className="fd-num mt-0.5 text-2xs text-text-subtle">{subtitle}</p>}
-      </header>
-      {children}
-    </section>
-  );
-}
-
 function StatCard({
   label,
   value,
@@ -254,23 +245,23 @@ function StatCard({
   tone: 'accent' | 'success' | 'danger' | 'warning';
 }) {
   const tones = {
-    accent: 'text-accent bg-accent-subtle',
-    success: 'text-success bg-success-subtle',
-    danger: 'text-danger bg-danger-subtle',
-    warning: 'text-warning bg-warning-subtle',
+    accent: 'bg-ink text-text-inverted',
+    success: 'bg-success text-accent-fg',
+    danger: 'bg-danger text-accent-fg',
+    warning: 'bg-marker text-ink',
   } as const;
 
   const percent = total > 0 ? Math.round((value / total) * 100) : 0;
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-3.5">
-      <div className="flex items-center gap-2">
-        <span className={clsx('flex size-7 items-center justify-center rounded-md', tones[tone])}>{icon}</span>
-        <span className="text-xs font-medium text-text-muted">{label}</span>
+    <div className={clsx('border-2 border-border-strong p-4 shadow-md', tones[tone])}>
+      <div className="flex items-center justify-between">
+        {icon}
+        <span className="fd-num text-[10px] uppercase tracking-widest opacity-70">{label}</span>
       </div>
-      <p className="fd-num mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-3 font-display text-3xl font-black tabular-nums">{value}</p>
       {total > 0 && (
-        <p className="fd-num mt-0.5 text-2xs text-text-subtle">
+        <p className="fd-num mt-1.5 text-[10px] uppercase tracking-widest opacity-70">
           {percent}% из {total}
         </p>
       )}
@@ -371,21 +362,21 @@ function VelocityChart({
   );
 }
 
-function BurndownChart({ data }: { data: { date: string; remaining: number; ideal: number }[] }) {
+function BurndownChart({ data }: { data: { date: string; remaining: number | null; ideal: number }[] }) {
   if (data.length < 2) {
     return <EmptyState compact title="Недостаточно данных" description="Укажите даты спринта, чтобы увидеть burndown." />;
   }
 
-  const max = Math.max(1, ...data.map((d) => Math.max(d.ideal, Number.isNaN(d.remaining) ? 0 : d.remaining)));
+  const max = Math.max(1, ...data.map((d) => Math.max(d.ideal, d.remaining ?? 0)));
   const width = 300;
   const height = 100;
   const stepX = width / (data.length - 1);
 
-  const toPoints = (pick: (d: (typeof data)[number]) => number) =>
+  const toPoints = (pick: (d: (typeof data)[number]) => number | null) =>
     data
       .map((d, i) => {
         const value = pick(d);
-        if (Number.isNaN(value)) return null;
+        if (value === null || Number.isNaN(value)) return null;
         return `${i * stepX},${height - (value / max) * (height - 10) - 5}`;
       })
       .filter((point): point is string => point !== null)

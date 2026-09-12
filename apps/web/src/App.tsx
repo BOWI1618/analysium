@@ -1,8 +1,8 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
 import { BrowserRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from './lib/api';
-import { ThemeProvider } from './app/theme';
+import { qk } from './lib/queryKeys';
 import { ToastProvider } from './app/toast';
 import { SessionProvider } from './app/session';
 import { RealtimeProvider } from './app/realtime';
@@ -68,21 +68,63 @@ class ErrorBoundary extends Component<{ children: ReactNode }, BoundaryState> {
   }
 }
 
+/**
+ * A 401 on any query or mutation means the session is gone. Invalidating the
+ * session query flips it to an error, and RequireAuth redirects to /login.
+ * The failing session query itself is left alone so the redirect cannot loop.
+ */
+function useSessionExpiryRedirect() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const handleError = (queryKey: readonly unknown[], error: unknown) => {
+      if (queryKey[0] === qk.session[0]) return;
+      if (error instanceof ApiError && error.isAuth) {
+        void queryClient.invalidateQueries({ queryKey: qk.session });
+      }
+    };
+
+    const unsubscribeQueries = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'error') {
+        handleError(event.query.queryKey, event.action.error);
+      }
+    });
+    const unsubscribeMutations = queryClient.getMutationCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'error') {
+        handleError([], event.action.error);
+      }
+    });
+
+    return () => {
+      unsubscribeQueries();
+      unsubscribeMutations();
+    };
+  }, [queryClient]);
+}
+
+/**
+ * Lives inside QueryClientProvider — the hook watches the caches for 401s and
+ * forces the session query to refetch, which lets RequireAuth redirect.
+ */
+function SessionExpiryWatcher() {
+  useSessionExpiryRedirect();
+  return null;
+}
+
 export function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <ToastProvider>
-            <BrowserRouter>
-              <SessionProvider>
-                <RealtimeProvider>
-                  <AppRoutes />
-                </RealtimeProvider>
-              </SessionProvider>
-            </BrowserRouter>
-          </ToastProvider>
-        </ThemeProvider>
+        <SessionExpiryWatcher />
+        <ToastProvider>
+          <BrowserRouter>
+            <SessionProvider>
+              <RealtimeProvider>
+                <AppRoutes />
+              </RealtimeProvider>
+            </SessionProvider>
+          </BrowserRouter>
+        </ToastProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

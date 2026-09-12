@@ -55,7 +55,7 @@ export function ShortcutsDialog() {
       <div className="grid gap-6 sm:grid-cols-2">
         {GROUPS.map((group) => (
           <section key={group.title}>
-            <h3 className="mb-2 text-2xs font-semibold tracking-wide text-text-subtle uppercase">
+            <h3 className="fd-eyebrow mb-2.5">
               {group.title}
             </h3>
             <ul className="space-y-1.5">
@@ -65,7 +65,7 @@ export function ShortcutsDialog() {
                   <span className="flex shrink-0 items-center gap-1">
                     {item.keys.map((key, index) => (
                       <span key={`${key}-${index}`} className="flex items-center gap-1">
-                        {index > 0 && <span className="text-2xs text-text-subtle">then</span>}
+                        {index > 0 && <span className="text-2xs text-text-subtle">затем</span>}
                         <Kbd>{key}</Kbd>
                       </span>
                     ))}

@@ -41,6 +41,8 @@ export function GanttPage() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [pendingShifts, setPendingShifts] = useState<{
     issueId: string;
+    start: string;
+    end: string;
     shifts: ScheduleShiftDto[];
   } | null>(null);
 
@@ -73,7 +75,9 @@ export function GanttPage() {
         onSuccess: (result) => {
           // Only interrupt when the move actually broke something downstream.
           if (result.suggestedShifts.length > 0) {
-            setPendingShifts({ issueId, shifts: result.suggestedShifts });
+            // Remember the dates we sent — the cache may not have them
+            // refetched yet when the user confirms the cascade.
+            setPendingShifts({ issueId, start, end, shifts: result.suggestedShifts });
           }
         },
       },
@@ -114,7 +118,7 @@ export function GanttPage() {
         <div className="ml-auto flex items-center gap-2">
           {isFetching && <span className="text-2xs text-text-subtle">Обновляем…</span>}
           {data && data.unscheduledCount > 0 && (
-            <span className="fd-num inline-flex items-center gap-1 rounded-full bg-surface-active px-2 py-0.5 text-2xs text-text-muted">
+            <span className="fd-num inline-flex items-center gap-1 border-2 border-border-strong bg-surface-active px-2 py-0.5 text-2xs text-text-muted">
               <CalendarClock className="size-3" />
               Без дат: {data.unscheduledCount}
             </span>
@@ -189,31 +193,39 @@ export function GanttPage() {
 
       {/* Legend */}
       {data?.range && (
-        <div className="flex items-center gap-4 overflow-x-auto border-t border-border bg-surface px-3 py-1.5 text-2xs whitespace-nowrap text-text-subtle no-scrollbar">
+        <div className="fd-eyebrow flex items-center gap-4 overflow-x-auto border-t-2 border-border-strong bg-surface px-3 py-2 whitespace-nowrap no-scrollbar">
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-xs border border-danger-border bg-danger-subtle" />
+            <span className="size-2.5 border-2 border-border-strong bg-accent" />
             Критический путь
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-xs border border-warning-border bg-warning-subtle" />
+            <span className="size-2.5 border-2 border-border-strong bg-danger" />
             Просрочено
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2 rotate-45 rounded-xs bg-accent" />
+            <span className="size-2.5 border-2 border-border-strong bg-surface" />
+            План
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 border-2 border-border-strong bg-success" />
+            Готово
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rotate-45 border-2 border-border-strong bg-marker" />
             Веха
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-0 w-4 border-t border-dashed border-text-subtle/60" />
+            <span className="h-0 w-4 border-t-2 border-dashed border-text-subtle/60" />
             Запас
           </span>
           {showBaseline && (
             <span className="flex items-center gap-1.5">
-              <span className="h-0 w-4 border-t border-dashed border-border-strong" />
+              <span className="h-0 w-4 border-t-2 border-dashed border-border-strong" />
               Базовый план
             </span>
           )}
           {editable && (
-            <span className="ml-auto hidden lg:inline">
+            <span className="ml-auto hidden normal-case tracking-normal lg:inline">
               Перетащите полосу, чтобы сдвинуть · потяните за край, чтобы изменить длительность
             </span>
           )}
@@ -225,15 +237,14 @@ export function GanttPage() {
         onClose={() => setPendingShifts(null)}
         onApply={() => {
           if (!pendingShifts) return;
-          const row = data?.rows.find((r) => r.id === pendingShifts.issueId);
-          if (row?.start && row.end) {
-            reschedule.mutate({
-              issueId: pendingShifts.issueId,
-              startDate: row.start,
-              dueDate: row.end,
-              cascade: true,
-            });
-          }
+          // Use the dates captured at reschedule time — re-reading the cache
+          // here could send stale dates and undo the move we just made.
+          reschedule.mutate({
+            issueId: pendingShifts.issueId,
+            startDate: pendingShifts.start,
+            dueDate: pendingShifts.end,
+            cascade: true,
+          });
           setPendingShifts(null);
         }}
         pendingMutation={reschedule.isPending}

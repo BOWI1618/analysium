@@ -23,7 +23,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          editor: ['@tiptap/react', '@tiptap/starter-kit', '@tiptap/pm'],
+          // Note: '@tiptap/pm' has no root export — only subpath entries —
+          // so it cannot be listed here; its modules join this chunk via the
+          // tiptap packages below.
+          editor: ['@tiptap/react', '@tiptap/starter-kit'],
           vendor: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
         },
       },

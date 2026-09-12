@@ -195,7 +195,10 @@ description="Всё уже запланировано — или задач ещ
         pending={createSprint.isPending}
       />
 
+      {/* Keying by sprint remounts the dialog, so a stale "move to" choice from
+          the previous open never leaks into the next one. */}
       <CompleteSprintDialog
+        key={completing?.id}
         sprint={completing}
         sprints={openSprints}
         projectId={projectId}
@@ -322,7 +325,7 @@ function SprintSection({
           )}
           {canManage && (
             <Menu>
-              <MenuTrigger asChild>
+              <MenuTrigger>
                 <button
                   type="button"
                   aria-label={`Действия со спринтом «${sprint.name}»`}

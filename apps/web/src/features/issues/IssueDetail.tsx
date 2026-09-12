@@ -6,6 +6,7 @@ import { Permission } from '@flowdesk/contracts';
 import {
   ChevronDown,
   Copy,
+  FileText,
   ExternalLink,
   Link2,
   MoreHorizontal,
@@ -53,6 +54,8 @@ import { Button, IconButton } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { ProgressBar, SkeletonText } from '~/ui/Feedback';
+import { Panel } from '~/ui/Panel';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { Tooltip } from '~/ui/Tooltip';
 import { formatBytes, fullDate, relativeTime } from '~/lib/format';
 
@@ -92,6 +95,9 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
   const [tab, setTab] = useState<'comments' | 'activity'>('comments');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Description value at the moment the editor took focus — compared on blur
+  // to detect that a teammate saved while we were typing.
+  const descriptionBaseRef = useRef<unknown>(undefined);
 
   const members = useMemo<UserSummaryDto[]>(() => project?.members.map((m) => m.user) ?? [], [project]);
   const epics = useMemo(
@@ -120,7 +126,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
       {/* ------------------------------------------------------------ header */}
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+      <header className="flex shrink-0 items-center gap-2 border-b-2 border-border-strong bg-surface px-3 py-2 shadow-sm">
         <IssueTypeIcon type={issue.type} className="size-4" />
         <Link
           to={`/issue/${issue.issueKey}`}
@@ -138,7 +144,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
           <button
             type="button"
             disabled={!canEdit}
-            className="rounded-full transition-opacity hover:opacity-80 disabled:cursor-default"
+            className="transition-opacity hover:opacity-80 disabled:cursor-default"
           >
             <StatusPill status={issue.status} />
           </button>
@@ -152,7 +158,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
           <button
             type="button"
             disabled={!canEdit}
-            className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-text-muted hover:bg-surface-hover disabled:cursor-default"
+            className="inline-flex items-center gap-1 rounded-sm px-1 py-0.5 text-xs text-text-muted hover:bg-surface-hover disabled:cursor-default"
           >
             <PriorityIcon priority={issue.priority} withTooltip={false} className="size-3.5" />
             <span className="hidden sm:inline">{PRIORITY_META[issue.priority].label}</span>
@@ -172,7 +178,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                 to={`/issue/${issue.issueKey}`}
                 onClick={onClose}
                 aria-label="Открыть на отдельной странице"
-                className="inline-flex size-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-hover hover:text-text"
+                className="inline-flex size-8 items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text"
               >
                 <ExternalLink className="size-4" />
               </Link>
@@ -180,7 +186,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
           )}
 
           <Menu>
-            <MenuTrigger asChild>
+            <MenuTrigger>
               <IconButton label="Действия с задачей" size="sm">
                 <MoreHorizontal className="size-4" />
               </IconButton>
@@ -236,10 +242,15 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
             </button>
           )}
 
-          <TitleField value={issue.title} editable={canEdit} onSave={(title) => patch({ title })} />
+          <TitleField
+            value={issue.title}
+            editable={canEdit}
+            display={variant === 'page'}
+            onSave={(title) => patch({ title })}
+          />
 
           {/* Description */}
-          <section className="mt-4" aria-label="Описание">
+          <Panel title="описание" icon={<FileText className="size-3.5 text-text-subtle" />} className="mt-6">
             <RichTextEditor
               value={issue.description}
               users={members}
@@ -247,22 +258,37 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
               toolbar={canEdit}
               placeholder={canEdit ? 'Добавьте описание…' : 'Описания нет'}
               minHeight="4rem"
+              onFocus={() => {
+                descriptionBaseRef.current = issue.description;
+              }}
               onBlur={(description) => {
-                if (JSON.stringify(description) !== JSON.stringify(issue.description)) {
-                  patch({ description: description as Record<string, unknown> });
+                const base = descriptionBaseRef.current;
+                descriptionBaseRef.current = undefined;
+                if (JSON.stringify(description) === JSON.stringify(base)) return;
+                if (JSON.stringify(issue.description) !== JSON.stringify(base)) {
+                  // A teammate saved while we were editing — keep their version
+                  // instead of overwriting it, and offer a reload to see it.
+                  toast.toast({
+                    tone: 'info',
+                    title: 'Описание обновилось',
+                    description: 'Пока вы редактировали, описание сохранил другой участник. Ваши правки не записаны.',
+                    action: { label: 'Обновить', onClick: () => window.location.reload() },
+                  });
+                  return;
                 }
+                patch({ description: description as Record<string, unknown> });
               }}
             />
-          </section>
+          </Panel>
 
           {/* Attachments */}
           <section className="mt-5" aria-label="Файлы">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="flex items-center gap-1.5 text-xs font-semibold text-text-muted">
+              <h3 className="fd-eyebrow flex items-center gap-1.5">
                 <Paperclip className="size-3.5" />
                 Файлы
                 {issue.attachments.length > 0 && (
-                  <span className="text-text-subtle">({issue.attachments.length})</span>
+                  <span className="fd-num">({issue.attachments.length})</span>
                 )}
               </h3>
               {can(Permission.ATTACHMENT_UPLOAD) && (
@@ -297,17 +323,17 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                 {issue.attachments.map((attachment) => (
                   <li
                     key={attachment.id}
-                    className="group flex items-center gap-2 rounded-md border border-border bg-surface-sunken p-1.5"
+                    className="group flex items-center gap-2 border-2 border-border-strong bg-surface-sunken p-1.5"
                   >
                     {attachment.isImage ? (
                       <img
                         src={attachment.url}
                         alt=""
-                        className="size-9 shrink-0 rounded-sm object-cover"
+                        className="size-9 shrink-0 object-cover"
                         loading="lazy"
                       />
                     ) : (
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-surface-active text-text-subtle">
+                      <span className="flex size-9 shrink-0 items-center justify-center bg-surface-active text-text-subtle">
                         <Paperclip className="size-4" />
                       </span>
                     )}
@@ -343,10 +369,10 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
           {issue.type !== 'SUBTASK' && (
             <section className="mt-5" aria-label="Подзадачи">
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-text-muted">
+                <h3 className="fd-eyebrow">
                   Подзадачи
                   {issue.subtasks.length > 0 && (
-                    <span className="ml-1.5 text-text-subtle">
+                    <span className="fd-num ml-1.5 normal-case tracking-normal">
                       {doneSubtasks} / {issue.subtasks.length} готово
                     </span>
                   )}
@@ -376,7 +402,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
               {issue.subtasks.length === 0 ? (
                 <p className="text-xs text-text-subtle">Разбейте задачу на части.</p>
               ) : (
-                <ul className="divide-y divide-border rounded-md border border-border">
+                <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
                   {issue.subtasks.map((subtask) => (
                     <li key={subtask.id}>
                       <button
@@ -405,7 +431,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
 
           {/* Discussion */}
           <section className="mt-6" aria-label="Обсуждение">
-            <div className="mb-3 flex items-center gap-1 border-b border-border">
+            <div className="mb-3 flex items-center gap-1 border-b-2 border-border-strong">
               {(['comments', 'activity'] as const).map((key) => (
                 <button
                   key={key}
@@ -414,7 +440,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                   aria-selected={tab === key}
                   role="tab"
                   className={clsx(
-                    '-mb-px border-b-2 px-2.5 py-1.5 text-sm font-medium transition-colors',
+                    '-mb-0.5 border-b-2 px-2.5 py-1.5 text-sm font-bold transition-colors',
                     tab === key
                       ? 'border-accent text-text'
                       : 'border-transparent text-text-muted hover:text-text',
@@ -445,15 +471,10 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
 
         {/* ---------------------------------------------------------- sidebar */}
         <aside
-          className={clsx(
-            'shrink-0 border-border',
-            variant === 'page'
-              ? 'lg:w-72 lg:border-l lg:pl-6'
-              : 'mt-2 border-t bg-surface-sunken px-4 py-3',
-          )}
+          className={clsx('shrink-0', variant === 'page' ? 'lg:w-72 lg:pt-6' : 'mt-4 px-4 pb-4')}
           aria-label="Свойства задачи"
         >
-          <dl className="space-y-3">
+          <dl className="divide-y-2 divide-border-strong border-2 border-border-strong bg-surface shadow-lg">
             <Field label="Статус">
               <StatusPicker
                 statuses={project?.statuses ?? []}
@@ -483,7 +504,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
             </Field>
 
             <Field label="Автор">
-              <span className="flex items-center gap-1.5 px-1.5 text-sm">
+              <span className="flex items-center gap-1.5 text-sm">
                 <Avatar user={issue.reporter} size="sm" />
                 {issue.reporter?.name ?? 'Неизвестно'}
               </span>
@@ -518,7 +539,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                 disabled={!canEdit}
                 onChange={(labelIds) => patch({ labelIds })}
               >
-                <FieldButton disabled={!canEdit} className="flex-wrap" label="Изменить метки">
+                <FieldButton disabled={!canEdit} wrap label="Изменить метки">
                   {issue.labels.length === 0 ? (
                     <span className="text-text-subtle">Нет</span>
                   ) : (
@@ -531,9 +552,9 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
             <Field label="Проект">
               <Link
                 to={`/projects/${issue.projectId}`}
-                className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm hover:bg-surface-hover"
+                className="flex items-center gap-1.5 text-sm hover:text-accent"
               >
-                <span aria-hidden="true">{issue.project.icon}</span>
+                <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
                 {issue.project.name}
               </Link>
             </Field>
@@ -544,7 +565,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                   value={issue.epic?.id ?? ''}
                   disabled={!canEdit}
                   onChange={(event) => patch({ epicId: event.target.value || null })}
-                  className="h-7 w-full rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:border-border hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
+                  className="h-7 w-full border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
                 >
                   <option value="">Без эпика</option>
                   {epics.map((epic) => (
@@ -562,7 +583,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                   value={issue.sprintId ?? ''}
                   disabled={!canEdit}
                   onChange={(event) => patch({ sprintId: event.target.value || null })}
-                  className="h-7 w-full rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:border-border hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
+                  className="h-7 w-full border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
                 >
                   <option value="">Бэклог</option>
                   {sprints.map((sprint) => (
@@ -589,7 +610,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                   if (next !== issue.storyPoints) patch({ storyPoints: next });
                 }}
                 placeholder="—"
-                className="h-7 w-full rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:border-border hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
+                className="h-7 w-full border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
               />
             </Field>
 
@@ -601,7 +622,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
               />
             </Field>
 
-            <div className="space-y-1 border-t border-border pt-3 text-2xs text-text-subtle">
+            <div className="fd-num space-y-1 bg-surface-sunken px-3.5 py-3 text-2xs text-text-subtle">
               <p title={fullDate(issue.createdAt)}>Создано {relativeTime(issue.createdAt)}</p>
               <p title={fullDate(issue.updatedAt)}>Обновлено {relativeTime(issue.updatedAt)}</p>
               {issue.completedAt && (
@@ -640,10 +661,13 @@ function TitleField({
   value,
   editable,
   onSave,
+  display,
 }: {
   value: string;
   editable: boolean;
   onSave: (title: string) => void;
+  /** The full page sets the title as a masthead; the side panel does not. */
+  display?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
   const [editing, setEditing] = useState(false);
@@ -676,7 +700,8 @@ function TitleField({
       <h1
         onClick={() => editable && setEditing(true)}
         className={clsx(
-          '-mx-1 rounded-md px-1 text-xl leading-snug font-semibold text-text',
+          '-mx-1 px-1 text-text',
+          display ? 'fd-display text-[clamp(1.375rem,2.4vw,2rem)]' : 'text-xl leading-snug font-semibold',
           editable && 'cursor-text hover:bg-surface-hover',
         )}
         title={editable ? 'Нажмите, чтобы переименовать' : undefined}
@@ -708,16 +733,28 @@ function TitleField({
         }
       }}
       aria-label="Название задачи"
-      className="-mx-1 w-[calc(100%+0.5rem)] resize-none overflow-hidden rounded-md border border-accent bg-surface px-1 text-xl leading-snug font-semibold outline-none"
+      className={clsx(
+        '-mx-1 w-[calc(100%+0.5rem)] resize-none overflow-hidden border-2 border-accent bg-surface px-1 outline-none',
+        display ? 'fd-display text-[clamp(1.375rem,2.4vw,2rem)]' : 'text-xl leading-snug font-semibold',
+      )}
     />
   );
 }
 
+/**
+ * One property of the issue. The label is set as a mono eyebrow above its
+ * value rather than beside it, so the rail reads as a stack of captioned
+ * entries — and long values (a name, a row of labels) get the full width.
+ */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[5.5rem_1fr] items-start gap-2">
-      <dt className="pt-1.5 text-xs text-text-subtle">{label}</dt>
-      <dd className="min-w-0">{children}</dd>
+    <div className="px-3.5 py-2.5">
+      <dt className="fd-eyebrow">{label}</dt>
+      {/* A picker wraps its trigger in an inline-flex span, which would
+          shrink-wrap to the value's own width and leave the rest of the cell
+          empty. Stretching the cell's children gives every control the full
+          column. */}
+      <dd className="mt-1.5 flex min-w-0 flex-col items-stretch">{children}</dd>
     </div>
   );
 }
@@ -732,11 +769,14 @@ function FieldButton({
   disabled,
   className,
   label,
+  wrap,
 }: {
   children: React.ReactNode;
   disabled?: boolean;
   className?: string;
   label?: string;
+  /** Set when the value is a collection (labels) that may need several lines. */
+  wrap?: boolean;
 }) {
   return (
     <button
@@ -744,14 +784,14 @@ function FieldButton({
       aria-label={label}
       disabled={disabled}
       className={clsx(
-        'flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm',
-        'border border-transparent transition-colors',
-        !disabled && 'hover:border-border hover:bg-surface-hover',
+        'flex w-full items-center gap-1.5 px-1 py-0.5 -mx-1 text-left text-sm font-semibold',
+        'border-2 border-transparent transition-colors',
+        !disabled && 'hover:border-border-strong hover:bg-surface-hover',
         disabled && 'cursor-default',
         className,
       )}
     >
-      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">{children}</span>
+      <span className={clsx('flex min-w-0 flex-1 items-center gap-1.5', wrap && 'flex-wrap')}>{children}</span>
       {!disabled && <ChevronDown className="size-3 shrink-0 text-text-subtle" />}
     </button>
   );

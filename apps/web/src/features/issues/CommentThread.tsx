@@ -30,10 +30,14 @@ export function CommentThread({
 
   const submit = async () => {
     if (isDocEmpty(draft) || createComment.isPending) return;
-    await createComment.mutateAsync(draft);
-    setDraft(EMPTY_DOC);
-    // Remounting the editor is the reliable way to clear ProseMirror state.
-    setDraftKey((k) => k + 1);
+    try {
+      await createComment.mutateAsync(draft);
+      setDraft(EMPTY_DOC);
+      // Remounting the editor is the reliable way to clear ProseMirror state.
+      setDraftKey((k) => k + 1);
+    } catch {
+      // The mutation hook already showed the error as a toast.
+    }
   };
 
   return (
@@ -43,7 +47,7 @@ export function CommentThread({
       ) : error ? (
         <p className="text-sm text-danger">Не удалось загрузить комментарии.</p>
       ) : comments && comments.length > 0 ? (
-        <ul className="space-y-4">
+        <ul aria-label="Комментарии" className="space-y-4">
           {comments.map((comment) => (
             <CommentItem key={comment.id} comment={comment} issueId={issueId} members={members} />
           ))}
@@ -110,8 +114,12 @@ function CommentItem({
 
   const save = async () => {
     if (isDocEmpty(draft)) return;
-    await updateComment.mutateAsync({ commentId: comment.id, body: draft });
-    setEditing(false);
+    try {
+      await updateComment.mutateAsync({ commentId: comment.id, body: draft });
+      setEditing(false);
+    } catch {
+      // The mutation hook already showed the error as a toast.
+    }
   };
 
   return (
@@ -131,7 +139,7 @@ function CommentItem({
 
           {(comment.canEdit || comment.canDelete) && !editing && (
             <Menu>
-              <MenuTrigger asChild>
+              <MenuTrigger>
                 <IconButton label="Действия с комментарием" size="xs" className="ml-auto">
                   <MoreHorizontal className="size-3.5" />
                 </IconButton>

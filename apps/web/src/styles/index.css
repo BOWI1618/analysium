@@ -1,12 +1,10 @@
 /* Self-hosted variable fonts — no network request at runtime, no FOUT. */
-@import '@fontsource-variable/inter';
+@import '@fontsource-variable/manrope';
 @import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource-variable/unbounded';
 
 @import 'tailwindcss';
 @import './tokens.css';
-
-/* Dark mode is driven by a class on <html>, set before first paint. */
-@custom-variant dark (&:where(.dark, .dark *));
 
 /* Expose the semantic tokens to Tailwind's utility generator. `inline` makes
    utilities reference the custom property directly, so a theme switch is a
@@ -36,6 +34,10 @@
   --color-accent-subtle-hover: var(--accent-subtle-hover);
   --color-accent-border: var(--accent-border);
 
+  --color-marker: var(--marker);
+  --color-marker-subtle: var(--marker-subtle);
+  --color-ink: var(--ink);
+
   --color-success: var(--success);
   --color-success-subtle: var(--success-subtle);
   --color-success-border: var(--success-border);
@@ -59,10 +61,12 @@
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
   --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
 
-  --font-sans:
-    'Inter Variable', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Manrope Variable', ui-sans-serif, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  /* Display face: wide, heavy, uppercase-friendly — for page mastheads and big
+     numbers, never for body copy. */
+  --font-display: 'Unbounded Variable', 'Manrope Variable', ui-sans-serif, sans-serif;
   /* Mono is structural here, not just for code: it sets issue keys, counts,
      points and dates, so identifiers align into a scannable column. */
   --font-mono:
@@ -109,17 +113,16 @@
 
   body {
     background-color: var(--bg);
+    /* Faint ink dot-grid — the paper texture of the editorial direction. */
+    background-image: radial-gradient(color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px);
+    background-size: 22px 22px;
     color: var(--text);
     font-family: var(--font-sans);
     font-size: 0.875rem;
     line-height: 1.375rem;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Inter's straight-sided alternates read better at UI sizes; tabular
-       figures keep every number column aligned. */
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum';
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.005em;
   }
 
   /* Headings tighten as they grow, so large type never looks loose. */
@@ -160,6 +163,61 @@
 }
 
 @layer utilities {
+  /* Ink-bordered plate with a solid offset shadow — the signature surface. */
+  .fd-hard {
+    border: 2px solid var(--border-strong);
+    box-shadow: var(--shadow-sm);
+  }
+  /* The mono kicker that sits above every page title: a dateline in a
+     newspaper. Wide tracking is what makes it read as a rule, not as text. */
+  .fd-kicker {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--text-subtle);
+  }
+
+  /* Section eyebrow — the same idea one notch tighter, for panel headers. */
+  .fd-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    line-height: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--text-subtle);
+  }
+
+  /* Masthead type: the wide display face, set heavy and uppercase. Headlines
+     are the loudest thing on the page, so they carry no letter-spacing of
+     their own — the face is already wide. */
+  .fd-display {
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    line-height: 1.04;
+  }
+
+  /* Yellow marker swipe behind a word — the editorial highlight. */
+  .marker-hl {
+    background: linear-gradient(180deg, transparent 58%, var(--marker) 58%, var(--marker) 92%, transparent 92%);
+  }
+  /* Hover-lift / active-press for hard-shadow plates. */
+  .fd-lift {
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .fd-lift:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: var(--shadow-md);
+  }
+  .fd-press:active {
+    transform: translate(1px, 1px);
+    box-shadow: none;
+  }
+
   /* Thin, self-effacing scrollbars — the product is full of scroll areas. */
   .scrollbar-thin {
     scrollbar-width: thin;

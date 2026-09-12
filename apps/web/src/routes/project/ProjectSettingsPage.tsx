@@ -25,9 +25,11 @@ import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { ErrorState, Skeleton } from '~/ui/Feedback';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { StatusDot } from '~/components/IssueMeta';
 import { PROJECT_ROLE_LABEL, STATUS_CATEGORY_LABEL } from '~/lib/labels';
 import { pluralize } from '~/lib/format';
+import { PROJECT_ICONS, PROJECT_COLORS } from '~/lib/projectMeta';
 
 const SECTIONS = ['general', 'workflow', 'labels', 'members', 'danger'] as const;
 type Section = (typeof SECTIONS)[number];
@@ -54,7 +56,7 @@ export function ProjectSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-3 p-4">
+      <div className="space-y-3 bg-bg p-4">
         <Skeleton className="h-6 w-40" />
         <Skeleton className="h-48 w-full max-w-2xl" />
       </div>
@@ -66,20 +68,20 @@ export function ProjectSettingsPage() {
   const canDelete = project.permissions.includes(Permission.PROJECT_DELETE);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+    <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
       <div className="mx-auto flex max-w-4xl gap-6 p-4">
         <nav className="hidden w-40 shrink-0 sm:block" aria-label="Разделы настроек">
-          <ul className="space-y-0.5">
+          <ul className="space-y-1">
             {SECTIONS.filter((s) => s !== 'danger' || canDelete).map((item) => (
               <li key={item}>
                 <button
                   type="button"
                   onClick={() => setSection(item)}
                   className={clsx(
-                    'w-full rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors',
+                    'w-full border-2 px-2 py-1.5 text-left text-sm font-bold transition-colors',
                     section === item
-                      ? 'bg-surface-active text-text'
-                      : 'text-text-muted hover:bg-surface-hover hover:text-text',
+                      ? 'border-border-strong bg-marker-subtle text-text'
+                      : 'border-transparent text-text-muted hover:bg-surface-hover hover:text-text',
                     item === 'danger' && section !== item && 'text-danger',
                   )}
                 >
@@ -126,10 +128,10 @@ type Project = NonNullable<ReturnType<typeof useProject>['data']>;
 
 function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
-      <div className="mt-3">{children}</div>
+    <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
+      <h2 className="fd-eyebrow">{title}</h2>
+      {description && <p className="mt-1 text-xs text-text-muted">{description}</p>}
+      <div className="mt-3.5">{children}</div>
     </section>
   );
 }
@@ -153,19 +155,51 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
     form.color !== project.color ||
     form.projectType !== project.projectType;
 
+  const isPresetColor = PROJECT_COLORS.some((c) => c.value === form.color);
+  const isPresetIcon = PROJECT_ICONS.some((i) => i.name === form.icon);
+
   return (
     <Card title="Основное" description="Название, внешний вид и методология.">
       <div className="space-y-3">
-        <div className="flex gap-3">
-          <div className="w-20">
-            <Input
-              label="Иконка"
-              value={form.icon}
-              maxLength={4}
-              onChange={(event) => setForm((f) => ({ ...f, icon: event.target.value }))}
-              className="text-center text-lg"
-            />
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-text">Иконка</label>
+          <div className="flex flex-wrap items-center gap-2">
+            {PROJECT_ICONS.map(({ name, label, Icon }) => {
+              const selected = form.icon === name;
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, icon: name }))}
+                  aria-pressed={selected}
+                  aria-label={`Иконка «${label}»`}
+                  title={label}
+                  className={clsx(
+                    'flex size-8 items-center justify-center transition-colors',
+                    selected
+                      ? 'border-2 border-accent bg-marker-subtle text-accent'
+                      : 'border-2 border-border-strong bg-surface text-text hover:bg-surface-hover',
+                  )}
+                >
+                  <Icon className="size-4" />
+                </button>
+              );
+            })}
+            {!isPresetIcon && (
+              <span className="flex size-8 items-center justify-center border-2 border-border-strong bg-surface-active text-sm">
+                {form.icon}
+              </span>
+            )}
           </div>
+          <Input
+            value={form.icon}
+            onChange={(event) => setForm((f) => ({ ...f, icon: event.target.value }))}
+            placeholder="package"
+            hint="Имя иконки из набора или произвольный символ."
+          />
+        </div>
+
+        <div className="flex gap-3">
           <div className="flex-1">
             <Input
               label="Название"
@@ -174,17 +208,35 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
             />
           </div>
           <div className="w-24">
-            <label className="mb-1 block text-xs font-medium text-text-muted" htmlFor="project-color">
-              Цвет
-            </label>
-            <input
-              id="project-color"
-              type="color"
+            <Input
+              label="Цвет"
               value={form.color}
               onChange={(event) => setForm((f) => ({ ...f, color: event.target.value }))}
-              className="h-8 w-full cursor-pointer rounded-md border border-border bg-surface p-1"
+              placeholder="#ff4d00"
+              className="font-mono"
             />
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {PROJECT_COLORS.map(({ value, label }) => {
+            const selected = form.color === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, color: value }))}
+                aria-pressed={selected}
+                aria-label={`Цвет: ${label}`}
+                title={label}
+                className="size-7 border-2 border-border-strong"
+                style={{
+                  backgroundColor: value,
+                  boxShadow: selected ? `0 0 0 2px var(--surface), 0 0 0 4px var(--border-strong)` : undefined,
+                }}
+              />
+            );
+          })}
         </div>
 
         <Textarea
@@ -259,9 +311,9 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
     <>
       <Card
         title="Колонки доски"
-description="Статусы задают колонки доски. Категория определяет, что считается «в работе» и «готово» в отчётах."
+        description="Статусы задают колонки доски. Категория определяет, что считается «в работе» и «готово» в отчётах."
       >
-        <ul className="divide-y divide-border rounded-md border border-border">
+        <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
           {project.statuses.map((status, index) => (
             <li key={status.id} className="flex flex-wrap items-center gap-2 p-2">
               {canManage && (
@@ -287,7 +339,7 @@ description="Статусы задают колонки доски. Катего
                   if (name && name !== status.name) updateStatus.mutate({ statusId: status.id, patch: { name } });
                 }}
                 aria-label={`Название статуса «${status.name}»`}
-                className="h-7 min-w-32 flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-sm hover:border-border focus:border-accent focus:outline-none disabled:cursor-default"
+                className="h-7 min-w-32 flex-1 border-2 border-transparent bg-transparent px-1.5 text-sm hover:border-border-strong focus:border-accent focus:outline-none disabled:cursor-default"
               />
 
               <select
@@ -297,7 +349,7 @@ description="Статусы задают колонки доски. Катего
                   updateStatus.mutate({ statusId: status.id, patch: { category: event.target.value } })
                 }
                 aria-label={`Категория статуса «${status.name}»`}
-                className="h-7 rounded-md border border-border bg-surface px-1.5 text-xs disabled:opacity-60"
+                className="h-7 border-2 border-border-strong bg-surface px-1.5 text-xs disabled:opacity-60"
               >
                 {STATUS_CATEGORIES.map((category) => (
                   <option key={category} value={category}>
@@ -312,7 +364,7 @@ description="Статусы задают колонки доски. Катего
                 disabled={!canManage}
                 onBlur={(event) => updateStatus.mutate({ statusId: status.id, patch: { color: event.target.value } })}
                 aria-label={`Цвет статуса «${status.name}»`}
-                className="h-7 w-10 cursor-pointer rounded-md border border-border bg-surface p-0.5 disabled:cursor-default"
+                className="h-7 w-10 cursor-pointer border-2 border-border-strong bg-surface p-0.5 disabled:cursor-default"
               />
 
               <input
@@ -328,7 +380,7 @@ description="Статусы задают колонки доски. Катего
                   if (wipLimit !== status.wipLimit) updateStatus.mutate({ statusId: status.id, patch: { wipLimit } });
                 }}
                 aria-label={`WIP-лимит статуса «${status.name}»`}
-                className="fd-num h-7 w-14 rounded-md border border-border bg-surface px-1.5 text-xs disabled:opacity-60"
+                className="fd-num h-7 w-14 border-2 border-border-strong bg-surface px-1.5 text-xs disabled:opacity-60"
               />
 
               <span className="fd-num text-2xs text-text-subtle">{status.issueCount ?? 0}</span>
@@ -393,7 +445,7 @@ description="Статусы задают колонки доски. Катего
           setDeleting(null);
         }}
         title={`Удалить «${deleting?.name}»?`}
-message="Задачи из этой колонки перейдут в статус по умолчанию. Ни одна задача не будет удалена."
+        message="Задачи из этой колонки перейдут в статус по умолчанию. Ни одна задача не будет удалена."
         confirmLabel="Удалить статус"
         danger
       />
@@ -408,7 +460,7 @@ function LabelsSection({ project }: { project: Project }) {
   const updateLabel = useUpdateLabel(project.id);
   const deleteLabel = useDeleteLabel(project.id);
   const [name, setName] = useState('');
-  const [color, setColor] = useState('#6b46f5');
+  const [color, setColor] = useState('#ff4d00');
 
   return (
     <Card title="Метки" description="Общий словарь для фильтрации на досках и в списках.">
@@ -416,14 +468,14 @@ function LabelsSection({ project }: { project: Project }) {
         {project.labels.map((label) => (
           <li
             key={label.id}
-            className="flex items-center gap-1.5 rounded-full border border-border bg-surface-sunken py-0.5 pr-1 pl-2"
+            className="flex items-center gap-1.5 border-2 border-border-strong bg-surface-sunken py-0.5 pr-1 pl-2"
           >
             <input
               type="color"
               defaultValue={label.color}
               onBlur={(event) => updateLabel.mutate({ labelId: label.id, patch: { color: event.target.value } })}
               aria-label={`Цвет метки «${label.name}»`}
-              className="size-4 cursor-pointer rounded-full border-none bg-transparent p-0"
+              className="size-4 cursor-pointer border-none bg-transparent p-0"
             />
             <input
               defaultValue={label.name}
@@ -439,7 +491,7 @@ function LabelsSection({ project }: { project: Project }) {
               type="button"
               onClick={() => deleteLabel.mutate(label.id)}
               aria-label={`Удалить метку «${label.name}»`}
-              className="rounded-full p-0.5 text-text-subtle hover:bg-danger-subtle hover:text-danger"
+              className="p-0.5 text-text-subtle hover:bg-danger-subtle hover:text-danger"
             >
               <X className="size-3" />
             </button>
@@ -460,7 +512,7 @@ function LabelsSection({ project }: { project: Project }) {
           <Input label="Новая метка" value={name} onChange={(event) => setName(event.target.value)} placeholder="например, безопасность" />
         </div>
         <div className="w-20">
-          <label className="mb-1 block text-xs font-medium text-text-muted" htmlFor="label-color">
+          <label className="mb-1 block text-xs font-bold text-text" htmlFor="label-color">
             Цвет
           </label>
           <input
@@ -468,7 +520,7 @@ function LabelsSection({ project }: { project: Project }) {
             type="color"
             value={color}
             onChange={(event) => setColor(event.target.value)}
-            className="h-8 w-full cursor-pointer rounded-md border border-border bg-surface p-1"
+            className="h-8 w-full cursor-pointer border-2 border-border-strong bg-surface p-1"
           />
         </div>
         <Button type="submit" variant="secondary" iconLeft={<Plus className="size-3.5" />} loading={createLabel.isPending}>
@@ -492,9 +544,9 @@ function MembersSection({ project, workspaceId }: { project: Project; workspaceI
   return (
     <Card
       title="Участники проекта"
-description="Гости видят только те проекты, куда их добавили. Остальные видят все проекты пространства."
+      description="Гости видят только те проекты, куда их добавили. Остальные видят все проекты пространства."
     >
-      <ul className="divide-y divide-border rounded-md border border-border">
+      <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
         {project.members.map((member) => (
           <li key={member.userId} className="flex items-center gap-2.5 p-2">
             <Avatar user={member.user} size="lg" />
@@ -579,8 +631,8 @@ function DangerSection({
         </Button>
       </Card>
 
-      <section className="rounded-lg border border-danger-border bg-danger-subtle p-4">
-        <h2 className="text-sm font-semibold text-danger">Удалить проект</h2>
+      <section className="border-2 border-danger-border bg-danger-subtle p-4 shadow-sm">
+        <h2 className="fd-eyebrow text-danger">Удалить проект</h2>
         <p className="mt-0.5 text-xs text-text-muted">
           Безвозвратно удалит {pluralize(project.totalIssueCount ?? 0, ['задачу', 'задачи', 'задач'])}, их комментарии,
           файлы и историю. Отменить нельзя.
@@ -605,7 +657,7 @@ function DangerSection({
           setConfirming(false);
         }}
         title={`Удалить проект «${project.name}»?`}
-message="Все задачи, комментарии, файлы и спринты проекта будут удалены навсегда."
+        message="Все задачи, комментарии, файлы и спринты проекта будут удалены навсегда."
         confirmLabel="Удалить навсегда"
         danger
         loading={deleteProject.isPending}

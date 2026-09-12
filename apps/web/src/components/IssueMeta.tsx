@@ -38,7 +38,7 @@ export function IssueTypeIcon({
   const Icon = meta.icon;
   const icon = (
     <span
-      className={clsx('inline-flex shrink-0 items-center justify-center rounded-xs', className ?? 'size-4')}
+      className={clsx('inline-flex shrink-0 items-center justify-center', className ?? 'size-4')}
       style={{ color: meta.color }}
       aria-label={meta.label}
     >
@@ -108,7 +108,7 @@ const CATEGORY_SHAPE: Record<StatusCategory, string> = {
   CANCELED: '',
 };
 
-/** Circular status indicator whose fill communicates progress at a glance. */
+/** Status indicator whose fill communicates progress at a glance. */
 export function StatusDot({ status, className }: { status: Pick<StatusDto, 'color' | 'category' | 'name'>; className?: string }) {
   const filled = status.category === 'COMPLETED' || status.category === 'CANCELED';
   const half = status.category === 'STARTED';
@@ -118,18 +118,19 @@ export function StatusDot({ status, className }: { status: Pick<StatusDto, 'colo
       className={clsx('relative inline-flex shrink-0 items-center justify-center', className ?? 'size-3.5')}
       aria-hidden="true"
     >
+      {/* Square, not round: the whole product is drawn with hard edges, and a
+          half-filled square reads "in progress" just as clearly as a pie. */}
       <span
-        className={clsx('size-full rounded-full border-2', CATEGORY_SHAPE[status.category])}
+        className={clsx('size-full border-2', CATEGORY_SHAPE[status.category])}
         style={{
           borderColor: status.color,
-          background: filled ? status.color : half ? `conic-gradient(${status.color} 0 50%, transparent 50% 100%)` : 'transparent',
+          background: filled
+            ? status.color
+            : half
+              ? `linear-gradient(90deg, ${status.color} 0 50%, transparent 50% 100%)`
+              : 'transparent',
         }}
       />
-      {filled && status.category === 'COMPLETED' && (
-        <svg viewBox="0 0 24 24" className="absolute size-2 text-white" fill="none" stroke="currentColor" strokeWidth="4">
-          <path d="m5 13 4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
     </span>
   );
 }
@@ -146,15 +147,11 @@ export function StatusPill({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full border font-medium whitespace-nowrap',
-        size === 'sm' ? 'px-1.5 py-0.5 text-2xs' : 'px-2 py-0.5 text-xs',
+        'inline-flex items-center gap-1.5 border-2 border-border-strong font-mono font-bold uppercase tracking-widest whitespace-nowrap',
+        size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-2xs',
         className,
       )}
-      style={{
-        color: status.color,
-        borderColor: hexWithAlpha(status.color, 0.35),
-        backgroundColor: hexWithAlpha(status.color, 0.1),
-      }}
+      style={{ backgroundColor: hexWithAlpha(status.color, 0.2) }}
     >
       <StatusDot status={status} className={size === 'sm' ? 'size-2.5' : 'size-3'} />
       {status.name}
@@ -176,12 +173,11 @@ export function LabelChip({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1 rounded-full font-medium whitespace-nowrap',
-        size === 'sm' ? 'px-1.5 py-px text-2xs' : 'px-2 py-0.5 text-xs',
+        'inline-flex items-center gap-1.5 border-2 border-border-strong bg-surface-sunken font-mono font-medium whitespace-nowrap text-text-muted',
+        size === 'sm' ? 'px-1.5 py-px text-[10px]' : 'px-2 py-0.5 text-2xs',
       )}
-      style={{ backgroundColor: hexWithAlpha(label.color, 0.16), color: label.color }}
     >
-      <span className="size-1.5 rounded-full" style={{ backgroundColor: label.color }} />
+      <span className="size-1.5 shrink-0" style={{ backgroundColor: label.color }} />
       {label.name}
       {onRemove && (
         <button
@@ -191,7 +187,7 @@ export function LabelChip({
             onRemove();
           }}
           aria-label={`Убрать метку ${label.name}`}
-          className="ml-0.5 rounded-full opacity-60 hover:opacity-100"
+          className="ml-0.5 opacity-60 hover:opacity-100"
         >
           <svg viewBox="0 0 24 24" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="3">
             <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
@@ -208,26 +204,33 @@ export function DueDateChip({ value, className }: { value: string | null; classN
   const due = dueDateLabel(value);
   if (!due) return null;
 
+  // Only a date that demands action is printed as a plate. A date that is
+  // merely in the future is set as plain text, so a column of cards shows
+  // colour exactly where something is wrong.
   const tones = {
-    overdue: 'text-danger bg-danger-subtle',
-    today: 'text-warning bg-warning-subtle',
-    soon: 'text-text-muted bg-surface-active',
-    normal: 'text-text-subtle bg-surface-active',
+    overdue: 'bg-danger text-accent-fg font-bold',
+    today: 'bg-marker text-ink font-bold',
+    soon: 'text-text-muted',
+    normal: 'text-text-subtle',
   } as const;
+  const isPlate = due.tone === 'overdue' || due.tone === 'today';
 
   return (
     <span
       className={clsx(
-        'fd-num inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-2xs font-medium whitespace-nowrap',
+        'fd-num inline-flex items-center gap-1 text-2xs whitespace-nowrap',
+        isPlate && 'px-1.5 py-0.5',
         tones[due.tone],
         className,
       )}
       title={due.tone === 'overdue' ? `Просрочено — срок был ${due.label}` : `Срок: ${due.label}`}
     >
-      <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
-        <rect x="3" y="5" width="18" height="16" rx="2" />
-        <path d="M8 3v4M16 3v4M3 11h18" strokeLinecap="round" />
-      </svg>
+      {!isPlate && (
+        <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="5" width="18" height="16" />
+          <path d="M8 3v4M16 3v4M3 11h18" strokeLinecap="round" />
+        </svg>
+      )}
       {due.label}
     </span>
   );
@@ -263,10 +266,10 @@ export function EpicChip({
   return (
     <span
       className={clsx(
-        'inline-flex max-w-32 items-center gap-1 rounded-full px-1.5 py-0.5 text-2xs font-medium',
+        'inline-flex max-w-32 items-center gap-1 border-2 border-border-strong px-1.5 py-0.5 font-mono text-[10px] font-medium',
         className,
       )}
-      style={{ backgroundColor: hexWithAlpha(epic.color, 0.16), color: epic.color }}
+      style={{ backgroundColor: hexWithAlpha(epic.color, 0.22) }}
       title={`Эпик: ${epic.title}`}
     >
       <Zap className="size-2.5 shrink-0" />
@@ -280,7 +283,7 @@ export function StoryPoints({ points, className }: { points: number | null; clas
   return (
     <span
       className={clsx(
-        'fd-num inline-flex size-4.5 min-w-4.5 items-center justify-center rounded-full bg-surface-active px-1 text-2xs font-semibold text-text-muted',
+        'fd-num inline-flex size-4.5 min-w-4.5 items-center justify-center border-2 border-border-strong bg-surface-active px-1 text-2xs font-bold text-text-muted',
         className,
       )}
       title={`${points} ${plural(points, ['стори-поинт', 'стори-поинта', 'стори-поинтов'])}`}

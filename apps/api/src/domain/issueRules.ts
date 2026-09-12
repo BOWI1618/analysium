@@ -80,7 +80,10 @@ export type HierarchyError =
   | 'PARENT_CANNOT_BE_SUBTASK'
   | 'SELF_REFERENCE'
   | 'EPIC_MUST_BE_EPIC_TYPE'
-  | 'PARENT_MUST_NOT_BE_EPIC';
+  | 'PARENT_MUST_NOT_BE_EPIC'
+  // Detected by walking the stored ancestor chain (wouldCreateParentCycle),
+  // never returned by validateHierarchy itself.
+  | 'PARENT_CYCLE';
 
 export function validateHierarchy(input: HierarchyInput): HierarchyError | null {
   const { issueId, type, parentId, parentType, epicId, epicType } = input;
@@ -113,7 +116,33 @@ export const HIERARCHY_MESSAGES: Record<HierarchyError, string> = {
   SELF_REFERENCE: 'Задача не может ссылаться сама на себя',
   EPIC_MUST_BE_EPIC_TYPE: 'Выбранная задача не является эпиком',
   PARENT_MUST_NOT_BE_EPIC: 'Чтобы связать задачу с эпиком, используйте поле «Эпик»',
+  PARENT_CYCLE: 'Нельзя установить родителя: образуется цикл в иерархии задач',
 };
+
+/**
+ * Guards against cycles that already exist in the data — the walk must
+ * terminate even on corrupt input, not spin forever.
+ */
+const MAX_ANCESTOR_DEPTH = 100;
+
+/**
+ * True when making `parentId` the parent of `issueId` would close a cycle,
+ * i.e. issueId is reachable from parentId by walking the ancestor chain.
+ * `loadParent` supplies the next ancestor one level at a time; the chain is
+ * explored iteratively and bounded by MAX_ANCESTOR_DEPTH.
+ */
+export async function wouldCreateParentCycle(
+  issueId: string,
+  parentId: string,
+  loadParent: (id: string) => Promise<string | null>,
+): Promise<boolean> {
+  let cursor: string | null = parentId;
+  for (let depth = 0; cursor !== null && depth < MAX_ANCESTOR_DEPTH; depth += 1) {
+    if (cursor === issueId) return true;
+    cursor = await loadParent(cursor);
+  }
+  return false;
+}
 
 /**
  * WIP limits are advisory for existing cards but enforced on entry: moving a

@@ -6,6 +6,7 @@ import { badRequest, conflict, notFound } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { emit } from '../../realtime/eventBus';
 import { sprintInclude, toSprint } from '../../lib/serialize';
+import { SPRINT_MOVE_MESSAGES, validateSprintMove } from '../../domain/sprintRules';
 import { notify } from '../notifications/service';
 
 export async function listSprints(projectId: string): Promise<SprintDto[]> {
@@ -84,27 +85,44 @@ export async function startSprint(actor: ActorContext, sprintId: string): Promis
   if (sprint.status === 'COMPLETED') throw badRequest('Спринт уже завершён');
   if (sprint.status === 'ACTIVE') throw badRequest('Спринт уже активен');
 
-  const active = await prisma.sprint.findFirst({
-    where: { projectId: sprint.projectId, status: 'ACTIVE' },
-    select: { id: true, name: true },
-  });
-  if (active) throw conflict(`Спринт «${active.name}» ещё активен — сначала завершите его`);
+  const { updated, issues, committedPoints } = await prisma.$transaction(async (tx) => {
+    // Serialize concurrent starts within the project — the conditional update
+    // alone can still pass at READ COMMITTED when both transactions snapshot
+    // before either one commits.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${sprint.projectId}))`;
 
-  const issues = await prisma.issue.findMany({
-    where: { sprintId },
-    select: { storyPoints: true, assigneeId: true },
-  });
-  const committedPoints = issues.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0);
+    const issues = await tx.issue.findMany({
+      where: { sprintId },
+      select: { storyPoints: true, assigneeId: true },
+    });
+    const committedPoints = issues.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0);
 
-  const updated = await prisma.sprint.update({
-    where: { id: sprintId },
-    data: {
-      status: 'ACTIVE',
-      committedPoints,
-      startDate: sprint.startDate ?? new Date(),
-      endDate: sprint.endDate ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    },
-    include: sprintInclude,
+    // Check-and-act in a single conditional update: either this sprint is still
+    // PLANNED with no ACTIVE sibling, or nothing is updated.
+    const started = await tx.sprint.updateMany({
+      where: {
+        id: sprintId,
+        status: 'PLANNED',
+        project: { sprints: { none: { status: 'ACTIVE' } } },
+      },
+      data: {
+        status: 'ACTIVE',
+        committedPoints,
+        startDate: sprint.startDate ?? new Date(),
+        endDate: sprint.endDate ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      },
+    });
+    if (started.count !== 1) {
+      const active = await tx.sprint.findFirst({
+        where: { projectId: sprint.projectId, status: 'ACTIVE' },
+        select: { name: true },
+      });
+      if (active) throw conflict(`Спринт «${active.name}» ещё активен — сначала завершите его`);
+      throw badRequest('Спринт уже завершён');
+    }
+
+    const updated = await tx.sprint.findUniqueOrThrow({ where: { id: sprintId }, include: sprintInclude });
+    return { updated, issues, committedPoints };
   });
 
   audit({
@@ -143,6 +161,8 @@ export async function completeSprint(
   if (sprint.status !== 'ACTIVE') throw badRequest('Завершить можно только активный спринт');
 
   const targetSprintId = moveUnfinishedTo === 'backlog' ? null : moveUnfinishedTo;
+  const moveError = validateSprintMove(sprintId, targetSprintId);
+  if (moveError) throw badRequest(SPRINT_MOVE_MESSAGES[moveError]);
   if (targetSprintId) {
     const target = await prisma.sprint.findFirst({
       where: { id: targetSprintId, projectId: sprint.projectId, status: { not: 'COMPLETED' } },

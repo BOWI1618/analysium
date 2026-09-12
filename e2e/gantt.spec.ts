@@ -49,7 +49,7 @@ async function createScheduledIssue(
   startDay: number,
   endDay: number,
 ) {
-  const response = await page.request.post('http://localhost:4000/api/v1/issues', {
+  const response = await page.request.post('/api/v1/issues', {
     data: {
       projectId,
       title,
@@ -87,7 +87,7 @@ test.describe('диаграмма Ганта', () => {
 
     await test.step('связь создаётся через API и рисуется на диаграмме', async () => {
       const response = await page.request.post(
-        `http://localhost:4000/api/v1/projects/${projectId}/dependencies`,
+        `/api/v1/projects/${projectId}/dependencies`,
         { data: { predecessorId: first.id, successorId: second.id } },
       );
       expect(response.status()).toBe(201);
@@ -100,7 +100,7 @@ test.describe('диаграмма Ганта', () => {
 
     await test.step('цикл отклоняется сервером', async () => {
       const response = await page.request.post(
-        `http://localhost:4000/api/v1/projects/${projectId}/dependencies`,
+        `/api/v1/projects/${projectId}/dependencies`,
         { data: { predecessorId: second.id, successorId: first.id } },
       );
       expect(response.status()).toBe(400);
@@ -123,13 +123,13 @@ test.describe('диаграмма Ганта', () => {
     const first = await createScheduledIssue(page, projectId, 'Первый этап', 1, 3);
     const second = await createScheduledIssue(page, projectId, 'Второй этап', 4, 8);
 
-    await page.request.post(`http://localhost:4000/api/v1/projects/${projectId}/dependencies`, {
+    await page.request.post(`/api/v1/projects/${projectId}/dependencies`, {
       data: { predecessorId: first.id, successorId: second.id },
     });
 
     // Moving the predecessor past its successor must ask before touching it.
     const response = await page.request.post(
-      `http://localhost:4000/api/v1/issues/${first.id}/reschedule`,
+      `/api/v1/issues/${first.id}/reschedule`,
       {
         data: {
           startDate: '2026-06-10T00:00:00.000Z',

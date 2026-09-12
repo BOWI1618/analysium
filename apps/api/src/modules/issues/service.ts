@@ -33,7 +33,8 @@ import {
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { assertCan, visibleProjectIds } from '../../lib/context';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound, AppError } from '../../lib/errors';
+import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
 import { audit } from '../../lib/audit';
 import { buildIssueWhere, cursorFieldFor, orderByFor } from '../../domain/filters';
@@ -44,6 +45,7 @@ import {
   formatIssueKey,
   nextCompletedAt,
   validateHierarchy,
+  wouldCreateParentCycle,
 } from '../../domain/issueRules';
 import { issueSummarySelect, toIssueSummary, toAttachment, attachmentSelect, toSprint, sprintInclude } from '../../lib/serialize';
 import { filterWorkspaceMembers, issueWatchers, notify } from '../notifications/service';
@@ -180,9 +182,15 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
 export async function getIssueByKey(actor: ActorContext, issueKey: string) {
   const issue = await prisma.issue.findFirst({
     where: { issueKey: issueKey.toUpperCase(), project: { workspaceId: actor.workspaceId } },
-    select: { id: true },
+    select: { id: true, projectId: true },
   });
   if (!issue) throw notFound('Задача');
+
+  // The lookup above is workspace-wide, so a guest could resolve any issue
+  // key; hide issues in projects the actor cannot see.
+  const allowed = await visibleProjectIds(actor);
+  if (allowed !== 'ALL' && !allowed.includes(issue.projectId)) throw notFound('Задача');
+
   return getIssue(actor, issue.id);
 }
 
@@ -196,7 +204,8 @@ export async function getActivity(actor: ActorContext, issueId: string, limit = 
   const { activitySelect, toActivity } = await import('../../lib/serialize');
   const rows = await prisma.activityEvent.findMany({
     where: { issueId },
-    orderBy: { createdAt: 'asc' },
+    // Newest first — the timeline reads top-down like a chat.
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit,
     select: activitySelect,
   });
@@ -248,6 +257,19 @@ async function checkHierarchy(
     epicType: (related.find((r) => r.id === input.epicId)?.type ?? null) as never,
   });
   if (error) throw badRequest(HIERARCHY_MESSAGES[error]);
+
+  // The static rules cannot see stored ancestors — walk the chain to reject
+  // cycles (A under B while B is already under A).
+  if (input.issueId && input.parentId) {
+    if (await wouldCreateParentCycle(input.issueId, input.parentId, loadParentId)) {
+      throw badRequest(HIERARCHY_MESSAGES.PARENT_CYCLE);
+    }
+  }
+}
+
+/** Supplies the parent of an issue, one ancestor level per call. */
+async function loadParentId(id: string): Promise<string | null> {
+  return (await prisma.issue.findUnique({ where: { id }, select: { parentId: true } }))?.parentId ?? null;
 }
 
 async function validateLabels(projectId: string, labelIds: string[]): Promise<void> {
@@ -293,15 +315,19 @@ export async function createIssue(
   const description = input.description ? sanitizeDoc(input.description) : null;
   const descriptionText = description ? docToText(description) : null;
 
-  // New cards land at the top of their column.
-  const first = await prisma.issue.findFirst({
-    where: { projectId: input.projectId, statusId: status.id },
-    orderBy: { rank: 'asc' },
-    select: { rank: true },
-  });
-  const rank = rankBetween(null, first?.rank ?? null);
-
   const issue = await prisma.$transaction(async (tx) => {
+    // Serialize concurrent creators on the column so two new cards never
+    // compute the same top-of-column rank.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${status.id}))`;
+
+    // New cards land at the top of their column.
+    const first = await tx.issue.findFirst({
+      where: { projectId: input.projectId, statusId: status.id },
+      orderBy: { rank: 'asc' },
+      select: { rank: true },
+    });
+    const rank = rankBetween(null, first?.rank ?? null);
+
     // Reserve the next number atomically so two concurrent creates cannot
     // produce the same issue key.
     const project = await tx.project.update({
@@ -364,7 +390,13 @@ export async function createIssue(
     payload: { issueId: issue.id, issueKey: issue.issueKey, projectId: issue.projectId },
   });
 
-  await fanoutCreate(actor, issue.id, issue.issueKey, input);
+  try {
+    await fanoutCreate(actor, issue.id, issue.issueKey, input);
+  } catch (error) {
+    // A failed notification must not fail the create — the client would retry
+    // and duplicate the issue.
+    log.warn(error, 'issue create fan-out failed');
+  }
 
   return getIssue(actor, issue.id);
 }
@@ -384,7 +416,7 @@ async function fanoutCreate(
         workspaceId: actor.workspaceId,
         actorId: actor.userId,
         type: NotificationType.ISSUE_ASSIGNED,
-        title: `${issueKey} was assigned to you`,
+        title: `${issueKey} назначена на вас`,
         body: input.title,
         issueId,
       }),
@@ -400,7 +432,7 @@ async function fanoutCreate(
           workspaceId: actor.workspaceId,
           actorId: actor.userId,
           type: NotificationType.ISSUE_MENTIONED,
-          title: `You were mentioned in ${issueKey}`,
+          title: `Вас упомянули в ${issueKey}`,
           body: input.title,
           issueId,
         }),
@@ -627,7 +659,13 @@ export async function updateIssue(
     });
   }
 
-  await fanoutUpdate(actor, { ...before, newStatus }, patch);
+  try {
+    await fanoutUpdate(actor, { ...before, newStatus }, patch);
+  } catch (error) {
+    // A failed notification must not fail the update — the client would retry
+    // and repeat the change.
+    log.warn(error, 'issue update fan-out failed');
+  }
 
   return getIssue(actor, issueId);
 }
@@ -653,7 +691,7 @@ async function fanoutUpdate(
         workspaceId: actor.workspaceId,
         actorId: actor.userId,
         type: NotificationType.ISSUE_ASSIGNED,
-        title: `${before.issueKey} was assigned to you`,
+        title: `${before.issueKey} назначена на вас`,
         body: patch.title ?? before.title,
         issueId: before.id,
       }),
@@ -668,7 +706,7 @@ async function fanoutUpdate(
           workspaceId: actor.workspaceId,
           actorId: actor.userId,
           type: NotificationType.ISSUE_STATUS_CHANGED,
-          title: `${before.issueKey} moved to ${before.newStatus!.name}`,
+          title: `${before.issueKey} → ${before.newStatus!.name}`,
           body: patch.title ?? before.title,
           issueId: before.id,
         }),
@@ -684,8 +722,14 @@ async function fanoutUpdate(
           workspaceId: actor.workspaceId,
           actorId: actor.userId,
           type: NotificationType.ISSUE_DUE_DATE_CHANGED,
-          title: `Due date changed on ${before.issueKey}`,
-          body: patch.dueDate ? new Date(patch.dueDate).toDateString() : 'Срок снят',
+          title: `Изменился срок у ${before.issueKey}`,
+          // The product is Russian throughout, so the date in a notification
+          // is written the way the rest of the interface writes dates.
+          body: patch.dueDate
+            ? new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+                new Date(patch.dueDate),
+              )
+            : 'Срок снят',
           issueId: before.id,
         }),
       ),
@@ -702,7 +746,7 @@ async function fanoutUpdate(
             workspaceId: actor.workspaceId,
             actorId: actor.userId,
             type: NotificationType.ISSUE_MENTIONED,
-            title: `You were mentioned in ${before.issueKey}`,
+            title: `Вас упомянули в ${before.issueKey}`,
             body: patch.title ?? before.title,
             issueId: before.id,
           }),
@@ -732,6 +776,7 @@ export async function moveIssue(
       projectId: true,
       issueKey: true,
       statusId: true,
+      sprintId: true,
       completedAt: true,
       title: true,
       status: { select: { name: true, category: true } },
@@ -752,38 +797,54 @@ export async function moveIssue(
     }
   }
 
-  const neighbours = await prisma.issue.findMany({
-    where: { id: { in: [input.beforeId, input.afterId].filter((v): v is string => Boolean(v)) } },
-    select: { id: true, rank: true, statusId: true },
-  });
-  const beforeRank = neighbours.find((n) => n.id === input.beforeId)?.rank ?? null;
-  const afterRank = neighbours.find((n) => n.id === input.afterId)?.rank ?? null;
+  if (input.sprintId !== undefined) await validateSprint(issue.projectId, input.sprintId);
 
-  let rank: string;
-  try {
-    rank = rankBetween(beforeRank, afterRank);
-  } catch {
-    // Neighbours arrived out of order (stale client state) — append instead of failing.
-    const last = await prisma.issue.findFirst({
-      where: { projectId: issue.projectId, statusId: status.id },
-      orderBy: { rank: 'desc' },
-      select: { rank: true },
-    });
-    rank = rankBetween(last?.rank ?? null, null);
-  }
-
-  const data: Prisma.IssueUpdateInput = { rank };
+  const data: Prisma.IssueUpdateInput = {};
   if (isEntering) {
     data.status = { connect: { id: status.id } };
     data.completedAt = nextCompletedAt(status.category as never, issue.completedAt);
   }
   if (input.sprintId !== undefined) {
-    await validateSprint(issue.projectId, input.sprintId);
     data.sprint = input.sprintId ? { connect: { id: input.sprintId } } : { disconnect: true };
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.issue.update({ where: { id: issueId }, data });
+  const rank = await prisma.$transaction(async (tx) => {
+    // Serialize rank recomputation per column so concurrent moves cannot
+    // compute the same rank between the same neighbours. A move touching two
+    // columns locks both, in a deterministic order, to avoid deadlocks.
+    const lockKeys = [...new Set([issue.statusId, status.id])].sort();
+    for (const key of lockKeys) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    }
+
+    const neighbours = await tx.issue.findMany({
+      where: {
+        id: { in: [input.beforeId, input.afterId].filter((v): v is string => Boolean(v)) },
+        // Neighbours must belong to the target column; a neighbour from
+        // another column (or a stale id) is ignored, falling back to the edge.
+        statusId: status.id,
+      },
+      select: { id: true, rank: true },
+    });
+    const beforeRank = neighbours.find((n) => n.id === input.beforeId)?.rank ?? null;
+    const afterRank = neighbours.find((n) => n.id === input.afterId)?.rank ?? null;
+
+    let rank: string;
+    try {
+      rank = rankBetween(beforeRank, afterRank);
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      // Neighbours arrived out of order (stale client state) — append instead of failing.
+      const last = await tx.issue.findFirst({
+        where: { projectId: issue.projectId, statusId: status.id },
+        orderBy: { rank: 'desc' },
+        select: { rank: true },
+      });
+      rank = rankBetween(last?.rank ?? null, null);
+    }
+
+    await tx.issue.update({ where: { id: issueId }, data: { ...data, rank } });
+
     if (isEntering) {
       await tx.activityEvent.create({
         data: {
@@ -797,6 +858,22 @@ export async function moveIssue(
         },
       });
     }
+
+    // A sprint change via drag & drop is recorded just like the PATCH path.
+    if (input.sprintId !== undefined && input.sprintId !== issue.sprintId) {
+      await tx.activityEvent.create({
+        data: {
+          issueId,
+          actorId: actor.userId,
+          type: ActivityType.SPRINT_CHANGED,
+          field: 'sprintId',
+          fromValue: issue.sprintId,
+          toValue: input.sprintId,
+        },
+      });
+    }
+
+    return rank;
   });
 
   emit(RealtimeEventType.ISSUE_MOVED, {
@@ -812,16 +889,21 @@ export async function moveIssue(
   });
 
   if (isEntering) {
-    const watchers = await issueWatchers(issueId);
-    await notify({
-      userIds: watchers,
-      workspaceId: actor.workspaceId,
-      actorId: actor.userId,
-      type: NotificationType.ISSUE_STATUS_CHANGED,
-      title: `${issue.issueKey} moved to ${status.name}`,
-      body: issue.title,
-      issueId,
-    });
+    try {
+      const watchers = await issueWatchers(issueId);
+      await notify({
+        userIds: watchers,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        type: NotificationType.ISSUE_STATUS_CHANGED,
+        title: `${issue.issueKey} → ${status.name}`,
+        body: issue.title,
+        issueId,
+      });
+    } catch (error) {
+      // A failed notification must not fail the move.
+      log.warn(error, 'move notification failed');
+    }
   }
 
   const updated = await prisma.issue.findUniqueOrThrow({ where: { id: issueId }, select: issueSummarySelect });
@@ -851,7 +933,7 @@ export async function bulkUpdate(
       project: { workspaceId: actor.workspaceId },
       ...(allowed === 'ALL' ? {} : { projectId: { in: allowed } }),
     },
-    select: { id: true, projectId: true, statusId: true, issueKey: true, completedAt: true },
+    select: { id: true, projectId: true, statusId: true, issueKey: true, completedAt: true, type: true, parentId: true },
   });
   if (!issues.length) return { updated: 0 };
 
@@ -862,6 +944,50 @@ export async function bulkUpdate(
 
   const status = patch.statusId ? await resolveStatus(projectIds[0]!, patch.statusId) : null;
   if (patch.assigneeId !== undefined) await validateAssignee(actor.workspaceId, patch.assigneeId);
+
+  // Reject cross-project links exactly like single-issue updates do: sprints
+  // and labels per project, hierarchy per issue.
+  const touchedLabelIds = [...(patch.addLabelIds ?? []), ...(patch.removeLabelIds ?? [])];
+  for (const projectId of projectIds) {
+    await validateSprint(projectId, patch.sprintId);
+    await validateLabels(projectId, touchedLabelIds);
+  }
+  if (patch.epicId !== undefined) {
+    for (const issue of issues) {
+      try {
+        await checkHierarchy(issue.projectId, {
+          issueId: issue.id,
+          type: issue.type,
+          parentId: issue.parentId,
+          epicId: patch.epicId,
+        });
+      } catch (error) {
+        // Say which row failed so the caller can find it in the selection.
+        if (error instanceof AppError) throw badRequest(`${issue.issueKey}: ${error.message}`);
+        throw error;
+      }
+    }
+  }
+
+  // WIP limits are enforced on entry, like moveIssue. The count is not atomic
+  // against concurrent moves — a known, accepted limitation (same as moveIssue).
+  if (status) {
+    const entering = issues.filter((i) => i.statusId !== status.id).length;
+    if (entering > 0) {
+      const current = await prisma.issue.count({
+        where: { projectId: projectIds[0]!, statusId: status.id, archivedAt: null, parentId: null },
+      });
+      if (
+        exceedsWipLimit(
+          { id: status.id, name: status.name, category: status.category as never, wipLimit: status.wipLimit },
+          current + entering - 1,
+          true,
+        )
+      ) {
+        throw conflict(`"${status.name}" has reached its WIP limit of ${status.wipLimit}`);
+      }
+    }
+  }
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {

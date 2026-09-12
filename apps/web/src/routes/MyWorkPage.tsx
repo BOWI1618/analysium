@@ -70,7 +70,9 @@ export function MyWorkPage() {
     [tab, extraFilters],
   );
 
-  const query = useIssueList({ workspaceId }, filters, { limit: 100 });
+  // The "upcoming" preset filters on dueAfter = now — refetch on a timer so
+  // the window does not freeze at the moment the tab was opened.
+  const query = useIssueList({ workspaceId }, filters, { limit: 100, refetchInterval: 60_000 });
   const issues = useMemo(() => flattenPages(query.data), [query.data]);
 
   const groups = useMemo(() => groupIssues(issues, groupBy), [issues, groupBy]);
@@ -79,17 +81,18 @@ export function MyWorkPage() {
     <>
       <Topbar breadcrumbs={[{ label: 'Мои задачи' }]} />
 
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-surface px-3 py-1.5 no-scrollbar">
-        {TABS.map((item) => (
+      <div className="flex items-stretch overflow-x-auto border-b-2 border-border-strong bg-bg-subtle no-scrollbar">
+        {TABS.map((item, index) => (
           <button
             key={item.value}
             type="button"
             onClick={() => setTab(item.value)}
             aria-current={tab === item.value ? 'page' : undefined}
             className={clsx(
-              'rounded-md px-2.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors',
+              'px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors',
+              index > 0 && 'border-l-2 border-border-strong',
               tab === item.value
-                ? 'bg-surface-active text-text'
+                ? 'relative bg-surface text-text after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-accent'
                 : 'text-text-muted hover:bg-surface-hover hover:text-text',
             )}
           >
@@ -150,11 +153,11 @@ export function MyWorkPage() {
         ) : (
           groups.map((group) => (
             <section key={group.key}>
-              <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface-sunken px-3 py-1.5">
+              <header className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-border-strong bg-surface-sunken px-3 py-1.5">
                 {group.accent && (
-                  <span className="size-2 rounded-full" style={{ backgroundColor: group.accent }} aria-hidden="true" />
+                  <span className="size-2.5 border border-border-strong" style={{ backgroundColor: group.accent }} aria-hidden="true" />
                 )}
-                <h2 className="text-xs font-semibold">{group.label}</h2>
+                <h2 className="fd-eyebrow">{group.label}</h2>
                 <span className="fd-num text-2xs text-text-subtle">{group.issues.length}</span>
               </header>
               {group.issues.map((issue) => (
@@ -179,7 +182,7 @@ export function MyWorkPage() {
               loading={query.isFetchingNextPage}
               onClick={() => void query.fetchNextPage()}
             >
-              Load more
+              Загрузить ещё
             </Button>
           </div>
         )}

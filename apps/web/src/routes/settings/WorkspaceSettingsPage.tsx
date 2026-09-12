@@ -23,6 +23,7 @@ import { Button, IconButton } from '~/ui/Button';
 import { Input, Select } from '~/ui/Input';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { EmptyState, Skeleton } from '~/ui/Feedback';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
 import { PROJECT_TYPE_LABEL, ROLE_LABEL } from '~/lib/labels';
 
@@ -52,20 +53,20 @@ export function WorkspaceSettingsPage() {
     <>
       <Topbar breadcrumbs={[{ label: workspace.name }, { label: 'Настройки' }]} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
         <div className="mx-auto flex max-w-4xl gap-6 p-4 sm:p-6">
           <nav className="hidden w-44 shrink-0 sm:block" aria-label="Разделы настроек">
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {visible.map((item) => (
                 <li key={item}>
                   <button
                     type="button"
                     onClick={() => setSection(item)}
                     className={clsx(
-                      'w-full rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors',
+                      'w-full border-2 px-2 py-1.5 text-left text-sm font-bold transition-colors',
                       section === item
-                        ? 'bg-surface-active text-text'
-                        : 'text-text-muted hover:bg-surface-hover hover:text-text',
+                        ? 'border-border-strong bg-marker-subtle text-text'
+                        : 'border-transparent text-text-muted hover:bg-surface-hover hover:text-text',
                     )}
                   >
                     {SECTION_LABELS[item]}
@@ -104,10 +105,10 @@ export function WorkspaceSettingsPage() {
 
 function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
-      <div className="mt-3">{children}</div>
+    <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
+      <h2 className="fd-eyebrow">{title}</h2>
+      {description && <p className="mt-1 text-xs text-text-muted">{description}</p>}
+      <div className="mt-3.5">{children}</div>
     </section>
   );
 }
@@ -134,7 +135,7 @@ function GeneralSection() {
               maxLength={4}
               onChange={(event) => setLogo(event.target.value)}
               className="text-center text-lg"
-              placeholder="🚀"
+              placeholder="A"
             />
           </div>
           <div className="flex-1">
@@ -228,7 +229,7 @@ function MembersSection() {
         {isLoading ? (
           <Skeleton className="h-32" />
         ) : (
-          <ul className="divide-y divide-border rounded-md border border-border">
+          <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
             {members?.map((member) => {
               const isSelf = member.user.id === user.id;
               const canChange = canManage && member.role !== 'OWNER' && outranks(workspace.role, member.role);
@@ -240,7 +241,7 @@ function MembersSection() {
                     <Avatar user={member.user} size="lg" />
                     {online && (
                       <span
-                        className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-success ring-2 ring-[var(--surface)]"
+                        className="absolute -right-0.5 -bottom-0.5 size-2.5 bg-success ring-2 ring-[var(--surface)]"
                         title="Сейчас онлайн"
                       />
                     )}
@@ -265,7 +266,7 @@ function MembersSection() {
                       value={member.role}
                       onChange={(event) => updateRole.mutate({ memberId: member.id, role: event.target.value })}
                       aria-label={`Роль участника ${member.user.name}`}
-                      className="h-7 rounded-md border border-border bg-surface px-1.5 text-xs"
+                      className="h-7 border-2 border-border-strong bg-surface px-1.5 text-xs"
                     >
                       {WORKSPACE_ROLES.filter((r) => r !== 'OWNER').map((option) => (
                         <option key={option} value={option}>
@@ -301,7 +302,7 @@ function MembersSection() {
           setRemoving(null);
         }}
         title={`Убрать ${removing?.name}?`}
-message="Доступ к пространству пропадёт сразу. Задачи и комментарии останутся."
+        message="Доступ к пространству пропадёт сразу. Задачи и комментарии останутся."
         confirmLabel="Убрать"
         danger
       />
@@ -348,11 +349,11 @@ function RolesSection() {
   return (
     <Card
       title="Роли"
-description="Роли проверяются на сервере при каждом запросе. Скрытая кнопка — это удобство, а не защита."
+      description="Роли проверяются на сервере при каждом запросе. Скрытая кнопка — это удобство, а не защита."
     >
       <ul className="space-y-2.5">
         {ROLE_MATRIX.map((entry) => (
-          <li key={entry.role} className="rounded-md border border-border p-3">
+          <li key={entry.role} className="border-2 border-border-strong bg-surface-sunken p-3">
             <div className="flex items-center gap-2">
               <ShieldCheck className="size-3.5 text-accent" />
               <h3 className="text-sm font-semibold">{ROLE_LABEL[entry.role]}</h3>
@@ -361,7 +362,7 @@ description="Роли проверяются на сервере при кажд
             <ul className="mt-2 space-y-1">
               {entry.grants.map((grant) => (
                 <li key={grant} className="flex items-start gap-1.5 text-xs text-text-muted">
-                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-text-subtle" aria-hidden="true" />
+                  <span className="mt-1.5 size-1 shrink-0 bg-text-subtle" aria-hidden="true" />
                   {grant}
                 </li>
               ))}
@@ -384,10 +385,10 @@ function ProjectsSection() {
       {isLoading ? (
         <Skeleton className="h-32" />
       ) : projects && projects.length > 0 ? (
-        <ul className="divide-y divide-border rounded-md border border-border">
+        <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
           {projects.map((project) => (
             <li key={project.id} className="flex items-center gap-2.5 p-2.5">
-              <span aria-hidden="true">{project.icon}</span>
+              <ProjectIcon icon={project.icon} color={project.color} size="sm" />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{project.name}</span>
               <span className="fd-key">{project.key}</span>
               <Badge>{PROJECT_TYPE_LABEL[project.projectType]}</Badge>
@@ -430,7 +431,7 @@ function AuditSection() {
       ) : entries.length === 0 ? (
         <EmptyState compact title="Записей пока нет" />
       ) : (
-        <ul className="divide-y divide-border rounded-md border border-border">
+        <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
           {entries.map((entry) => (
             <li key={entry.id} className="flex items-center gap-2.5 p-2.5">
               <Avatar user={entry.actor} size="md" />

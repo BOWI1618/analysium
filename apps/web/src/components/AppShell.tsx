@@ -70,7 +70,7 @@ export function AppShell() {
             onClick={() => setMobileNavOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative z-10 h-full w-64 animate-in">
+          <div className="relative z-10 h-full w-64 animate-in shadow-xl">
             <Sidebar onNavigate={() => setMobileNavOpen(false)} />
           </div>
         </div>

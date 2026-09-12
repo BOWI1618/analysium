@@ -5,16 +5,24 @@ import { Spinner } from './Spinner';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'subtle' | 'outline';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
+/* Hard-plate variants carry the solid offset shadow: they lift one pixel on
+   hover and press flat on active. Motion is gated on `enabled` so a disabled
+   button never moves. */
+const HARD_PLATE =
+  'border-2 border-border-strong shadow-sm ' +
+  'transition-[color,background-color,border-color,box-shadow,translate] duration-100 ' +
+  'enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:shadow-md ' +
+  'enabled:active:translate-x-px enabled:active:translate-y-px enabled:active:shadow-none';
+
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    'bg-accent text-accent-fg hover:bg-accent-hover active:bg-accent-active shadow-xs disabled:hover:bg-accent',
-  secondary:
-    'bg-surface text-text border border-border hover:bg-surface-hover active:bg-surface-active shadow-xs disabled:hover:bg-surface',
-  outline:
-    'bg-transparent text-text border border-border-strong hover:bg-surface-hover active:bg-surface-active',
-  ghost: 'bg-transparent text-text-muted hover:bg-surface-hover hover:text-text active:bg-surface-active',
-  subtle: 'bg-accent-subtle text-accent hover:bg-accent-subtle-hover',
-  danger: 'bg-danger text-white hover:opacity-90 active:opacity-80 shadow-xs',
+  primary: `${HARD_PLATE} bg-accent text-accent-fg hover:bg-accent-hover active:bg-accent-active disabled:hover:bg-accent`,
+  secondary: `${HARD_PLATE} bg-surface text-text hover:bg-surface-hover active:bg-surface-active disabled:hover:bg-surface`,
+  outline: `${HARD_PLATE} bg-transparent text-text hover:bg-surface-hover active:bg-surface-active`,
+  ghost:
+    'bg-transparent text-text-muted transition-colors duration-100 hover:bg-surface-hover hover:text-text active:bg-surface-active',
+  subtle:
+    'border-2 border-border-strong bg-marker-subtle text-text transition-colors duration-100 hover:bg-marker active:bg-surface-active',
+  danger: `${HARD_PLATE} bg-danger text-accent-fg hover:opacity-95 active:opacity-90`,
 };
 
 const SIZES: Record<ButtonSize, string> = {

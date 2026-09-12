@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import {
   ISSUE_PRIORITIES,
@@ -69,6 +69,9 @@ export function FilterBar({
 }: FilterBarProps) {
   const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
   const [facetsOpen, setFacetsOpen] = useState(false);
+
+  // The URL (or an applied saved view) can change filters.search from outside.
+  useEffect(() => setSearchTerm(filters.search ?? ''), [filters.search]);
   const count = activeFilterCount(filters);
 
   const patch = (next: Partial<IssueFilters>) => onChange({ ...filters, ...next });
@@ -83,7 +86,7 @@ export function FilterBar({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface px-3 py-2">
+    <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-border-strong bg-surface px-3 py-2">
       {/* Search */}
       <div className="relative min-w-40 flex-1 sm:max-w-64">
         <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-text-subtle" />
@@ -95,7 +98,7 @@ export function FilterBar({
           }}
           placeholder="Фильтр по заголовку или ключу…"
           aria-label="Фильтровать задачи"
-          className="h-7 w-full rounded-md border border-border bg-surface-sunken pr-6 pl-7 text-xs outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className="h-7 w-full border-2 border-border-strong bg-surface-sunken pr-6 pl-7 text-xs outline-none hover:bg-surface hover:shadow-xs focus:border-accent focus:shadow-sm focus:-translate-x-px focus:-translate-y-px"
         />
         {searchTerm && (
           <button
@@ -105,7 +108,7 @@ export function FilterBar({
               patch({ search: undefined });
             }}
             aria-label="Очистить фильтр"
-            className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm p-0.5 text-text-subtle hover:text-text"
+            className="absolute top-1/2 right-1.5 -translate-y-1/2 p-0.5 text-text-subtle hover:text-text"
           >
             <X className="size-3" />
           </button>
@@ -120,10 +123,10 @@ export function FilterBar({
         onClick={() => setFacetsOpen((open) => !open)}
         aria-expanded={facetsOpen}
         className={clsx(
-          'inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs font-medium sm:hidden',
+          'inline-flex h-7 items-center gap-1.5 border-2 px-2 text-xs font-bold sm:hidden',
           count
             ? 'border-accent-border bg-accent-subtle text-accent'
-            : 'border-border text-text-muted hover:bg-surface-hover hover:text-text',
+            : 'border-border-strong text-text-muted hover:bg-surface-hover hover:text-text hover:shadow-xs',
         )}
       >
         <ListFilter className="size-3" />
@@ -185,7 +188,7 @@ export function FilterBar({
             options={labels.map((l) => ({
               value: l.id,
               label: l.name,
-              icon: <span className="size-2.5 rounded-full" style={{ backgroundColor: l.color }} />,
+              icon: <span className="size-2.5 border border-border-strong" style={{ backgroundColor: l.color }} />,
             }))}
             value={filters.labelId ?? []}
             onChange={(labelId) => patch({ labelId: labelId.length ? labelId : undefined })}
@@ -221,7 +224,7 @@ export function FilterBar({
 
         {/* More */}
         <Menu>
-          <MenuTrigger asChild>
+          <MenuTrigger>
             <FacetButton label="Ещё" icon={<SlidersHorizontal className="size-3" />} />
           </MenuTrigger>
           <MenuContent width={220} label="Дополнительные фильтры">
@@ -274,7 +277,7 @@ export function FilterBar({
 
         {savedViews.length > 0 && onApplyView && (
           <Menu>
-            <MenuTrigger asChild>
+            <MenuTrigger>
               <FacetButton label="Виды" icon={<Bookmark className="size-3" />} />
             </MenuTrigger>
             <MenuContent width={220} label="Сохранённые виды">
@@ -333,10 +336,12 @@ function FacetButton({
     <button
       type="button"
       className={clsx(
-        'inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs font-medium whitespace-nowrap transition-colors',
+        'inline-flex h-7 items-center gap-1.5 border-2 border-border-strong px-2 text-xs font-bold whitespace-nowrap transition-colors',
+        // An applied filter is a solid plate: it has to be obvious at a glance
+        // which of a dozen chips are actually narrowing the list.
         count
-          ? 'border-accent-border bg-accent-subtle text-accent'
-          : 'border-border text-text-muted hover:bg-surface-hover hover:text-text',
+          ? 'bg-ink text-text-inverted shadow-xs'
+          : 'text-text-muted hover:bg-surface-hover hover:text-text hover:shadow-xs',
       )}
     >
       {icon ?? <ListFilter className="size-3" />}

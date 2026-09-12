@@ -4,21 +4,22 @@
   "private": true,
   "description": "FlowDesk — modern project & issue tracking for product teams",
   "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=20.12" },
   "scripts": {
-    "dev": "npm run dev --workspace=@flowdesk/api & npm run dev --workspace=@flowdesk/web",
+    "dev": "node scripts/dev.mjs",
     "dev:api": "npm run dev --workspace=@flowdesk/api",
     "dev:web": "npm run dev --workspace=@flowdesk/web",
-    "build": "npm run build --workspace=@flowdesk/contracts && npm run build --workspace=@flowdesk/api && npm run build --workspace=@flowdesk/web",
+    "build": "npm run build --workspace=@flowdesk/api && npm run build --workspace=@flowdesk/web",
     "db:up": "docker compose up -d db",
     "db:push": "npm run db:push --workspace=@flowdesk/api",
     "db:migrate": "npm run db:migrate --workspace=@flowdesk/api",
     "db:seed": "npm run db:seed --workspace=@flowdesk/api",
     "db:reset": "npm run db:reset --workspace=@flowdesk/api",
-    "setup": "npm run db:up && sleep 4 && npm run db:push && npm run db:seed",
+    "setup": "docker compose up -d --wait db && npm run db:push && npm run db:seed",
     "test": "npm run test --workspace=@flowdesk/api",
     "test:e2e": "playwright test",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:e2e",
+    "typecheck:e2e": "tsc --noEmit -p e2e"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

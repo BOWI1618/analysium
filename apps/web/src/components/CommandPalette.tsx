@@ -13,11 +13,8 @@ import {
   Zap,
   Inbox,
   Home,
-  Moon,
-  Sun,
 } from 'lucide-react';
 import { useSession } from '~/app/session';
-import { useTheme } from '~/app/theme';
 import { useUiStore } from '~/app/uiStore';
 import { useSearch } from '~/features/search/hooks';
 import { Avatar } from '~/ui/Avatar';
@@ -45,7 +42,6 @@ export function CommandPalette() {
   const openIssue = useUiStore((s) => s.openIssue);
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
   const { workspace } = useSession();
-  const { setMode, resolved } = useTheme();
   const navigate = useNavigate();
 
   const [term, setTerm] = useState('');
@@ -107,13 +103,6 @@ export function CommandPalette() {
         run: () => navigate('/projects/new'),
       },
       {
-        id: 'action-theme',
-        label: resolved === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему',
-        icon: resolved === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />,
-        group: 'Действия',
-        run: () => setMode(resolved === 'dark' ? 'light' : 'dark'),
-      },
-      {
         id: 'action-shortcuts',
         label: 'Горячие клавиши',
         hint: '?',
@@ -129,7 +118,7 @@ export function CommandPalette() {
         run: () => navigate('/settings/workspace'),
       },
     ],
-    [navigate, openCreateIssue, resolved, setMode, setShortcutsOpen],
+    [navigate, openCreateIssue, setShortcutsOpen],
   );
 
   const commands = useMemo<Command[]>(() => {
@@ -206,7 +195,9 @@ export function CommandPalette() {
           setOpen(false);
         }
       } else if (event.key === 'Escape') {
+        // Swallow the event so layers below (drawer, dialogs) stay open.
         event.preventDefault();
+        event.stopPropagation();
         setOpen(false);
       }
     };
@@ -233,9 +224,9 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label="Командная палитра"
-        className="relative z-10 w-full max-w-xl overflow-hidden rounded-xl border border-border bg-surface-raised shadow-lg animate-slide-up"
+        className="relative z-10 w-full max-w-xl overflow-hidden border-2 border-border-strong bg-surface shadow-xl animate-slide-up"
       >
-        <div className="flex items-center gap-2 border-b border-border px-3">
+        <div className="flex items-center gap-2 border-b-2 border-border-strong bg-surface-raised px-3">
           <Search className="size-4 shrink-0 text-text-subtle" />
           <input
             autoFocus
@@ -257,7 +248,7 @@ export function CommandPalette() {
           ) : (
             Object.entries(grouped).map(([group, entries]) => (
               <div key={group} className="mb-1">
-                <p className="px-2 py-1 text-2xs font-semibold tracking-wide text-text-subtle uppercase">
+                <p className="fd-eyebrow px-2 py-1.5">
                   {group}
                 </p>
                 {entries.map(({ command, index }) => (
@@ -271,18 +262,18 @@ export function CommandPalette() {
                       setOpen(false);
                     }}
                     className={clsx(
-                      'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm',
-                      index === activeIndex ? 'bg-accent-subtle text-text' : 'hover:bg-surface-hover',
+                      'flex w-full items-center gap-2.5 px-2 py-2 text-left text-sm font-semibold',
+                      // The keyboard cursor is printed in reverse, so it is
+                      // unmistakable while typing.
+                      index === activeIndex ? 'bg-ink text-text-inverted' : 'hover:bg-surface-hover',
                     )}
                   >
-                    <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
-                      {command.icon}
-                    </span>
+                    <span className="flex size-4 shrink-0 items-center justify-center">{command.icon}</span>
                     <span className="min-w-0 flex-1 truncate">{command.label}</span>
                     {command.hint && (
                       <span className="fd-key shrink-0">{command.hint}</span>
                     )}
-                    {index === activeIndex && <CornerDownLeft className="size-3 shrink-0 text-text-subtle" />}
+                    {index === activeIndex && <CornerDownLeft className="size-3 shrink-0" />}
                   </button>
                 ))}
               </div>
@@ -290,17 +281,17 @@ export function CommandPalette() {
           )}
         </div>
 
-        <div className="flex items-center gap-3 border-t border-border px-3 py-1.5 text-2xs text-text-subtle">
+        <div className="flex items-center gap-3 border-t-2 border-border-strong bg-surface-raised px-3 py-1.5 text-2xs text-text-subtle">
           <span className="flex items-center gap-1">
             <Kbd>↑</Kbd>
-            <Kbd>↓</Kbd> navigate
+            <Kbd>↓</Kbd> навигация
           </span>
           <span className="flex items-center gap-1">
-            <Kbd>↵</Kbd> open
+            <Kbd>↵</Kbd> открыть
           </span>
           <span className="ml-auto flex items-center gap-1">
             <ArrowRight className="size-3" />
-            {results?.issues.length ?? 0} issues matched
+            {results?.issues.length ?? 0} задач найдено
           </span>
         </div>
       </div>

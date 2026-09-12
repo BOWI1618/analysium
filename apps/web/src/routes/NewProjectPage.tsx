@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import clsx from 'clsx';
 import { ApiError } from '~/lib/api';
 import { useSession } from '~/app/session';
 import { useMembers } from '~/features/members/hooks';
@@ -7,9 +8,8 @@ import { useCreateProject } from '~/features/projects/hooks';
 import { Topbar } from '~/components/Topbar';
 import { Button } from '~/ui/Button';
 import { Input, Select, Textarea } from '~/ui/Input';
-
-const ICONS = ['📦', '🌐', '📱', '🛠️', '🚀', '🎨', '🔐', '📊', '⚙️', '🧪', '💬', '🧭'];
-const COLORS = ['#6b46f5', '#ec4899', '#14b8a6', '#f59e0b', '#0ea5e9', '#ef4444', '#22c55e', '#8b5cf6'];
+import { PROJECT_ICONS, PROJECT_COLORS } from '~/lib/projectMeta';
+import { Marker, Masthead } from '~/ui/Masthead';
 
 /** Derives a project key from the name: "Mobile App" → "MOB". */
 function suggestKey(name: string): string {
@@ -34,8 +34,8 @@ export function NewProjectPage() {
     name: '',
     key: '',
     description: '',
-    icon: '📦',
-    color: '#6b46f5',
+    icon: PROJECT_ICONS[0]!.name,
+    color: PROJECT_COLORS[0]!.value,
     projectType: 'KANBAN',
     leadId: '',
   });
@@ -65,16 +65,20 @@ export function NewProjectPage() {
     <>
       <Topbar breadcrumbs={[{ label: 'Проекты', to: '/projects' }, { label: 'Новый проект' }]} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <form className="mx-auto max-w-xl space-y-4 p-4 sm:p-6" onSubmit={submit}>
-          <header>
-            <h1 className="text-lg font-semibold">Новый проект</h1>
-            <p className="text-sm text-text-muted">
-              У проекта своя доска, рабочий процесс и метки. Всё это можно изменить позже.
-            </p>
-          </header>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
+        <form className="mx-auto max-w-xl space-y-6 p-4 sm:p-6 lg:p-8" onSubmit={submit}>
+          <Masthead
+            size="md"
+            kicker="новый проект"
+            title={
+              <>
+                Заводим <Marker>проект</Marker>
+              </>
+            }
+            note="У проекта своя доска, рабочий процесс и метки. Всё это можно изменить позже."
+          />
 
-          <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
+          <div className="space-y-3 border-2 border-border-strong bg-surface p-4 shadow-lg">
             <Input
               label="Название"
               autoFocus
@@ -97,7 +101,7 @@ export function NewProjectPage() {
                 setKeyTouched(true);
                 setForm((f) => ({ ...f, key: event.target.value.toUpperCase() }));
               }}
-hint="2–6 символов. Задачи получат номера вида MOB-1, MOB-2 — изменить потом нельзя."
+              hint="2–6 символов. Задачи получат номера вида MOB-1, MOB-2 — изменить потом нельзя."
               maxLength={6}
               className="fd-num uppercase"
               placeholder="MOB"
@@ -112,44 +116,55 @@ hint="2–6 символов. Задачи получат номера вида 
             />
 
             <fieldset>
-              <legend className="mb-1.5 text-xs font-medium text-text-muted">Иконка</legend>
+              <legend className="mb-1.5 text-xs font-bold text-text">Иконка</legend>
               <div className="flex flex-wrap gap-1.5">
-                {ICONS.map((icon) => (
-                  <button
-                    key={icon}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, icon }))}
-                    aria-pressed={form.icon === icon}
-                    aria-label={`Иконка ${icon}`}
-                    className={
-                      form.icon === icon
-                        ? 'flex size-8 items-center justify-center rounded-md border-2 border-accent bg-accent-subtle'
-                        : 'flex size-8 items-center justify-center rounded-md border border-border hover:bg-surface-hover'
-                    }
-                  >
-                    {icon}
-                  </button>
-                ))}
+                {PROJECT_ICONS.map(({ name, label, Icon }) => {
+                  const selected = form.icon === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, icon: name }))}
+                      aria-pressed={selected}
+                      aria-label={`Иконка «${label}»`}
+                      title={label}
+                      className={clsx(
+                        'flex size-8 items-center justify-center transition-colors',
+                        selected
+                          ? 'border-2 border-accent bg-marker-subtle text-accent'
+                          : 'border-2 border-border-strong bg-surface text-text hover:bg-surface-hover',
+                      )}
+                    >
+                      <Icon className="size-4" />
+                    </button>
+                  );
+                })}
               </div>
             </fieldset>
 
             <fieldset>
-              <legend className="mb-1.5 text-xs font-medium text-text-muted">Цвет</legend>
-              <div className="flex flex-wrap gap-1.5">
-                {COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, color }))}
-                    aria-pressed={form.color === color}
-                    aria-label={`Цвет ${color}`}
-                    className="size-7 rounded-md ring-offset-2 ring-offset-[var(--surface)]"
-                    style={{
-                      backgroundColor: color,
-                      boxShadow: form.color === color ? `0 0 0 2px var(--surface), 0 0 0 4px ${color}` : undefined,
-                    }}
-                  />
-                ))}
+              <legend className="mb-1.5 text-xs font-bold text-text">Цвет</legend>
+              <div className="flex flex-wrap gap-2">
+                {PROJECT_COLORS.map(({ value, label }) => {
+                  const selected = form.color === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, color: value }))}
+                      aria-pressed={selected}
+                      aria-label={`Цвет: ${label}`}
+                      title={label}
+                      className="size-7 border-2 border-border-strong"
+                      style={{
+                        backgroundColor: value,
+                        boxShadow: selected
+                          ? `0 0 0 2px var(--surface), 0 0 0 4px var(--border-strong)`
+                          : undefined,
+                      }}
+                    />
+                  );
+                })}
               </div>
             </fieldset>
 

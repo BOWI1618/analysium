@@ -46,7 +46,7 @@ export async function scanDueSoon(now = new Date()): Promise<number> {
       // System-generated: no human actor, so nothing is suppressed as an echo.
       actorId: null,
       type: NotificationType.ISSUE_DUE_SOON,
-      title: `${issue.issueKey} is due soon`,
+      title: `Скоро срок у ${issue.issueKey}`,
       body: issue.title,
       issueId: issue.id,
     });
@@ -56,8 +56,17 @@ export async function scanDueSoon(now = new Date()): Promise<number> {
 }
 
 export function startDueDateScanner(): () => void {
+  // In-flight guard: never let a slow cycle overlap the next tick — in the
+  // single-instance deployment that is what would duplicate notifications.
+  let scanning = false;
   const timer = setInterval(() => {
-    void scanDueSoon().catch(() => undefined);
+    if (scanning) return;
+    scanning = true;
+    void scanDueSoon()
+      .catch(() => undefined)
+      .finally(() => {
+        scanning = false;
+      });
   }, INTERVAL_MS);
   timer.unref();
   return () => clearInterval(timer);

@@ -65,7 +65,7 @@ export function Popover({ trigger, children, align = 'start', className, width =
             role="dialog"
             aria-label={label}
             className={clsx(
-              'fixed z-[var(--z-menu)] rounded-lg border border-border bg-surface-raised p-2 shadow-lg animate-scale-in',
+              'fixed z-[var(--z-menu)] rounded-md border-2 border-border-strong bg-surface p-2 shadow-lg animate-scale-in',
               className,
             )}
             style={{

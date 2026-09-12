@@ -17,10 +17,15 @@ export interface FilterScope {
   currentUserId: string;
 }
 
-const enumIn = <T extends string>(values: string[] | undefined, allowed: readonly string[]): T[] | undefined => {
+const enumIn = <T extends string>(
+  values: string[] | undefined,
+  allowed: readonly string[],
+): { values: T[]; hasMatches: boolean } | undefined => {
   if (!values?.length) return undefined;
   const filtered = values.filter((v) => allowed.includes(v)) as T[];
-  return filtered.length ? filtered : undefined;
+  // A present-but-fully-invalid filter must narrow the query to nothing,
+  // not drop the clause and silently widen it to everything.
+  return { values: filtered, hasMatches: filtered.length > 0 };
 };
 
 function resolveUsers(values: string[] | undefined, currentUserId: string) {
@@ -57,7 +62,13 @@ export function buildIssueWhere(
   if (filter.statusId?.length) and.push({ statusId: { in: filter.statusId } });
 
   const categories = enumIn(filter.statusCategory, Object.values(StatusCategory));
-  if (categories) and.push({ status: { category: { in: categories as never } } });
+  if (categories) {
+    and.push(
+      categories.hasMatches
+        ? { status: { category: { in: categories.values as never } } }
+        : { id: { in: [] } },
+    );
+  }
 
   const assignee = resolveUsers(filter.assigneeId, scope.currentUserId);
   if (assignee) {
@@ -68,13 +79,22 @@ export function buildIssueWhere(
   }
 
   const reporter = resolveUsers(filter.reporterId, scope.currentUserId);
-  if (reporter?.realIds.length) and.push({ reporterId: { in: reporter.realIds } });
+  if (reporter) {
+    const or: Prisma.IssueWhereInput[] = [];
+    if (reporter.realIds.length) or.push({ reporterId: { in: reporter.realIds } });
+    if (reporter.includeUnassigned) or.push({ reporterId: null });
+    if (or.length) and.push({ OR: or });
+  }
 
   const priorities = enumIn(filter.priority, opts.priorities);
-  if (priorities) and.push({ priority: { in: priorities as never } });
+  if (priorities) {
+    and.push(priorities.hasMatches ? { priority: { in: priorities.values as never } } : { id: { in: [] } });
+  }
 
   const types = enumIn(filter.type, opts.types);
-  if (types) and.push({ type: { in: types as never } });
+  if (types) {
+    and.push(types.hasMatches ? { type: { in: types.values as never } } : { id: { in: [] } });
+  }
 
   if (filter.labelId?.length) {
     // AND semantics: an issue must carry every selected label.

@@ -10,7 +10,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { hashToken, generateToken } from '../lib/password';
 import { unauthorized, forbidden } from '../lib/errors';
-import { env, isProd, allowedOrigins } from '../config/env';
+import { env, isProd, isAllowedOrigin } from '../config/env';
 
 export const SESSION_COOKIE = 'fd_session';
 
@@ -37,7 +37,7 @@ export function assertSameOrigin(req: FastifyRequest): void {
   if (SAFE_METHODS.has(req.method)) return;
   const origin = req.headers.origin;
   if (!origin) return; // same-origin fetches and server-to-server calls omit it
-  if (!allowedOrigins.includes(origin)) {
+  if (!isAllowedOrigin(origin)) {
     throw forbidden('Межсайтовый запрос заблокирован');
   }
 }

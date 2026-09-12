@@ -67,7 +67,7 @@ export function CalendarPage() {
     { projectId },
     {
       ...filters,
-      dueAfter: new Date(range.start.setHours(0, 0, 0, 0)).toISOString(),
+      dueAfter: new Date(new Date(range.start).setHours(0, 0, 0, 0)).toISOString(),
       dueBefore: new Date(new Date(range.end).setHours(23, 59, 59, 999)).toISOString(),
       sort: 'dueDate',
       order: 'asc',
@@ -201,7 +201,7 @@ export function CalendarPage() {
                   <div className="mb-1 flex items-center gap-1">
                     <span
                       className={clsx(
-                        'fd-num inline-flex size-5 items-center justify-center rounded-full text-2xs font-medium',
+                        'fd-num inline-flex size-5 items-center justify-center text-2xs font-bold',
                         isToday(day)
                           ? 'bg-accent text-accent-fg'
                           : outside

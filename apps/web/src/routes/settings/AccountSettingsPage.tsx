@@ -3,13 +3,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
-import { useTheme } from '~/app/theme';
 import { useToast } from '~/app/toast';
 import { Topbar } from '~/components/Topbar';
+import { Marker, Masthead } from '~/ui/Masthead';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
 import { Input, Select } from '~/ui/Input';
-import { SegmentedControl } from '~/ui/Tabs';
 
 const TIMEZONES = [
   'UTC',
@@ -25,7 +24,6 @@ const TIMEZONES = [
 
 export function AccountSettingsPage() {
   const { user, refresh } = useSession();
-  const { mode, setMode } = useTheme();
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -73,12 +71,20 @@ export function AccountSettingsPage() {
     <>
       <Topbar breadcrumbs={[{ label: 'Настройки' }]} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto max-w-2xl space-y-4 p-4 sm:p-6">
-          <h1 className="text-lg font-semibold">Настройки</h1>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
+        <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6 lg:p-8">
+          <Masthead
+            size="md"
+            kicker="аккаунт"
+            title={
+              <>
+                Ваши <Marker>настройки</Marker>
+              </>
+            }
+          />
 
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <h2 className="text-sm font-semibold">Профиль</h2>
+          <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
+            <h2 className="fd-eyebrow">Профиль</h2>
             <div className="mt-3 space-y-3">
               <div className="flex items-center gap-3">
                 <Avatar
@@ -134,26 +140,8 @@ export function AccountSettingsPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <h2 className="text-sm font-semibold">Оформление</h2>
-            <p className="mt-0.5 text-xs text-text-muted">
-              «Системная» следует настройке операционной системы.
-            </p>
-            <SegmentedControl
-              className="mt-3"
-              label="Тема"
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'light', label: 'Светлая' },
-                { value: 'dark', label: 'Тёмная' },
-                { value: 'system', label: 'Системная' },
-              ]}
-            />
-          </section>
-
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <h2 className="text-sm font-semibold">Пароль</h2>
+          <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
+            <h2 className="fd-eyebrow">Пароль</h2>
             <form
               className="mt-3 space-y-3"
               onSubmit={(event) => {
@@ -177,7 +165,7 @@ export function AccountSettingsPage() {
                 required
                 value={passwords.newPassword}
                 error={passwordErrors.newPassword}
-hint="Минимум 8 символов, включая букву и цифру."
+                hint="Минимум 8 символов, включая букву и цифру."
                 onChange={(event) => setPasswords((p) => ({ ...p, newPassword: event.target.value }))}
               />
               <Button
