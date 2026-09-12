@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
+import { differenceInCalendarDays } from 'date-fns';
 import { Plus } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
@@ -227,21 +228,37 @@ function groupIssues(issues: IssueSummaryDto[], groupBy: GroupBy): Group[] {
     map.set(key, group);
   }
 
+  const later = map.get('later');
+  if (later) {
+    const earliest = later.issues.reduce<string | null>(
+      (min, issue) => (issue.dueDate && (!min || issue.dueDate < min) ? issue.dueDate : min),
+      null,
+    );
+    if (earliest) later.label = `Позже — с ${shortDate(earliest)}`;
+  }
+
   const order = ['overdue', 'today', 'week', 'later', 'none'];
   return [...map.values()].sort((a, b) =>
     groupBy === 'dueDate' ? order.indexOf(a.key) - order.indexOf(b.key) : a.label.localeCompare(b.label),
   );
 }
 
+/**
+ * Which bucket a due date belongs to.
+ *
+ * Counted in calendar days, not elapsed milliseconds: a task due at noon today
+ * is still due *today* at 18:00, and subtracting timestamps would round it down
+ * to −1 and file it under «Просрочено» — contradicting the «Сегодня» chip on
+ * the very same row. `dueDateLabel` already counts calendar days, so the two
+ * must agree.
+ */
 function dueBucket(dueDate: string | null): { key: string; label: string } {
   if (!dueDate) return { key: 'none', label: 'Без срока' };
-  const due = new Date(dueDate);
-  const now = new Date();
-  const days = Math.floor((due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+  const days = differenceInCalendarDays(new Date(dueDate), new Date());
   if (days < 0) return { key: 'overdue', label: 'Просрочено' };
   if (days === 0) return { key: 'today', label: 'Сегодня' };
   if (days <= 7) return { key: 'week', label: 'На этой неделе' };
-  return { key: 'later', label: `Позже — с ${shortDate(dueDate)}` };
+  return { key: 'later', label: 'Позже' };
 }
 
 function emptyTitle(tab: Tab): string {

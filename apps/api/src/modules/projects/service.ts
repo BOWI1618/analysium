@@ -46,7 +46,10 @@ export async function listProjects(
     select: {
       ...projectSelect,
       members: { where: { userId: actor.userId }, select: { role: true } },
-      _count: { select: { issues: true } },
+      // Same population as openIssueCount below: the UI subtracts one from the
+      // other to show progress, so a total that counted archived issues would
+      // silently inflate "готово".
+      _count: { select: { issues: { where: { archivedAt: null } } } },
     },
   });
 
@@ -169,7 +172,10 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
         take: 1,
         include: sprintInclude,
       },
-      _count: { select: { issues: true } },
+      // Same population as openIssueCount below: the UI subtracts one from the
+      // other to show progress, so a total that counted archived issues would
+      // silently inflate "готово".
+      _count: { select: { issues: { where: { archivedAt: null } } } },
     },
   });
   if (!project) throw notFound('Проект');

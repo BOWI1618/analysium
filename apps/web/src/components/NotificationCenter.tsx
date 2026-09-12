@@ -9,7 +9,7 @@ import { Popover } from '~/ui/Popover';
 import { Avatar } from '~/ui/Avatar';
 import { CountBadge } from '~/ui/Badge';
 import { EmptyState, SkeletonText } from '~/ui/Feedback';
-import { relativeTime } from '~/lib/format';
+import { pluralize, relativeTime } from '~/lib/format';
 
 const TYPE_LABEL: Record<string, string> = {
   ISSUE_ASSIGNED: 'Назначено',
@@ -38,7 +38,11 @@ export function NotificationBell() {
         <button
           type="button"
           onClick={toggle}
-          aria-label={unread > 0 ? `Уведомления, ${unread} непрочитанных` : 'Уведомления'}
+          aria-label={
+            unread > 0
+              ? `Уведомления, ${pluralize(unread, ['непрочитанное', 'непрочитанных', 'непрочитанных'])}`
+              : 'Уведомления'
+          }
           className="relative inline-flex size-8 items-center justify-center border-2 border-transparent text-text-muted hover:border-border-strong hover:bg-surface-hover hover:text-text hover:shadow-xs"
         >
           <Bell className="size-4" />

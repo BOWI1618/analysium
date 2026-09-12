@@ -153,7 +153,7 @@ export function ProjectsPage() {
                         max={Math.max(total, 1)}
                         className="mt-3"
                         tone="success"
-                        label={`${done} of ${total} issues complete`}
+                        label={`Готово ${done} из ${total} задач`}
                       />
 
                       <div className="mt-2 flex items-center gap-2">

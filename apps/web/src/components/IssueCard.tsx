@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
 import { MessageSquare, Paperclip, ListChecks } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
+import { pluralize } from '~/lib/format';
 import { DueDateChip, EpicChip, IssueTypeIcon, LabelChip, PriorityIcon, StoryPoints } from './IssueMeta';
 
 export interface IssueCardProps {
@@ -94,20 +95,20 @@ export const IssueCard = memo(function IssueCard({
             {issue.subtaskCount > 0 && (
               <span
                 className="flex items-center gap-0.5"
-                title={`${issue.subtaskDoneCount} of ${issue.subtaskCount} subtasks done`}
+                title={`Подзадачи: ${issue.subtaskDoneCount} из ${issue.subtaskCount} готово`}
               >
                 <ListChecks className="size-3" />
                 {issue.subtaskDoneCount}/{issue.subtaskCount}
               </span>
             )}
             {issue.commentCount > 0 && (
-              <span className="flex items-center gap-0.5" title={`${issue.commentCount} comments`}>
+              <span className="flex items-center gap-0.5" title={pluralize(issue.commentCount, ['комментарий', 'комментария', 'комментариев'])}>
                 <MessageSquare className="size-3" />
                 {issue.commentCount}
               </span>
             )}
             {issue.attachmentCount > 0 && (
-              <span className="flex items-center gap-0.5" title={`${issue.attachmentCount} files`}>
+              <span className="flex items-center gap-0.5" title={pluralize(issue.attachmentCount, ['файл', 'файла', 'файлов'])}>
                 <Paperclip className="size-3" />
                 {issue.attachmentCount}
               </span>
