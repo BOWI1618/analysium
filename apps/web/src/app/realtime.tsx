@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { RealtimeEventType, type RealtimeEvent } from '@flowdesk/contracts';
-import { API_BASE } from '~/lib/api';
+import { API_BASE, CLIENT_ID } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from './session';
 
@@ -43,8 +43,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     let disposed = false;
 
     const handle = (event: RealtimeEvent) => {
-      // Ignore our own echoes: the optimistic update already applied them.
-      const isOwnEcho = event.actorId === userId;
+      // Skip only this tab's own echo — it already applied the change
+      // optimistically. Every other client refreshes, including another tab or
+      // device of the same person, which is why this compares the tab id and
+      // not the user id.
+      const isOwnEcho = event.clientId !== undefined && event.clientId === CLIENT_ID;
 
       switch (event.type) {
         case RealtimeEventType.ISSUE_CREATED:
@@ -56,8 +59,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           void queryClient.invalidateQueries({ queryKey: ['project', event.payload.projectId] });
           void queryClient.invalidateQueries({ queryKey: ['issues'] });
           void queryClient.invalidateQueries({ queryKey: qk.issue(event.payload.issueId) });
-          // The standalone /issue/:key page reads through its own key.
-          void queryClient.invalidateQueries({ queryKey: ['issue-by-key'] });
+          void queryClient.invalidateQueries({ queryKey: qk.issuesByKey });
           break;
         }
         case RealtimeEventType.COMMENT_CREATED:

@@ -7,6 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { RealtimeEvent, RealtimeEventType } from '@flowdesk/contracts';
+import { currentClientId } from '../lib/requestContext';
 
 export type EventListener = (event: RealtimeEvent) => void;
 
@@ -54,16 +55,24 @@ export const eventBus = new InMemoryEventBus();
 
 type PayloadOf<T extends RealtimeEventType> = Extract<RealtimeEvent, { type: T }>['payload'];
 
-/** Builds the envelope so call sites only supply type + payload. */
+/**
+ * Builds the envelope so call sites only supply type + payload.
+ *
+ * The originating tab is read from the ambient request context rather than
+ * passed in: it is the same value for every event raised while handling one
+ * request, and threading it through eighteen call sites would add nothing.
+ */
 export function emit<T extends RealtimeEventType>(
   type: T,
   args: { workspaceId: string; actorId: string; payload: PayloadOf<T> },
 ): void {
+  const clientId = currentClientId();
   eventBus.publish({
     id: randomUUID(),
     type,
     workspaceId: args.workspaceId,
     actorId: args.actorId,
+    ...(clientId ? { clientId } : {}),
     at: new Date().toISOString(),
     payload: args.payload,
   } as RealtimeEvent);

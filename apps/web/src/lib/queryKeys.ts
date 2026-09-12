@@ -26,6 +26,15 @@ export const qk = {
 
   issues: (scope: string, filters: unknown) => ['issues', scope, filters] as const,
   issue: (issueId: string) => ['issue', issueId] as const,
+  /**
+   * The standalone /issue/:key page resolves by human key, not id, so it reads
+   * through a key of its own. `issuesByKey` is the root every such query hangs
+   * off — invalidate it whenever an issue changes, or that page keeps showing
+   * what it fetched on load.
+   */
+  issueByKey: (workspaceId: string, issueKey: string | undefined) =>
+    ['issue-by-key', workspaceId, issueKey] as const,
+  issuesByKey: ['issue-by-key'] as const,
   issueComments: (issueId: string) => ['issue', issueId, 'comments'] as const,
   issueActivity: (issueId: string) => ['issue', issueId, 'activity'] as const,
 

@@ -77,7 +77,7 @@ export function useIssue(issueId: string | null | undefined) {
 
 export function useIssueByKey(workspaceId: string, issueKey: string | undefined) {
   return useQuery({
-    queryKey: ['issue-by-key', workspaceId, issueKey],
+    queryKey: qk.issueByKey(workspaceId, issueKey),
     queryFn: () => api.get<IssueDetailDto>(`/workspaces/${workspaceId}/issues/by-key/${issueKey}`),
     enabled: Boolean(issueKey),
   });
@@ -97,6 +97,10 @@ export function useIssueActivity(issueId: string | null | undefined) {
 /** Invalidates everything that can display an issue. */
 function invalidateIssueViews(queryClient: ReturnType<typeof useQueryClient>, projectId?: string) {
   void queryClient.invalidateQueries({ queryKey: ['issues'] });
+  // The /issue/:key page hangs off its own root and is easy to forget; without
+  // this the tab that made the change is the one left showing stale data,
+  // because it skips its own realtime echo by design.
+  void queryClient.invalidateQueries({ queryKey: qk.issuesByKey });
   if (projectId) void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
   else void queryClient.invalidateQueries({ queryKey: ['project'] });
 }

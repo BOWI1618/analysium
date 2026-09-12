@@ -28,8 +28,18 @@ interface BaseEvent<T extends RealtimeEventType, P> {
   id: string;
   type: T;
   workspaceId: string;
-  /** User who caused the event — clients skip their own echoes. */
+  /** User who caused the event. */
   actorId: string;
+  /**
+   * The browser tab that caused it, when the event came from a request.
+   *
+   * A tab skips only the echo of its *own* action, because it already applied
+   * that change optimistically. Filtering by `actorId` instead would be wrong:
+   * the same person's second tab or phone is a different client and must still
+   * refresh. Absent for events raised outside a request — background jobs and
+   * presence — which every client should act on.
+   */
+  clientId?: string;
   at: string;
   payload: P;
 }

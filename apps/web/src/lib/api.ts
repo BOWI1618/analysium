@@ -9,6 +9,21 @@ import type { ApiErrorBody } from '@flowdesk/contracts';
 
 export const API_BASE = '/api/v1';
 
+/**
+ * Identifies this browser tab for the lifetime of the page.
+ *
+ * Sent with every request and echoed back on realtime events, so a tab can
+ * skip the echo of its own action — which it already applied optimistically —
+ * while still reacting to everything else, including the same person working
+ * in another tab or on their phone. Deliberately per-tab and in memory: a
+ * value shared through localStorage would make two tabs indistinguishable
+ * again, which is the whole problem it exists to solve.
+ */
+export const CLIENT_ID: string =
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -89,6 +104,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         // Marks the call as a same-origin XHR; the server rejects
         // cross-origin state changes.
         'x-requested-with': 'flowdesk',
+        'x-client-id': CLIENT_ID,
       },
       body: formData ?? (body !== undefined ? JSON.stringify(body) : undefined),
     });

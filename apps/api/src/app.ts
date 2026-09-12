@@ -7,6 +7,7 @@ import multipart from '@fastify/multipart';
 import { env, allowedOrigins, isTest, trustProxy } from './config/env';
 import { authPlugin, SESSION_COOKIE } from './plugins/auth';
 import { registerErrorHandler } from './plugins/errorHandler';
+import { runWithRequestContext } from './lib/requestContext';
 import { authRoutes } from './modules/auth/routes';
 import { workspaceRoutes } from './modules/workspaces/routes';
 import { projectRoutes } from './modules/projects/routes';
@@ -43,6 +44,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   registerErrorHandler(app);
+
+  // Registered before every other onRequest hook so the whole request — plugins
+  // and handlers alike — runs inside the context. A tab identifies itself here
+  // once, and realtime events carry it back so that tab can skip its own echo.
+  app.addHook('onRequest', (req, _reply, done) => {
+    const header = req.headers['x-client-id'];
+    const clientId = typeof header === 'string' && header.length <= 64 ? header : undefined;
+    runWithRequestContext({ clientId }, done);
+  });
 
   await app.register(cors, {
     origin: allowedOrigins,
