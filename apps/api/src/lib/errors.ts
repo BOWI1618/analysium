@@ -11,6 +11,8 @@ export type ErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
+  /** Credentials are right, but the address behind the account is unproven. */
+  | 'EMAIL_NOT_VERIFIED'
   | 'RATE_LIMITED'
   | 'PAYLOAD_TOO_LARGE'
   | 'INTERNAL';
@@ -22,6 +24,7 @@ const STATUS: Record<ErrorCode, number> = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  EMAIL_NOT_VERIFIED: 403,
   RATE_LIMITED: 429,
   PAYLOAD_TOO_LARGE: 413,
   INTERNAL: 500,

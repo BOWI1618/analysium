@@ -7,7 +7,7 @@
 //    position, so a drag & drop touches exactly one row.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   // `postgresqlExtensions` lets the trigram indexes below live in the schema.
   // Declared as raw SQL in a migration they were invisible to Prisma, and the
   // next `migrate dev` silently dropped them.
@@ -43,21 +43,33 @@ model User {
   updatedAt    DateTime   @updatedAt
   lastActiveAt DateTime?
 
+  /// Set when the address behind this account has been proven. Null means the
+  /// person typed an address they may not own, so sign-in is refused until the
+  /// link in the message is opened.
+  emailVerifiedAt DateTime?
+
+  /// Record of consent to the personal-data policy: the moment it was given and
+  /// which text was shown. Storing the version matters — consent to one wording
+  /// is not consent to a later one, and a changed policy must be re-accepted.
+  consentAcceptedAt DateTime?
+  consentVersion    String?
+
   sessions           Session[]
-  ownedWorkspaces    Workspace[]       @relation("WorkspaceOwner")
+  ownedWorkspaces    Workspace[]         @relation("WorkspaceOwner")
   memberships        WorkspaceMember[]
   projectRoles       ProjectMember[]
-  ledProjects        Project[]         @relation("ProjectLead")
-  reportedIssues     Issue[]           @relation("IssueReporter")
-  assignedIssues     Issue[]           @relation("IssueAssignee")
+  ledProjects        Project[]           @relation("ProjectLead")
+  reportedIssues     Issue[]             @relation("IssueReporter")
+  assignedIssues     Issue[]             @relation("IssueAssignee")
   comments           Comment[]
   activityEvents     ActivityEvent[]
-  notifications      Notification[]    @relation("NotificationRecipient")
-  actedNotifications Notification[]    @relation("NotificationActor")
+  notifications      Notification[]      @relation("NotificationRecipient")
+  actedNotifications Notification[]      @relation("NotificationActor")
   auditLogs          AuditLog[]
   attachments        Attachment[]
   savedViews         SavedView[]
   favorites          Favorite[]
+  tokens             VerificationToken[]
 
   @@index([email])
   @@index([status])
@@ -67,6 +79,32 @@ model User {
 
 /// Opaque, revocable session tokens. Only the SHA-256 of the token is stored,
 /// so a database leak cannot be replayed against the API.
+/// Single-use, time-limited tokens sent by e-mail.
+///
+/// Only the hash is stored: a leaked database must not hand anyone a working
+/// link. One table serves every purpose so expiry, single use and cleanup are
+/// implemented once rather than per feature.
+model VerificationToken {
+  id        String       @id @default(cuid())
+  userId    String
+  tokenHash String       @unique
+  purpose   TokenPurpose
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("verification_tokens")
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 model Session {
   id         String   @id @default(cuid())
   userId     String

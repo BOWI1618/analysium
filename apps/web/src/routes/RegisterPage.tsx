@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError } from '~/lib/api';
+import { api, ApiError } from '~/lib/api';
 import { useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
-import { Input } from '~/ui/Input';
+import { Checkbox, Input } from '~/ui/Input';
 
 export function RegisterPage() {
   const { register } = useSession();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ name: '', email: '', password: '', workspaceName: '' });
+  const [consent, setConsent] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -18,19 +21,28 @@ export function RegisterPage() {
   const update = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
+  const resend = async (email: string) => {
+    // Answers the same regardless of whether the address is known, so a failure
+    // here says nothing worth reporting differently.
+    await api.post('/auth/resend-verification', { email }).catch(() => undefined);
+    setResent(true);
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setPending(true);
     setError(null);
     setFieldErrors({});
     try {
-      await register({
+      const awaitingVerification = await register({
         name: form.name,
         email: form.email,
         password: form.password,
+        consent: true,
         ...(form.workspaceName.trim() ? { workspaceName: form.workspaceName.trim() } : {}),
       });
-      navigate('/', { replace: true });
+      if (awaitingVerification) setSentTo(form.email);
+      else navigate('/', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -42,6 +54,35 @@ export function RegisterPage() {
       setPending(false);
     }
   };
+
+  // The account exists but has no session yet — nothing to do here but open the
+  // message, so the form is replaced rather than left on screen half-usable.
+  if (sentTo) {
+    return (
+      <AuthLayout
+        title="Проверьте почту"
+        subtitle={`Ссылка для подтверждения отправлена на ${sentTo}. Откройте её, чтобы завершить регистрацию.`}
+        footer={
+          <>
+            Письмо не пришло?{' '}
+            <button
+              type="button"
+              onClick={() => void resend(sentTo)}
+              className="font-bold text-accent hover:underline"
+            >
+              Отправить ещё раз
+            </button>
+            {resent && <span className="ml-2 text-xs text-text-subtle">Отправлено.</span>}
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-text-muted">
+          Проверьте папку «Спам», если письма нет во входящих. Ссылка действует ограниченное
+          время — если она устареет, запросите новую.
+        </p>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -106,7 +147,26 @@ export function RegisterPage() {
           hint="Переименовать или добавить пространства можно позже."
         />
 
-        <Button type="submit" variant="primary" size="lg" fullWidth loading={pending}>
+        <Checkbox
+          checked={consent}
+          onChange={(event) => setConsent(event.target.checked)}
+          label={
+            <span className="text-xs leading-relaxed text-text-muted">
+              Я согласен на обработку персональных данных в соответствии с{' '}
+              <Link to="/privacy" target="_blank" className="font-bold text-accent hover:underline">
+                политикой обработки персональных данных
+              </Link>
+              .
+            </span>
+          }
+        />
+        {fieldErrors.consent && (
+          <p role="alert" className="text-xs font-medium text-danger">
+            {fieldErrors.consent}
+          </p>
+        )}
+
+        <Button type="submit" variant="primary" size="lg" fullWidth loading={pending} disabled={!consent}>
           Создать аккаунт
         </Button>
       </form>

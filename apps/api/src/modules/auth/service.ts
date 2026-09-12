@@ -2,9 +2,11 @@ import type { LoginInput, RegisterInput, SessionDto, WorkspaceDto } from '@flowd
 import { AuditAction, WorkspaceRole } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
 import { hashPassword, verifyPassword } from '../../lib/password';
-import { conflict, unauthorized } from '../../lib/errors';
+import { AppError, conflict, unauthorized } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { slugify, uniqueSlug } from '../workspaces/slug';
+import { env } from '../../config/env';
+import { verificationRequired } from './verification';
 
 export async function register(input: RegisterInput, ip?: string) {
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
@@ -21,6 +23,12 @@ export async function register(input: RegisterInput, ip?: string) {
         email: input.email,
         passwordHash,
         lastActiveAt: new Date(),
+        // The moment and the wording agreed to. Without mail configured there
+        // is no way to prove the address, so it counts as verified rather than
+        // leaving an account nobody can ever activate.
+        consentAcceptedAt: new Date(),
+        consentVersion: env.PRIVACY_POLICY_VERSION,
+        emailVerifiedAt: env.MAIL_ENABLED ? null : new Date(),
       },
     });
 
@@ -46,6 +54,12 @@ export async function login(input: LoginInput, ip?: string) {
   const ok = await verifyPassword(input.password, user?.passwordHash ?? null);
   if (!user || !ok) throw unauthorized('Неверная почта или пароль');
   if (user.status === 'DEACTIVATED') throw unauthorized('Этот аккаунт отключён');
+
+  // Distinct code so the sign-in form can offer to resend the link instead of
+  // showing "wrong password" for an account whose password is perfectly right.
+  if (verificationRequired() && !user.emailVerifiedAt) {
+    throw new AppError('EMAIL_NOT_VERIFIED', 'Почта не подтверждена. Откройте ссылку из письма.');
+  }
 
   audit({ actorId: user.id, action: AuditAction.USER_LOGIN, entityType: 'User', entityId: user.id, ip });
   return user;

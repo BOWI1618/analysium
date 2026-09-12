@@ -12,7 +12,8 @@ interface SessionContextValue {
   isLoading: boolean;
   switchWorkspace: (workspaceId: string) => void;
   login: (input: LoginInput) => Promise<void>;
-  register: (input: RegisterInput) => Promise<void>;
+  /** Resolves to `true` when a verification link was sent instead of a session. */
+  register: (input: RegisterInput) => Promise<boolean>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -20,6 +21,12 @@ interface SessionContextValue {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 type SessionResponse = SessionDto | { user: null; workspaces: []; activeWorkspaceId: null };
+
+/** What /auth/register answers when the address still has to be proven. */
+interface PendingVerification {
+  verificationRequired: true;
+  email: string;
+}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -54,10 +61,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: (input: RegisterInput) => api.post<SessionDto>('/auth/register', input),
-    onSuccess: (session) => {
-      queryClient.setQueryData(qk.session, session);
-      setPreferredWorkspaceId(session.activeWorkspaceId);
+    // Two possible answers: a session when mail is off, or a note that a
+    // verification link is on its way. Only the first one signs anybody in.
+    mutationFn: (input: RegisterInput) =>
+      api.post<SessionDto | PendingVerification>('/auth/register', input),
+    onSuccess: (result) => {
+      if ('verificationRequired' in result) return;
+      queryClient.setQueryData(qk.session, result);
+      setPreferredWorkspaceId(result.activeWorkspaceId);
     },
   });
 
@@ -78,7 +89,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       isLoading,
       switchWorkspace: (id: string) => setPreferredWorkspaceId(id),
       login: async (input) => void (await loginMutation.mutateAsync(input)),
-      register: async (input) => void (await registerMutation.mutateAsync(input)),
+      register: async (input) => {
+        const result = await registerMutation.mutateAsync(input);
+        return 'verificationRequired' in result;
+      },
       logout: async () => void (await logoutMutation.mutateAsync()),
       refresh: async () => void (await queryClient.invalidateQueries({ queryKey: qk.session })),
     }),

@@ -20,6 +20,9 @@ async function register(page: Page, name: string) {
   await page.getByLabel('Рабочая почта').fill(email);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByLabel('Название пространства').fill('Команда E2E');
+  // Registration cannot proceed without consent to the data policy — the box is
+  // deliberately not pre-ticked, so the flow has to tick it like a person would.
+  await page.getByLabel(/согласен на обработку персональных данных/i).check();
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
 
   await expect(page.getByRole('heading', { level: 1 })).toContainText(name.split(' ')[0]!, {

@@ -20,7 +20,7 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Анна Смирнова', email: 'anna@test.local', password: 'password123' },
+      payload: { name: 'Анна Смирнова', email: 'anna@test.local', password: 'password123', consent: true },
     });
 
     expect(response.statusCode).toBe(201);
@@ -35,7 +35,7 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Борис Ким', email: 'boris@test.local', password: 'password123' },
+      payload: { name: 'Борис Ким', email: 'boris@test.local', password: 'password123', consent: true },
     });
     expect(JSON.stringify(response.json())).not.toContain('passwordHash');
     expect(JSON.stringify(response.json())).not.toContain('scrypt$');
@@ -45,7 +45,7 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Анна Дубль', email: 'anna@test.local', password: 'password123' },
+      payload: { name: 'Анна Дубль', email: 'anna@test.local', password: 'password123', consent: true },
     });
     expect(response.statusCode).toBe(409);
     expect(response.json().error.code).toBe('CONFLICT');
@@ -55,17 +55,42 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Слабый Пароль', email: 'weak@test.local', password: 'short' },
+      payload: { name: 'Слабый Пароль', email: 'weak@test.local', password: 'short', consent: true },
     });
     expect(response.statusCode).toBe(422);
     expect(response.json().error.fields.password).toBeTruthy();
+  });
+
+  it('refuses to register without consent to the data policy', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { name: 'Без Согласия', email: 'noconsent@test.local', password: 'password123' },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.fields.consent).toBeTruthy();
+  });
+
+  it('records when consent was given and which version was shown', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { name: 'Согласие Есть', email: 'consent@test.local', password: 'password123', consent: true },
+    });
+    const { prisma } = await import('../../src/lib/prisma');
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email: 'consent@test.local' },
+      select: { consentAcceptedAt: true, consentVersion: true },
+    });
+    expect(user.consentAcceptedAt).toBeInstanceOf(Date);
+    expect(user.consentVersion).toBeTruthy();
   });
 
   it('sets an httpOnly session cookie', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Кука Тест', email: 'cookie@test.local', password: 'password123' },
+      payload: { name: 'Кука Тест', email: 'cookie@test.local', password: 'password123', consent: true },
     });
     const cookies = response.headers['set-cookie'] as string | string[];
     const raw = Array.isArray(cookies) ? cookies.join(';') : cookies;

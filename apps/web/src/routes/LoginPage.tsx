@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ApiError } from '~/lib/api';
+import { api, ApiError } from '~/lib/api';
 import { useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
@@ -17,6 +17,8 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resent, setResent] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
 
@@ -31,6 +33,9 @@ export function LoginPage() {
       if (err instanceof ApiError) {
         setError(err.message);
         setFieldErrors(err.fields);
+        // The password was right — the address just has not been proven yet, so
+        // the useful next step is another link, not another attempt.
+        setNeedsVerification(err.code === 'EMAIL_NOT_VERIFIED');
       } else {
         setError('Сервер недоступен. API запущен?');
       }
@@ -62,6 +67,20 @@ export function LoginPage() {
         {error && (
           <div role="alert" className="rounded-md border-2 border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger font-medium">
             {error}
+            {needsVerification && (
+              <button
+                type="button"
+                className="mt-1.5 block font-bold underline hover:no-underline"
+                onClick={() => {
+                  void api
+                    .post('/auth/resend-verification', { email })
+                    .catch(() => undefined)
+                    .finally(() => setResent(true));
+                }}
+              >
+                {resent ? 'Письмо отправлено' : 'Отправить письмо ещё раз'}
+              </button>
+            )}
           </div>
         )}
 

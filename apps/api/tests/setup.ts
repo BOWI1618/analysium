@@ -94,6 +94,7 @@ export async function registerUser(
       name: overrides.name ?? 'Тестовый Пользователь',
       email,
       password: 'password123',
+      consent: true,
       ...(overrides.workspaceName ? { workspaceName: overrides.workspaceName } : {}),
     },
   });

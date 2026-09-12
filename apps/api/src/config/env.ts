@@ -39,6 +39,30 @@ const schema = z.object({
    * once the team is onboarded: existing members keep inviting each other, and
    * the sign-up form stops being an open door.
    */
+  /**
+   * Outgoing mail. Off by default: a fresh checkout and the test suite must
+   * work without an SMTP server, and with it off registration simply skips
+   * verification instead of stranding accounts nobody can activate.
+   */
+  MAIL_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  SMTP_HOST: z.string().default('localhost'),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  MAIL_FROM: z.string().default('FlowDesk <no-reply@localhost>'),
+
+  /** Hours a verification link stays valid. */
+  EMAIL_TOKEN_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(48),
+
+  /**
+   * Version of the personal-data policy currently in force.
+   *
+   * Stored on each account alongside the moment of acceptance. Bump it when the
+   * text changes: consent to one wording is not consent to the next, and the
+   * stored version is what shows who agreed to what.
+   */
+  PRIVACY_POLICY_VERSION: z.string().default('2026-09-12'),
+
   ALLOW_PUBLIC_REGISTRATION: z
     .enum(['true', 'false'])
     .default('true')
