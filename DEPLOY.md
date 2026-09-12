@@ -64,7 +64,7 @@ dig +short analysium.space     # должен вернуть IP этого се�
 ## 3. Код и настройки
 
 ```bash
-git clone git@github.com:BOWI1618/analysium.git
+git clone https://github.com/BOWI1618/analysium.git
 cd analysium
 cp .env.production.example .env.production
 ```

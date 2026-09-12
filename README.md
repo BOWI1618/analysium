@@ -223,7 +223,7 @@ Docker с Compose, открытые наружу порты 80 и 443, и A-за
 контейнеров.
 
 ```bash
-git clone git@github.com:BOWI1618/analysium.git && cd analysium
+git clone https://github.com/BOWI1618/analysium.git && cd analysium
 cp .env.production.example .env.production
 # заполнить DOMAIN, ADMIN_EMAIL, POSTGRES_PASSWORD, SESSION_SECRET
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
