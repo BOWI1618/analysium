@@ -54,14 +54,10 @@ const schema = z.object({
   /** Hours a verification link stays valid. */
   EMAIL_TOKEN_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(48),
 
-  /**
-   * Version of the personal-data policy currently in force.
-   *
-   * Stored on each account alongside the moment of acceptance. Bump it when the
-   * text changes: consent to one wording is not consent to the next, and the
-   * stored version is what shows who agreed to what.
-   */
-  PRIVACY_POLICY_VERSION: z.string().default('2026-09-12'),
+  /** Days an invitation stays open. Longer than a verification link: the
+   *  invited person may simply be away when it arrives. */
+  INVITE_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(14),
+
 
   ALLOW_PUBLIC_REGISTRATION: z
     .enum(['true', 'false'])

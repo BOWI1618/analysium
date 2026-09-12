@@ -1,6 +1,13 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LoginInput, RegisterInput, SessionDto, UserDto, WorkspaceDto } from '@flowdesk/contracts';
+import type {
+  AcceptInviteInput,
+  LoginInput,
+  RegisterInput,
+  SessionDto,
+  UserDto,
+  WorkspaceDto,
+} from '@flowdesk/contracts';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
@@ -14,6 +21,8 @@ interface SessionContextValue {
   login: (input: LoginInput) => Promise<void>;
   /** Resolves to `true` when a verification link was sent instead of a session. */
   register: (input: RegisterInput) => Promise<boolean>;
+  /** Turns an invitation link into a signed-in account. */
+  acceptInvite: (input: AcceptInviteInput) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -72,6 +81,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const acceptInviteMutation = useMutation({
+    mutationFn: (input: AcceptInviteInput) => api.post<SessionDto>('/auth/accept-invite', input),
+    onSuccess: (session) => {
+      queryClient.setQueryData(qk.session, session);
+      setPreferredWorkspaceId(session.activeWorkspaceId);
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: () => api.post<void>('/auth/logout'),
     onSuccess: () => {
@@ -93,10 +110,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const result = await registerMutation.mutateAsync(input);
         return 'verificationRequired' in result;
       },
+      acceptInvite: async (input) => void (await acceptInviteMutation.mutateAsync(input)),
       logout: async () => void (await logoutMutation.mutateAsync()),
       refresh: async () => void (await queryClient.invalidateQueries({ queryKey: qk.session })),
     }),
-    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, registerMutation, logoutMutation, queryClient],
+    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, registerMutation, acceptInviteMutation, logoutMutation, queryClient],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

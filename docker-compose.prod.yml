@@ -58,7 +58,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-FlowDesk <no-reply@localhost>}
       EMAIL_TOKEN_TTL_HOURS: ${EMAIL_TOKEN_TTL_HOURS:-48}
-      PRIVACY_POLICY_VERSION: ${PRIVACY_POLICY_VERSION:-2026-09-12}
+      INVITE_TOKEN_TTL_DAYS: ${INVITE_TOKEN_TTL_DAYS:-14}
     volumes:
       - uploads:/app/apps/api/uploads
     healthcheck:

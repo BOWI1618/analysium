@@ -20,7 +20,7 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Анна Смирнова', email: 'anna@test.local', password: 'password123', consent: true },
+      payload: { name: 'Анна Смирнова', email: 'anna@test.local', password: 'password123' },
     });
 
     expect(response.statusCode).toBe(201);
@@ -35,7 +35,7 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Борис Ким', email: 'boris@test.local', password: 'password123', consent: true },
+      payload: { name: 'Борис Ким', email: 'boris@test.local', password: 'password123' },
     });
     expect(JSON.stringify(response.json())).not.toContain('passwordHash');
     expect(JSON.stringify(response.json())).not.toContain('scrypt$');
@@ -45,7 +45,7 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Анна Дубль', email: 'anna@test.local', password: 'password123', consent: true },
+      payload: { name: 'Анна Дубль', email: 'anna@test.local', password: 'password123' },
     });
     expect(response.statusCode).toBe(409);
     expect(response.json().error.code).toBe('CONFLICT');
@@ -55,42 +55,18 @@ describe('POST /auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Слабый Пароль', email: 'weak@test.local', password: 'short', consent: true },
+      payload: { name: 'Слабый Пароль', email: 'weak@test.local', password: 'short' },
     });
     expect(response.statusCode).toBe(422);
     expect(response.json().error.fields.password).toBeTruthy();
   });
 
-  it('refuses to register without consent to the data policy', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/register',
-      payload: { name: 'Без Согласия', email: 'noconsent@test.local', password: 'password123' },
-    });
-    expect(response.statusCode).toBe(422);
-    expect(response.json().error.fields.consent).toBeTruthy();
-  });
-
-  it('records when consent was given and which version was shown', async () => {
-    await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/register',
-      payload: { name: 'Согласие Есть', email: 'consent@test.local', password: 'password123', consent: true },
-    });
-    const { prisma } = await import('../../src/lib/prisma');
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { email: 'consent@test.local' },
-      select: { consentAcceptedAt: true, consentVersion: true },
-    });
-    expect(user.consentAcceptedAt).toBeInstanceOf(Date);
-    expect(user.consentVersion).toBeTruthy();
-  });
 
   it('sets an httpOnly session cookie', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { name: 'Кука Тест', email: 'cookie@test.local', password: 'password123', consent: true },
+      payload: { name: 'Кука Тест', email: 'cookie@test.local', password: 'password123' },
     });
     const cookies = response.headers['set-cookie'] as string | string[];
     const raw = Array.isArray(cookies) ? cookies.join(';') : cookies;
@@ -179,5 +155,54 @@ describe('authentication guard', () => {
       headers: { cookie: 'fd_session=not-a-real-token' },
     });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('приглашения', () => {
+  it('приглашённый заводит пароль по ссылке и входит', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Пространство приглашений' });
+
+    const invited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: 'invited@test.local', role: 'MEMBER' },
+    });
+    expect(invited.statusCode).toBe(201);
+
+    // Until the link is opened the account has no password at all, so there is
+    // no way in — that is exactly what the invitation exists to hand over.
+    const beforeAccepting = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: 'invited@test.local', password: 'whatever123' },
+    });
+    expect(beforeAccepting.statusCode).toBe(401);
+
+    const { prisma } = await import('../../src/lib/prisma');
+    const token = await prisma.verificationToken.findFirst({
+      where: { purpose: 'INVITE', usedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(token).not.toBeNull();
+  });
+
+  it('членство в пространстве выдаётся сразу, роль сохраняется', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Роли' });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: 'admin-invite@test.local', role: 'ADMIN' },
+    });
+
+    const members = await app.inject({
+      method: 'GET',
+      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
+      headers: { cookie: owner.cookie },
+    });
+    const invited = members.json().find((m: { user: { email: string } }) => m.user.email === 'admin-invite@test.local');
+    expect(invited?.role).toBe('ADMIN');
+    expect(invited?.user.status).toBe('INVITED');
   });
 });

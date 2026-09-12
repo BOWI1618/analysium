@@ -11,6 +11,7 @@ import { prisma } from '../../lib/prisma';
 import { env } from '../../config/env';
 import { sendMail } from '../../lib/mailer';
 import { badRequest } from '../../lib/errors';
+import { hashPassword } from '../../lib/password';
 
 function hash(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -56,6 +57,48 @@ export async function sendVerificationEmail(user: { id: string; email: string; n
   });
 }
 
+/**
+ * Invites someone into a workspace by mail.
+ *
+ * The link is what makes the invitation usable at all: until it is opened the
+ * account has no password, so there is no way in. Any earlier unused invite is
+ * replaced, so re-inviting somebody simply sends a fresh, working link.
+ */
+export async function sendInviteEmail(args: {
+  user: { id: string; email: string };
+  workspaceName: string;
+  invitedByName: string;
+}): Promise<void> {
+  await prisma.verificationToken.deleteMany({
+    where: { userId: args.user.id, purpose: TokenPurpose.INVITE, usedAt: null },
+  });
+
+  const token = randomBytes(32).toString('base64url');
+  await prisma.verificationToken.create({
+    data: {
+      userId: args.user.id,
+      tokenHash: hash(token),
+      purpose: TokenPurpose.INVITE,
+      expiresAt: new Date(Date.now() + env.INVITE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const origin = env.WEB_ORIGIN.split(',')[0]?.trim() ?? '';
+  await sendMail({
+    to: args.user.email,
+    subject: `Приглашение в «${args.workspaceName}» — FlowDesk`,
+    text: [
+      `${args.invitedByName} приглашает вас в пространство «${args.workspaceName}» в FlowDesk.`,
+      '',
+      'Чтобы принять приглашение и задать пароль, откройте ссылку:',
+      `${origin}/accept-invite?token=${token}`,
+      '',
+      `Ссылка действует ${env.INVITE_TOKEN_TTL_DAYS} дн.`,
+      'Если вы не ждали этого письма, просто удалите его.',
+    ].join('\n'),
+  });
+}
+
 /** Consumes a token and marks the address proven. */
 export async function verifyEmail(token: string): Promise<void> {
   const record = await prisma.verificationToken.findUnique({
@@ -85,4 +128,51 @@ export async function verifyEmail(token: string): Promise<void> {
  */
 export function verificationRequired(): boolean {
   return env.MAIL_ENABLED;
+}
+
+/**
+ * Turns an invitation into a usable account.
+ *
+ * The link itself proves the address, so the person is verified on the spot —
+ * asking them to confirm a second time would be theatre. If they already had a
+ * password (invited to a second workspace), it is left alone: the membership is
+ * what the invitation grants, not a new identity.
+ */
+export async function acceptInvite(input: {
+  token: string;
+  name: string;
+  password: string;
+}): Promise<{ id: string; alreadyRegistered: boolean }> {
+  const record = await prisma.verificationToken.findUnique({
+    where: { tokenHash: hash(input.token) },
+    select: {
+      id: true,
+      purpose: true,
+      expiresAt: true,
+      usedAt: true,
+      user: { select: { id: true, passwordHash: true } },
+    },
+  });
+
+  const invalid = badRequest('Приглашение недействительно или устарело. Попросите новое.');
+  if (!record || record.purpose !== TokenPurpose.INVITE) throw invalid;
+  if (record.usedAt || record.expiresAt < new Date()) throw invalid;
+
+  const alreadyRegistered = Boolean(record.user.passwordHash);
+
+  await prisma.$transaction([
+    prisma.verificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    prisma.user.update({
+      where: { id: record.user.id },
+      data: {
+        status: 'ACTIVE',
+        emailVerifiedAt: new Date(),
+        ...(alreadyRegistered
+          ? {}
+          : { name: input.name, passwordHash: await hashPassword(input.password) }),
+      },
+    }),
+  ]);
+
+  return { id: record.user.id, alreadyRegistered };
 }

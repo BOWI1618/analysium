@@ -6,7 +6,7 @@ import { Spinner } from '~/ui/Spinner';
 import { LoginPage } from './LoginPage';
 import { RegisterPage } from './RegisterPage';
 import { VerifyEmailPage } from './VerifyEmailPage';
-import { PrivacyPage } from './PrivacyPage';
+import { AcceptInvitePage } from './AcceptInvitePage';
 import { HomePage } from './HomePage';
 import { MyWorkPage } from './MyWorkPage';
 import { InboxPage } from './InboxPage';
@@ -81,10 +81,10 @@ export function AppRoutes() {
             </RedirectIfSignedIn>
           }
         />
-        {/* Both are reachable without an account: one is opened from a link in
-            an e-mail, the other has to be readable before agreeing to it. */}
+        {/* Both are reached from a link in an e-mail, so neither may require
+            a session — an invited account does not even have a password yet. */}
         <Route path="/verify-email" element={<VerifyEmailPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/accept-invite" element={<AcceptInvitePage />} />
         <Route
           path="/workspaces/new"
           element={

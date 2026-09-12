@@ -5,6 +5,7 @@ import { assertCan, workspaceContext } from '../../lib/context';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { slugify, uniqueSlug } from './slug';
+import { sendInviteEmail } from '../auth/verification';
 
 export async function listWorkspaces(userId: string): Promise<WorkspaceDto[]> {
   const memberships = await prisma.workspaceMember.findMany({
@@ -197,11 +198,14 @@ export async function inviteMember(
     throw forbidden('Нельзя выдать роль, равную вашей или выше');
   }
 
-  let user = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
+  let user = await prisma.user.findUnique({
+    where: { email: input.email },
+    select: { id: true, passwordHash: true },
+  });
   if (!user) {
     user = await prisma.user.create({
       data: { email: input.email, name: input.email.split('@')[0] ?? input.email, status: 'INVITED' },
-      select: { id: true },
+      select: { id: true, passwordHash: true },
     });
   }
 
@@ -221,6 +225,19 @@ export async function inviteMember(
         select: { id: true, name: true, email: true, avatarUrl: true, status: true, lastActiveAt: true },
       },
     },
+  });
+
+  // The membership alone does not let anybody in: an account created here has
+  // no password. The link in this message is the only way to get one, so an
+  // invitation that is not delivered is not an invitation.
+  const [workspace, inviter] = await Promise.all([
+    prisma.workspace.findUniqueOrThrow({ where: { id: actor.workspaceId }, select: { name: true } }),
+    prisma.user.findUniqueOrThrow({ where: { id: actor.userId }, select: { name: true } }),
+  ]);
+  await sendInviteEmail({
+    user: { id: user.id, email: input.email },
+    workspaceName: workspace.name,
+    invitedByName: inviter.name,
   });
 
   audit({

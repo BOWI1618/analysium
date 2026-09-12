@@ -23,11 +23,8 @@ export async function register(input: RegisterInput, ip?: string) {
         email: input.email,
         passwordHash,
         lastActiveAt: new Date(),
-        // The moment and the wording agreed to. Without mail configured there
-        // is no way to prove the address, so it counts as verified rather than
-        // leaving an account nobody can ever activate.
-        consentAcceptedAt: new Date(),
-        consentVersion: env.PRIVACY_POLICY_VERSION,
+        // Without mail configured there is no way to prove the address, so it
+        // counts as verified rather than leaving an account nobody can activate.
         emailVerifiedAt: env.MAIL_ENABLED ? null : new Date(),
       },
     });

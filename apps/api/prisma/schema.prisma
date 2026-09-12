@@ -48,12 +48,6 @@ model User {
   /// link in the message is opened.
   emailVerifiedAt DateTime?
 
-  /// Record of consent to the personal-data policy: the moment it was given and
-  /// which text was shown. Storing the version matters — consent to one wording
-  /// is not consent to a later one, and a changed policy must be re-accepted.
-  consentAcceptedAt DateTime?
-  consentVersion    String?
-
   sessions           Session[]
   ownedWorkspaces    Workspace[]         @relation("WorkspaceOwner")
   memberships        WorkspaceMember[]
@@ -102,6 +96,9 @@ model VerificationToken {
 
 enum TokenPurpose {
   EMAIL_VERIFICATION
+  /// Sent to someone added to a workspace who has no account yet: opening the
+  /// link is what lets them set a password and get in.
+  INVITE
   PASSWORD_RESET
 }
 

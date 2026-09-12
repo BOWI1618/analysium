@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  acceptInviteSchema,
   loginSchema,
   registerSchema,
   resendVerificationSchema,
@@ -19,7 +20,7 @@ import {
   setSessionCookie,
 } from '../../plugins/auth';
 import { buildSession, login, register } from './service';
-import { sendVerificationEmail, verificationRequired, verifyEmail } from './verification';
+import { acceptInvite, sendVerificationEmail, verificationRequired, verifyEmail } from './verification';
 import { prisma } from '../../lib/prisma';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -55,6 +56,20 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const { token } = parse(verifyEmailSchema, req.body);
     await verifyEmail(token);
     return reply.status(204).send();
+  });
+
+  app.post('/auth/accept-invite', strictLimit, async (req, reply) => {
+    const input = parse(acceptInviteSchema, req.body);
+    const { id } = await acceptInvite(input);
+
+    // Straight into a session: the link already proved the address, so making
+    // them type the password they just chose would be pure friction.
+    const { token, expiresAt } = await createSession(id, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+    });
+    setSessionCookie(reply, token, expiresAt);
+    return reply.status(200).send(await buildSession(id));
   });
 
   app.post('/auth/resend-verification', strictLimit, async (req, reply) => {

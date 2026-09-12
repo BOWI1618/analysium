@@ -69,14 +69,6 @@ export const registerSchema = z.object({
   password: passwordSchema,
   /** Optional: name for the workspace bootstrapped with the account. */
   workspaceName: z.string().trim().min(2).max(60).optional(),
-  /**
-   * Consent to the personal-data policy. Required and must be `true`: an
-   * unticked box has to fail the request rather than be quietly treated as
-   * agreement, which is the whole point of asking.
-   */
-  consent: z.literal(true, {
-    errorMap: () => ({ message: 'Без согласия на обработку данных регистрация невозможна' }),
-  }),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
@@ -84,6 +76,13 @@ export const verifyEmailSchema = z.object({
   token: z.string().min(10).max(200),
 });
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
+export const acceptInviteSchema = z.object({
+  token: z.string().min(10).max(200),
+  name: z.string().trim().min(2).max(80),
+  password: passwordSchema,
+});
+export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
 
 export const resendVerificationSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),

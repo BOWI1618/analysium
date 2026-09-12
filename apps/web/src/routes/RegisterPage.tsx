@@ -4,14 +4,13 @@ import { api, ApiError } from '~/lib/api';
 import { useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
-import { Checkbox, Input } from '~/ui/Input';
+import { Input } from '~/ui/Input';
 
 export function RegisterPage() {
   const { register } = useSession();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ name: '', email: '', password: '', workspaceName: '' });
-  const [consent, setConsent] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +37,6 @@ export function RegisterPage() {
         name: form.name,
         email: form.email,
         password: form.password,
-        consent: true,
         ...(form.workspaceName.trim() ? { workspaceName: form.workspaceName.trim() } : {}),
       });
       if (awaitingVerification) setSentTo(form.email);
@@ -147,26 +145,8 @@ export function RegisterPage() {
           hint="Переименовать или добавить пространства можно позже."
         />
 
-        <Checkbox
-          checked={consent}
-          onChange={(event) => setConsent(event.target.checked)}
-          label={
-            <span className="text-xs leading-relaxed text-text-muted">
-              Я согласен на обработку персональных данных в соответствии с{' '}
-              <Link to="/privacy" target="_blank" className="font-bold text-accent hover:underline">
-                политикой обработки персональных данных
-              </Link>
-              .
-            </span>
-          }
-        />
-        {fieldErrors.consent && (
-          <p role="alert" className="text-xs font-medium text-danger">
-            {fieldErrors.consent}
-          </p>
-        )}
 
-        <Button type="submit" variant="primary" size="lg" fullWidth loading={pending} disabled={!consent}>
+        <Button type="submit" variant="primary" size="lg" fullWidth loading={pending}>
           Создать аккаунт
         </Button>
       </form>

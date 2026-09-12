@@ -221,11 +221,15 @@ async function main(): Promise<void> {
     PEOPLE.map((person) =>
       prisma.user.upsert({
         where: { email: person.email },
-        update: { name: person.name, passwordHash, status: 'ACTIVE' },
+        // Demo accounts are verified outright: there is no mailbox behind
+        // these addresses, so a confirmation link would strand every one of
+        // them the moment MAIL_ENABLED is turned on.
+        update: { name: person.name, passwordHash, status: 'ACTIVE', emailVerifiedAt: new Date() },
         create: {
           name: person.name,
           email: person.email,
           passwordHash,
+          emailVerifiedAt: new Date(),
           timezone: 'Europe/Berlin',
           lastActiveAt: daysAgo(rand() * 2),
         },
