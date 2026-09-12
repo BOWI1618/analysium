@@ -1,0 +1,139 @@
+name: CI
+
+# Runs on every push and pull request to main. The point is narrow: nothing
+# reaches the server that does not typecheck, pass its tests, and still build
+# as a production image.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Проверки и тесты
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Same major version as production. The schema declares the pg_trgm
+        # extension, which the official image ships with.
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flowdesk
+          POSTGRES_PASSWORD: flowdesk
+          POSTGRES_DB: flowdesk
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U flowdesk -d flowdesk"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://flowdesk:flowdesk@localhost:5433/flowdesk?schema=public
+      SESSION_SECRET: ci-secret-not-used-anywhere-else-000000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Клиент Prisma
+        run: npm run db:push --workspace=@flowdesk/api
+
+      - name: Типы
+        run: npm run typecheck
+
+      - name: Тесты API
+        run: npm test
+
+      - name: Прод-сборка
+        run: npm run build
+
+      - name: Миграции воспроизводят схему
+        # Catches the case where schema.prisma was changed with `db push` and no
+        # migration was written: production applies migrations, so a drift here
+        # means production would silently get a different database than dev.
+        # Paths are relative to apps/api: `npx --workspace` would change the
+        # working directory out from under them.
+        working-directory: apps/api
+        run: |
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "postgresql://flowdesk:flowdesk@localhost:5433/flowdesk_shadow" \
+            --exit-code
+
+  e2e:
+    name: Сквозные сценарии
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flowdesk
+          POSTGRES_PASSWORD: flowdesk
+          POSTGRES_DB: flowdesk
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U flowdesk -d flowdesk"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://flowdesk:flowdesk@localhost:5433/flowdesk?schema=public
+      SESSION_SECRET: ci-secret-not-used-anywhere-else-000000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Схема и демо-данные
+        run: |
+          npm run db:push --workspace=@flowdesk/api
+          npm run db:seed --workspace=@flowdesk/api
+
+      - run: npx playwright install --with-deps chromium
+
+      # Playwright starts the dev and API servers itself; both are reachable on
+      # their default ports in a fresh runner.
+      - run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  image:
+    name: Продакшен-образы
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deploy runs `up --build` on the server. Building here means a broken
+      # Dockerfile is found in CI rather than halfway through a deploy.
+      - name: API
+        run: docker build -f apps/api/Dockerfile -t flowdesk-api:ci .
+
+      - name: Веб и Caddy
+        run: docker build -f apps/web/Dockerfile -t flowdesk-web:ci .

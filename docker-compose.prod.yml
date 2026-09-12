@@ -1,14 +1,22 @@
-# Production stack: Postgres, the API, and Caddy in front of both.
+# Production stack: Postgres, the API, Caddy in front of both, and a nightly
+# database dump.
 #
 #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 #
 # Caddy obtains and renews the certificate for $DOMAIN on its own; the host
 # needs ports 80 and 443 reachable and the domain's A record pointing at it.
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -28,6 +36,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    logging: *logging
     depends_on:
       db:
         condition: service_healthy
@@ -44,14 +53,24 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - uploads:/app/apps/api/uploads
+    healthcheck:
+      # Migrations run before the server binds, so "started" and "answering"
+      # are not the same moment. wget comes from busybox in the base image.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
     restart: unless-stopped
+    logging: *logging
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
       DOMAIN: ${DOMAIN}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
@@ -63,8 +82,29 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # pg_dump reads the password from here rather than the command line,
+      # where it would show up in `ps` for every user on the host.
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+      - backups:/backups
+    entrypoint: ['sh', '/usr/local/bin/backup.sh']
+
 volumes:
   pgdata:
   uploads:
+  backups:
   caddy_data:
   caddy_config:
