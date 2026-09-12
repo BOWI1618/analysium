@@ -4,7 +4,6 @@ import { GANTT_SCALES, Permission, type GanttScale } from '@flowdesk/contracts';
 import { CalendarClock, GitBranch, Plus } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
-import { useProject } from '~/features/projects/hooks';
 import {
   useCreateDependency,
   useDeleteDependency,
@@ -51,7 +50,6 @@ export function GanttPage() {
     [includeDone, onlyMine, user],
   );
 
-  const { data: project } = useProject(projectId);
   const { data, isLoading, error, refetch, isFetching } = useGantt(projectId, filters);
 
   const reschedule = useRescheduleIssue(projectId);

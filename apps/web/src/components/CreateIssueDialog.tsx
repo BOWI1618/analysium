@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import type { CreateIssueInput, IssuePriority, IssueType } from '@flowdesk/contracts';
 import { EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
 import { ChevronDown, CornerDownLeft } from 'lucide-react';
@@ -30,7 +29,6 @@ export function CreateIssueDialog() {
   const openIssue = useUiStore((s) => s.openIssue);
   const { workspace } = useSession();
   const toast = useToast();
-  const navigate = useNavigate();
 
   const { data: projects } = useProjects(workspace?.id ?? '');
   const [projectId, setProjectId] = useState<string>('');

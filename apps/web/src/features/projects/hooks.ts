@@ -155,15 +155,6 @@ export function useReorderStatuses(projectId: string) {
 
 /* ----------------------------------------------------------------- labels */
 
-export function useLabels(projectId: string | undefined) {
-  return useQuery({
-    queryKey: qk.labels(projectId ?? ''),
-    queryFn: () => api.get<LabelDto[]>(`/projects/${projectId}/labels`),
-    enabled: Boolean(projectId),
-    staleTime: 60_000,
-  });
-}
-
 export function useCreateLabel(projectId: string) {
   const queryClient = useQueryClient();
   const toast = useToast();

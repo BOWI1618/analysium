@@ -41,15 +41,6 @@ export function useCreateSprint(projectId: string) {
   );
 }
 
-export function useUpdateSprint(projectId: string) {
-  return useSprintMutation(
-    projectId,
-    ({ sprintId, patch }: { sprintId: string; patch: Partial<CreateSprintInput> }) =>
-      api.patch<SprintDto>(`/sprints/${sprintId}`, patch),
-    { error: 'Не удалось обновить спринт' },
-  );
-}
-
 export function useStartSprint(projectId: string) {
   return useSprintMutation(
     projectId,

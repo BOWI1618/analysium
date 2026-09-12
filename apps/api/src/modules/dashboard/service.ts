@@ -15,7 +15,11 @@ function dayKey(d: Date): string {
  * loading issues into memory, so the numbers stay cheap on large projects.
  */
 export async function projectDashboard(
-  actor: ActorContext,
+  // Access is enforced before this runs: the route resolves the caller through
+  // `projectContext`, which throws when they cannot see the project. The actor
+  // is kept in the signature so the boundary stays visible and so a future
+  // per-widget check has it to hand.
+  _actor: ActorContext,
   projectId: string,
   days = 30,
 ): Promise<DashboardDto> {

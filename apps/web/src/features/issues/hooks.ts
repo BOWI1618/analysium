@@ -237,22 +237,6 @@ export function useMoveIssue(projectId: string, filters: IssueFilters) {
   });
 }
 
-/** Reorders a backlog / list item without changing its status. */
-export function useReorderIssue(projectId: string) {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  return useMutation({
-    mutationFn: ({ issueId, ...input }: MoveIssueInput & { issueId: string }) =>
-      api.post<IssueSummaryDto>(`/issues/${issueId}/move`, input),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-      void queryClient.invalidateQueries({ queryKey: ['issues'] });
-    },
-    onError: (error) => toast.error(error, 'Не удалось изменить порядок'),
-  });
-}
-
 /**
  * Patches an arbitrary issue by id. Drag-and-drop handlers cannot call a hook
  * per issue, so views that mutate many different issues (calendar, list rows)

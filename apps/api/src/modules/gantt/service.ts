@@ -81,17 +81,19 @@ export async function getGantt(
     // planning. A single date pins the issue to that day on the timeline.
     const from = query.from ? new Date(query.from) : null;
     const to = query.to ? new Date(query.to) : null;
-    const span = (field: 'startDate' | 'dueDate'): Prisma.DateTimeFilter => ({
+    // The column is chosen by the caller's object key, so one window filter
+    // serves both dates.
+    const span: Prisma.DateTimeFilter = {
       ...(from ? { gte: from } : {}),
       ...(to ? { lte: to } : {}),
-    });
+    };
     where.AND = [
       {
         OR: [
           { startDate: null, dueDate: null },
-          { AND: [{ startDate: span('startDate') }, { dueDate: span('dueDate') }] },
-          { AND: [{ startDate: null }, { dueDate: span('dueDate') }] },
-          { AND: [{ dueDate: null }, { startDate: span('startDate') }] },
+          { AND: [{ startDate: span }, { dueDate: span }] },
+          { AND: [{ startDate: null }, { dueDate: span }] },
+          { AND: [{ dueDate: null }, { startDate: span }] },
         ],
       },
     ];

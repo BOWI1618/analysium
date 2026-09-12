@@ -25,7 +25,6 @@ import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { ErrorState, Skeleton } from '~/ui/Feedback';
-import { ProjectIcon } from '~/ui/ProjectIcon';
 import { StatusDot } from '~/components/IssueMeta';
 import { PROJECT_ROLE_LABEL, STATUS_CATEGORY_LABEL } from '~/lib/labels';
 import { pluralize } from '~/lib/format';
@@ -237,6 +236,13 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
               />
             );
           })}
+          {!isPresetColor && form.color && (
+            <span
+              className="size-7 border-2 border-border-strong"
+              style={{ backgroundColor: form.color }}
+              title={`Свой цвет: ${form.color}`}
+            />
+          )}
         </div>
 
         <Textarea

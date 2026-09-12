@@ -33,17 +33,3 @@ export function useCreateSavedView(workspaceId: string) {
     onError: (error) => toast.error(error, 'Не удалось сохранить вид'),
   });
 }
-
-export function useDeleteSavedView(workspaceId: string) {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  return useMutation({
-    mutationFn: (viewId: string) => api.delete<void>(`/views/${viewId}`),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.views(workspaceId) });
-      toast.success('Вид удалён');
-    },
-    onError: (error) => toast.error(error, 'Не удалось удалить вид'),
-  });
-}
