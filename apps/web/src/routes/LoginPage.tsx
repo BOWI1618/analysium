@@ -6,6 +6,7 @@ import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
 import { Input } from '~/ui/Input';
 
+/** Seeded demo account — see the block at the bottom of the form. */
 const DEMO = { email: 'alex@acme.test', password: 'demo1234' };
 
 export function LoginPage() {
@@ -113,25 +114,30 @@ export function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-4 rounded-lg border-2 border-border-strong bg-surface-raised p-3 shadow-xs">
-        <p className="text-xs font-bold">Демо-пространство</p>
-        <p className="mt-0.5 text-xs text-text-muted">
-          Готовое пространство с проектами, спринтами и 70+ задачами.
-        </p>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="mt-2"
-          disabled={pending}
-          onClick={() => {
-            setEmail(DEMO.email);
-            setPassword(DEMO.password);
-            void submit(DEMO);
-          }}
-        >
-          Войти как Алекс (владелец)
-        </Button>
-      </div>
+      {/* Development only. `import.meta.env.DEV` is replaced with `false` at
+          build time, so the bundler drops this block and the credentials above
+          along with it — a production bundle contains neither. */}
+      {import.meta.env.DEV && (
+        <div className="mt-4 rounded-lg border-2 border-border-strong bg-surface-raised p-3 shadow-xs">
+          <p className="text-xs font-bold">Демо-пространство</p>
+          <p className="mt-0.5 text-xs text-text-muted">
+            Готовое пространство с проектами, спринтами и 70+ задачами.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-2"
+            disabled={pending}
+            onClick={() => {
+              setEmail(DEMO.email);
+              setPassword(DEMO.password);
+              void submit(DEMO);
+            }}
+          >
+            Войти как Алекс (владелец)
+          </Button>
+        </div>
+      )}
     </AuthLayout>
   );
 }

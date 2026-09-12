@@ -22,4 +22,10 @@ RUN npm run build --workspace=@flowdesk/web
 # working exactly as they do in development.
 FROM caddy:2-alpine
 COPY --from=build /app/apps/web/dist /srv
+# Source maps are not published. They carry the original, unminified source —
+# including anything the bundler dropped from the shipped code, such as the
+# development-only demo credentials — and would be fetchable by anyone who
+# guesses the filename. Nothing consumes them here; a local `npm run build`
+# still produces them for debugging.
+RUN find /srv -name '*.map' -delete
 COPY Caddyfile /etc/caddy/Caddyfile
