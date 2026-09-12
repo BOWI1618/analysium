@@ -31,6 +31,18 @@ const schema = z.object({
     .refine((s) => !/^(replace-me|changeme|secret|password)/i.test(s), 'SESSION_SECRET looks like a placeholder'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   UPLOAD_DIR: z.string().default('./uploads'),
+  /**
+   * Whether strangers can create an account.
+   *
+   * Defaults to open, which is what a local or self-hosted first run needs —
+   * somebody has to create the first workspace. On a public domain turn it off
+   * once the team is onboarded: existing members keep inviting each other, and
+   * the sign-up form stops being an open door.
+   */
+  ALLOW_PUBLIC_REGISTRATION: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   MAX_UPLOAD_BYTES: z.coerce.number().int().default(10 * 1024 * 1024),
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),

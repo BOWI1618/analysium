@@ -1,0 +1,55 @@
+# Caddy terminates TLS and puts the app and the API on one origin.
+#
+# Same origin is not a convenience here — the session cookie is SameSite=Lax and
+# the API rejects cross-origin writes, so serving the bundle from one host and
+# the API from another would break sign-in. `/api/*` is proxied through to the
+# API container exactly as the Vite dev server proxies it in development.
+#
+# DOMAIN and ADMIN_EMAIL come from the environment (see .env.production.example).
+
+{
+	email {$ADMIN_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Uploads cap out at MAX_UPLOAD_BYTES on the API; refuse anything wildly
+	# larger before it reaches Node.
+	request_body {
+		max_size 25MB
+	}
+
+	handle /api/* {
+		# flush_interval -1 disables response buffering. The realtime stream is
+		# Server-Sent Events on /api/v1/workspaces/:id/stream: buffered, events
+		# would arrive in batches or not at all, and the board would stop
+		# updating live.
+		reverse_proxy api:4000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv
+
+		# Vite fingerprints every asset filename, so a hit can never be stale.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		# The entry document must not be cached, or a deploy would leave browsers
+		# pointing at asset names that no longer exist.
+		header /index.html Cache-Control "no-cache"
+
+		header {
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+			X-Frame-Options DENY
+			-Server
+		}
+
+		# Client-side routing: every unknown path is a route, not a 404.
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,18 @@
+# Keeps the build context small and prevents host state from leaking into an image.
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.github
+test-results
+playwright-report
+design
+e2e
+*.log
+# Any .env at any depth: apps/api/.env holds local database credentials and
+# would otherwise be baked into the image and override the runtime environment.
+**/.env
+**/.env.*
+!.env.production.example
+**/uploads

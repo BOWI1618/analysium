@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { loginSchema, registerSchema, AuditAction } from '@flowdesk/contracts';
 import { env } from '../../config/env';
 import { parse } from '../../lib/validate';
+import { forbidden } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import {
   clearSessionCookie,
@@ -20,6 +21,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   };
 
   app.post('/auth/register', strictLimit, async (req, reply) => {
+    if (!env.ALLOW_PUBLIC_REGISTRATION) {
+      throw forbidden('Регистрация закрыта. Попросите приглашение у администратора пространства.');
+    }
     const input = parse(registerSchema, req.body);
     const user = await register(input, req.ip);
     const { token, expiresAt } = await createSession(user.id, {
