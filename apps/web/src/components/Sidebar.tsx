@@ -119,18 +119,33 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       style={{ width: collapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)' }}
     >
       {/* Workspace switcher — the nameplate at the top of the rail */}
-      <div className="flex items-center gap-1 border-b-2 border-border-strong p-2.5">
+      {/* The collapsed rail is 56px wide. The theme's `size-7` is 48px, which
+          with the header padding does not fit and ran under the rail's border —
+          so the collapsed state gets its own, smaller geometry. The two states
+          use alternative classes rather than overrides: Tailwind orders
+          utilities itself, so `px-0` placed after `px-1` in the class string is
+          not guaranteed to win. */}
+      <div
+        className={clsx(
+          'flex items-center gap-1 border-b-2 border-border-strong',
+          collapsed ? 'justify-center py-2.5' : 'p-2.5',
+        )}
+      >
         <Menu>
           <MenuTrigger>
             <button
               type="button"
               className={clsx(
-                'flex min-w-0 flex-1 items-center gap-2.5 border-2 border-transparent px-1 py-0.5 text-left hover:border-border-strong hover:bg-surface-hover',
-                collapsed && 'justify-center px-0',
+                'flex min-w-0 items-center border-2 border-transparent text-left hover:border-border-strong hover:bg-surface-hover',
+                collapsed ? 'justify-center p-0.5' : 'flex-1 gap-2.5 px-1 py-0.5',
               )}
+              aria-label={collapsed ? `Пространство ${workspace.name}` : undefined}
             >
               <span
-                className="grid size-7 shrink-0 place-items-center border-2 border-border-strong bg-accent font-display text-xs font-extrabold text-accent-fg shadow-xs"
+                className={clsx(
+                  'grid shrink-0 place-items-center border-2 border-border-strong bg-accent font-display text-xs font-extrabold text-accent-fg shadow-xs',
+                  collapsed ? 'size-9' : 'size-7',
+                )}
                 aria-hidden="true"
               >
                 {workspace.logo ?? workspace.name[0]?.toUpperCase()}
