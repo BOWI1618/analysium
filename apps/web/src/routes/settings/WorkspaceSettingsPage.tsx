@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { AuditLogDto, WorkspaceRole } from '@flowdesk/contracts';
 import { Permission, WORKSPACE_ROLES, can, outranks } from '@flowdesk/contracts';
-import { Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Check, Copy, Link2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
@@ -180,6 +180,18 @@ function MembersSection() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<string>('MEMBER');
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+  const [lastInvite, setLastInvite] = useState<{ email: string; url: string; emailSent: boolean } | null>(null);
+
+  const sendInvite = (inviteEmail: string, inviteRole: string, onDone?: () => void) =>
+    invite.mutate(
+      { email: inviteEmail, role: inviteRole },
+      {
+        onSuccess: (member) => {
+          if (member.invite) setLastInvite({ email: member.user.email, ...member.invite });
+          onDone?.();
+        },
+      },
+    );
 
   if (!workspace || !user) return null;
   const actor = { userId: user.id, workspaceId, workspaceRole: workspace.role };
@@ -188,13 +200,13 @@ function MembersSection() {
   return (
     <>
       {canManage && (
-        <Card title="Добавить участника" description="Существующие аккаунты FlowDesk попадают в пространство сразу.">
+        <Card title="Добавить участника" description="Существующие аккаунты попадают в пространство сразу. Новым людям уходит ссылка-приглашение.">
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               if (!email.trim()) return;
-              invite.mutate({ email: email.trim(), role }, { onSuccess: () => setEmail('') });
+              sendInvite(email.trim(), role, () => setEmail(''));
             }}
           >
             <div className="min-w-48 flex-1">
@@ -222,6 +234,8 @@ function MembersSection() {
               Добавить
             </Button>
           </form>
+
+          {lastInvite && <InviteLinkPanel invite={lastInvite} onClose={() => setLastInvite(null)} />}
         </Card>
       )}
 
@@ -256,6 +270,17 @@ function MembersSection() {
                   </div>
 
                   {member.user.status === 'INVITED' && <Badge tone="warning">Приглашён</Badge>}
+                  {member.user.status === 'INVITED' && canChange && (
+                    <Button
+                      size="xs"
+                      variant="secondary"
+                      iconLeft={<Link2 className="size-3" />}
+                      loading={invite.isPending && invite.variables?.email === member.user.email}
+                      onClick={() => sendInvite(member.user.email, member.role)}
+                    >
+                      Ссылка
+                    </Button>
+                  )}
 
                   <span className="fd-num hidden text-2xs text-text-subtle sm:inline">
                     {member.user.lastActiveAt ? relativeTime(member.user.lastActiveAt) : 'не заходил(а)'}
@@ -307,6 +332,69 @@ function MembersSection() {
         danger
       />
     </>
+  );
+}
+
+/**
+ * The link from the latest invitation.
+ *
+ * Shown whether or not the e-mail went out: without SMTP it is the only way the
+ * invitation reaches anyone, and even with it a message can land in spam. The
+ * link is single-use, so handing it over by messenger is as safe as mailing it.
+ */
+function InviteLinkPanel({
+  invite,
+  onClose,
+}: {
+  invite: { email: string; url: string; emailSent: boolean };
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(invite.url);
+    } catch {
+      // Clipboard access can be refused; selecting the text still lets the
+      // admin copy it by hand.
+      document.getElementById('invite-link')?.focus();
+      return;
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="mt-3 border-2 border-border-strong bg-surface-sunken p-3">
+      <p className="text-sm font-bold">Приглашение для {invite.email}</p>
+      <p className="mt-0.5 text-xs text-text-muted">
+        {invite.emailSent
+          ? 'Письмо отправлено. Если оно не дойдёт, перешлите ссылку сами — например, в мессенджере.'
+          : 'Письмо не отправлено: почта не настроена или сервер недоступен. Перешлите ссылку сами.'}{' '}
+        Ссылка одноразовая, по ней человек задаст имя и пароль.
+      </p>
+      <div className="mt-2 flex gap-2">
+        <input
+          id="invite-link"
+          readOnly
+          value={invite.url}
+          onFocus={(event) => event.target.select()}
+          aria-label="Ссылка приглашения"
+          className="fd-num h-8 min-w-0 flex-1 border-2 border-border-strong bg-surface px-2 text-xs"
+        />
+        <Button
+          size="sm"
+          variant="primary"
+          iconLeft={copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          onClick={() => void copy()}
+        >
+          {copied ? 'Скопировано' : 'Скопировать'}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          Готово
+        </Button>
+      </div>
+    </div>
   );
 }
 

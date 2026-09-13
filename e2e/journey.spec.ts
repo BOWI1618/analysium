@@ -33,7 +33,9 @@ async function createProject(page: Page, name: string, key: string) {
   await page.getByLabel('Название').fill(name);
   await page.getByLabel('Ключ').fill(key);
   await page.getByRole('button', { name: 'Создать проект' }).click();
-  await expect(page).toHaveURL(/\/projects\/[^/]+/, { timeout: 20_000 });
+  // `/projects/new` itself matches a bare `/projects/<segment>` pattern, which
+  // let this wait succeed before the redirect — exclude it explicitly.
+  await expect(page).toHaveURL(/\/projects\/(?!new(?:[/?]|$))[^/?]+/, { timeout: 20_000 });
 }
 
 test.describe('основной сценарий', () => {
@@ -144,8 +146,9 @@ test.describe('основной сценарий', () => {
 
   test('гость не может создавать задачи', async ({ page, browser }) => {
     // The owner sets up a project and invites a guest.
-    const ownerEmail = await register(page, 'Хозяин Пространства');
+    await register(page, 'Хозяин Пространства');
     await createProject(page, 'Закрытый проект', `G${unique().slice(0, 2).toUpperCase()}`);
+    const projectId = new URL(page.url()).pathname.split('/')[2]!;
 
     const guestEmail = `guest-${unique()}@test.local`;
     await page.goto('/settings/workspace');
@@ -153,14 +156,30 @@ test.describe('основной сценарий', () => {
     await page.getByLabel('Почта').fill(guestEmail);
     await page.getByLabel('Роль').selectOption('GUEST');
     await page.getByRole('button', { name: 'Добавить' }).click();
-    // The email shows up both in the toast and in the member list; the list row
-    // is the durable assertion.
-    await expect(page.getByText(guestEmail, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
 
-    // The guest has no password yet, so this asserts the owner's own view
-    // instead: the invite landed and the role is what was granted.
-    await expect(page.getByText('Роль: гость')).toBeVisible();
-    expect(ownerEmail).toContain('@');
-    expect(browser.browserType().name()).toBe('chromium');
+    // Mail is off here, so the link on screen is the only way in — the same
+    // situation as a server without SMTP.
+    const linkField = page.getByLabel('Ссылка приглашения');
+    await expect(linkField).toBeVisible({ timeout: 15_000 });
+    const inviteUrl = await linkField.inputValue();
+
+    // The guest opens it in a browser of their own.
+    const guestContext = await browser.newContext();
+    const guest = await guestContext.newPage();
+    await guest.goto(inviteUrl);
+    await guest.getByLabel('Ваше имя').fill('Гость Пространства');
+    await guest.getByLabel('Пароль').fill('guest12345');
+    await guest.getByRole('button', { name: 'Принять приглашение' }).click();
+    await expect(guest.getByRole('heading', { level: 1 })).toContainText('Гость', { timeout: 20_000 });
+
+    // Signed in, but a guest outside the project must not be able to add work
+    // to it. Asserted against the API, which is where the rule is enforced.
+    const attempt = await guest.request.post('/api/v1/issues', {
+      headers: { 'x-requested-with': 'flowdesk' },
+      data: { projectId, title: 'Не должно создаться' },
+    });
+    expect([403, 404]).toContain(attempt.status());
+
+    await guestContext.close();
   });
 });

@@ -23,9 +23,13 @@ export function useInviteMember(workspaceId: string) {
       api.post<MemberDto>(`/workspaces/${workspaceId}/members`, input),
     onSuccess: (member) => {
       void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
-      toast.success(`${member.user.email} добавлен(а)`, `Роль: ${ROLE_LABEL[member.role] ?? member.role}`);
+      // A pending invitation is reported by the panel with the link, not a
+      // toast: the admin needs something to copy, not a message that fades.
+      if (!member.invite) {
+        toast.success(`${member.user.email} добавлен(а)`, `Роль: ${ROLE_LABEL[member.role] ?? member.role}`);
+      }
     },
-    onError: (error) => toast.error(error, 'Не удалось добавить участника'),
+    onError: (error) => toast.error(error, 'Не удалось пригласить участника'),
   });
 }
 

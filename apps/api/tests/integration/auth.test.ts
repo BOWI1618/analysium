@@ -187,6 +187,65 @@ describe('приглашения', () => {
     expect(token).not.toBeNull();
   });
 
+  it('ссылка приглашения возвращается администратору и пускает человека внутрь', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Ссылка' });
+    const invited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: 'bylink@test.local', role: 'MEMBER' },
+    });
+    const { invite } = invited.json();
+    // Mail is off in tests, so the link is the only way the invitation can
+    // reach anyone — exactly the case the returned URL exists for.
+    expect(invite.emailSent).toBe(false);
+    const token = new URL(invite.url).searchParams.get('token');
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/accept-invite',
+      payload: { token, name: 'По Ссылке', password: 'bylink12345' },
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().workspaces.some((w: { id: string }) => w.id === owner.workspaceId)).toBe(true);
+  });
+
+  it('повторное приглашение непринявшего выдаёт новую ссылку, старая гаснет', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Повтор' });
+    const inviteOnce = () =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/workspaces/${owner.workspaceId}/members`,
+        headers: { cookie: owner.cookie },
+        payload: { email: 'again@test.local', role: 'MEMBER' },
+      });
+
+    const first = (await inviteOnce()).json().invite.url;
+    const second = await inviteOnce();
+    expect(second.statusCode).toBe(201);
+    expect(second.json().invite.url).not.toBe(first);
+
+    const stale = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/accept-invite',
+      payload: { token: new URL(first).searchParams.get('token'), name: 'Старая', password: 'stale12345' },
+    });
+    expect(stale.statusCode).toBe(400);
+  });
+
+  it('человеку с аккаунтом ссылка не выдаётся — он попадает в пространство сразу', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Свои' });
+    const existing = await registerUser(app, { email: 'has-account@test.local' });
+    const added = await app.inject({
+      method: 'POST',
+      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: existing.email, role: 'MEMBER' },
+    });
+    expect(added.statusCode).toBe(201);
+    expect(added.json().invite).toBeUndefined();
+  });
+
   it('членство в пространстве выдаётся сразу, роль сохраняется', async () => {
     const owner = await registerUser(app, { workspaceName: 'Роли' });
     await app.inject({

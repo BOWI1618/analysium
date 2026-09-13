@@ -68,7 +68,7 @@ export async function sendInviteEmail(args: {
   user: { id: string; email: string };
   workspaceName: string;
   invitedByName: string;
-}): Promise<void> {
+}): Promise<{ url: string; emailSent: boolean }> {
   await prisma.verificationToken.deleteMany({
     where: { userId: args.user.id, purpose: TokenPurpose.INVITE, usedAt: null },
   });
@@ -84,19 +84,21 @@ export async function sendInviteEmail(args: {
   });
 
   const origin = env.WEB_ORIGIN.split(',')[0]?.trim() ?? '';
-  await sendMail({
+  const url = `${origin}/accept-invite?token=${token}`;
+  const emailSent = await sendMail({
     to: args.user.email,
     subject: `Приглашение в «${args.workspaceName}» — FlowDesk`,
     text: [
       `${args.invitedByName} приглашает вас в пространство «${args.workspaceName}» в FlowDesk.`,
       '',
       'Чтобы принять приглашение и задать пароль, откройте ссылку:',
-      `${origin}/accept-invite?token=${token}`,
+      url,
       '',
       `Ссылка действует ${env.INVITE_TOKEN_TTL_DAYS} дн.`,
       'Если вы не ждали этого письма, просто удалите его.',
     ].join('\n'),
   });
+  return { url, emailSent };
 }
 
 /** Consumes a token and marks the address proven. */

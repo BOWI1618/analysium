@@ -47,6 +47,13 @@ export interface MemberDto {
   role: WorkspaceRole;
   joinedAt: string;
   user: UserSummaryDto & { status: UserStatus; lastActiveAt: string | null };
+  /**
+   * Present only in the reply to an invitation, and only for a person without
+   * an account. The link is handed to the admin as well as mailed, so an
+   * invitation still works when mail is off or a message never arrives — it can
+   * be passed on through any messenger.
+   */
+  invite?: { url: string; emailSent: boolean };
 }
 
 export interface StatusDto {

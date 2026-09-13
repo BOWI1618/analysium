@@ -245,15 +245,20 @@ export async function inviteMember(
   // The membership alone does not let anybody in: an account created here has
   // no password. The link in this message is the only way to get one, so an
   // invitation that is not delivered is not an invitation.
-  const [workspace, inviter] = await Promise.all([
-    prisma.workspace.findUniqueOrThrow({ where: { id: actor.workspaceId }, select: { name: true } }),
-    prisma.user.findUniqueOrThrow({ where: { id: actor.userId }, select: { name: true } }),
-  ]);
-  await sendInviteEmail({
-    user: { id: user.id, email: input.email },
-    workspaceName: workspace.name,
-    invitedByName: inviter.name,
-  });
+  // Someone who already has an account is simply in — there is no password to
+  // set, so a "set your password" link would only confuse them.
+  let invite: { url: string; emailSent: boolean } | undefined;
+  if (!user.passwordHash) {
+    const [workspace, inviter] = await Promise.all([
+      prisma.workspace.findUniqueOrThrow({ where: { id: actor.workspaceId }, select: { name: true } }),
+      prisma.user.findUniqueOrThrow({ where: { id: actor.userId }, select: { name: true } }),
+    ]);
+    invite = await sendInviteEmail({
+      user: { id: user.id, email: input.email },
+      workspaceName: workspace.name,
+      invitedByName: inviter.name,
+    });
+  }
 
   audit({
     workspaceId: actor.workspaceId,
@@ -277,6 +282,7 @@ export async function inviteMember(
       status: member.user.status,
       lastActiveAt: member.user.lastActiveAt?.toISOString() ?? null,
     },
+    ...(invite ? { invite } : {}),
   };
 }
 
