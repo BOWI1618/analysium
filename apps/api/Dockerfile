@@ -12,7 +12,11 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 # The web workspace is not installed — it is built by its own image — but npm
 # needs its manifest present to resolve the lockfile.
-RUN npm ci --omit-optional --workspace=@flowdesk/api --workspace=@flowdesk/contracts --include-workspace-root
+# --omit=dev keeps the test runner, the type definitions and the pretty-printer
+# out of the image: none of them run here, and every package that ships is one
+# more thing to keep patched. tsx and the Prisma CLI are runtime requirements —
+# they start the server and apply migrations — so they live in dependencies.
+RUN npm ci --omit=dev --omit-optional --workspace=@flowdesk/api --workspace=@flowdesk/contracts --include-workspace-root
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
