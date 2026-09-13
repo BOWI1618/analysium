@@ -1,0 +1,27 @@
+# Line endings.
+#
+# Git on Windows converts LF to CRLF on checkout by default. That is harmless
+# for most files here, but `scripts/backup.sh` is mounted straight into a Linux
+# container and run by `sh`: with CRLF the shell reads `\r` as part of every
+# command and the backup service dies on the first line. The same applies to
+# anything else Linux executes verbatim.
+#
+# `text=auto` normalises to LF inside the repository; the `eol=lf` entries below
+# additionally force LF in the working copy, so a checkout on Windows still
+# produces files Linux can run.
+
+* text=auto
+
+*.sh        text eol=lf
+*.mjs       text eol=lf
+Dockerfile  text eol=lf
+Caddyfile   text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.sql       text eol=lf
+.env*       text eol=lf
+
+# Binary — never touched.
+*.png       binary
+*.woff2     binary
+*.ico       binary

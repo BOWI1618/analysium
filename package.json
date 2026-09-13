@@ -3,8 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "FlowDesk — modern project & issue tracking for product teams",
-  "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=20.12" },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.12"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:api": "npm run dev --workspace=@flowdesk/api",
@@ -15,11 +20,12 @@
     "db:migrate": "npm run db:migrate --workspace=@flowdesk/api",
     "db:seed": "npm run db:seed --workspace=@flowdesk/api",
     "db:reset": "npm run db:reset --workspace=@flowdesk/api",
-    "setup": "docker compose up -d --wait db && npm run db:push && npm run db:seed",
+    "setup": "node scripts/init-env.mjs && docker compose up -d --wait db && npm run db:push && npm run db:seed",
     "test": "npm run test --workspace=@flowdesk/api",
     "test:e2e": "playwright test",
     "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:e2e",
-    "typecheck:e2e": "tsc --noEmit -p e2e"
+    "typecheck:e2e": "tsc --noEmit -p e2e",
+    "init:env": "node scripts/init-env.mjs"
   },
   "devDependencies": {
     "typescript": "^5.7.2",
