@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { useCurrentUser, useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
+import { useHotkeys } from '~/lib/hooks/useHotkeys';
+import { SHORTCUTS } from '~/lib/shortcuts';
 import { useToast } from '~/app/toast';
 import { useProject } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
@@ -79,6 +81,26 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
   const openIssue = useUiStore((s) => s.openIssue);
 
+  // Issue shortcuts press the very buttons a mouse would, found inside this
+  // issue: one code path, and nothing to fall out of sync with the fields. They
+  // stand down while another dialog is on top — quick-create over an open issue
+  // must not have its keys open this issue's menus underneath.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pressInIssue = (selector: string) => () => {
+    const root = rootRef.current;
+    if (!root) return;
+    const topDialog = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].pop();
+    if (topDialog && !topDialog.contains(root)) return;
+    root.querySelector<HTMLElement>(selector)?.click();
+  };
+  useHotkeys({
+    [SHORTCUTS.issueTitle]: pressInIssue('[data-issue-title]'),
+    [SHORTCUTS.issueStatus]: pressInIssue('[aria-label="Изменить статус"]'),
+    [SHORTCUTS.issueAssignee]: pressInIssue('[aria-label="Изменить исполнителя"]'),
+    [SHORTCUTS.issuePriority]: pressInIssue('[aria-label="Изменить приоритет"]'),
+    [SHORTCUTS.issueLabels]: pressInIssue('[aria-label="Изменить метки"]'),
+  });
+
   const { data: project } = useProject(issue.projectId);
   const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? issue.projectId : undefined);
   const { data: activity, isLoading: activityLoading } = useIssueActivity(issue.id);
@@ -124,7 +146,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
   const doneSubtasks = issue.subtasks.filter((s) => s.status.category === 'COMPLETED').length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface">
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-surface">
       {/* ------------------------------------------------------------ header */}
       <header className="flex shrink-0 items-center gap-2 border-b-2 border-border-strong bg-surface px-3 py-2 shadow-sm">
         <IssueTypeIcon type={issue.type} className="size-4" />
@@ -698,6 +720,7 @@ function TitleField({
   if (!editable || !editing) {
     return (
       <h1
+        data-issue-title
         onClick={() => editable && setEditing(true)}
         className={clsx(
           '-mx-1 px-1 text-text',

@@ -24,8 +24,10 @@ import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } fr
 import { Avatar } from '~/ui/Avatar';
 import { CountBadge } from '~/ui/Badge';
 import { IconButton } from '~/ui/Button';
-import { Tooltip, Kbd } from '~/ui/Tooltip';
+import { Tooltip } from '~/ui/Tooltip';
 import { useRealtime } from '~/app/realtime';
+import { Shortcut } from '~/ui/Shortcut';
+import { SHORTCUTS } from '~/lib/shortcuts';
 import { useToast } from '~/app/toast';
 
 interface NavItemProps {
@@ -348,7 +350,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </MenuItem>
             <MenuItem
               icon={<Keyboard className="size-3.5" />}
-              shortcut={<Kbd>?</Kbd>}
+              shortcut={<Shortcut combo={SHORTCUTS.showShortcuts} />}
               onSelect={() => setShortcutsOpen(true)}
             >
               Горячие клавиши

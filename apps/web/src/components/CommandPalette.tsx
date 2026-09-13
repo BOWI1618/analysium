@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   ArrowRight,
-  CornerDownLeft,
   LayoutGrid,
   Plus,
   Search,
@@ -19,12 +18,15 @@ import { useUiStore } from '~/app/uiStore';
 import { useSearch } from '~/features/search/hooks';
 import { Avatar } from '~/ui/Avatar';
 import { Kbd } from '~/ui/Tooltip';
+import { Shortcut } from '~/ui/Shortcut';
+import { SHORTCUTS } from '~/lib/shortcuts';
 import { Spinner } from '~/ui/Spinner';
 import { IssueTypeIcon } from './IssueMeta';
 
 interface Command {
   id: string;
   label: string;
+  /** A combo from SHORTCUTS, drawn as keycaps next to the command. */
   hint?: string;
   icon: React.ReactNode;
   group: string;
@@ -63,6 +65,7 @@ export function CommandPalette() {
         id: 'nav-home',
         label: 'Перейти на главную',
         icon: <Home className="size-4" />,
+        hint: SHORTCUTS.goHome,
         group: 'Навигация',
         run: () => navigate('/'),
       },
@@ -70,6 +73,7 @@ export function CommandPalette() {
         id: 'nav-my-work',
         label: 'Перейти в «Мои задачи»',
         icon: <UserRound className="size-4" />,
+        hint: SHORTCUTS.goMyWork,
         group: 'Навигация',
         run: () => navigate('/my-work'),
       },
@@ -77,6 +81,7 @@ export function CommandPalette() {
         id: 'nav-inbox',
         label: 'Перейти во «Входящие»',
         icon: <Inbox className="size-4" />,
+        hint: SHORTCUTS.goInbox,
         group: 'Навигация',
         run: () => navigate('/inbox'),
       },
@@ -84,13 +89,14 @@ export function CommandPalette() {
         id: 'nav-projects',
         label: 'Перейти к проектам',
         icon: <LayoutGrid className="size-4" />,
+        hint: SHORTCUTS.goProjects,
         group: 'Навигация',
         run: () => navigate('/projects'),
       },
       {
         id: 'action-create-issue',
         label: 'Создать задачу',
-        hint: 'C',
+        hint: SHORTCUTS.createIssue,
         icon: <Plus className="size-4" />,
         group: 'Действия',
         run: () => openCreateIssue(),
@@ -105,7 +111,7 @@ export function CommandPalette() {
       {
         id: 'action-shortcuts',
         label: 'Горячие клавиши',
-        hint: '?',
+        hint: SHORTCUTS.showShortcuts,
         icon: <Zap className="size-4" />,
         group: 'Действия',
         run: () => setShortcutsOpen(true),
@@ -275,7 +281,7 @@ export function CommandPalette() {
             autoFocus
             value={term}
             onChange={(event) => setTerm(event.target.value)}
-            placeholder="Поиск задач, проектов, людей — или команда…"
+            placeholder="Найти задачу, проект, человека — или выбрать команду…"
             aria-label="Поиск"
             className={clsx(
               'w-full bg-transparent outline-none placeholder:text-text-subtle',
@@ -316,10 +322,7 @@ export function CommandPalette() {
                   >
                     <span className="flex size-4 shrink-0 items-center justify-center">{command.icon}</span>
                     <span className="min-w-0 flex-1 truncate">{command.label}</span>
-                    {command.hint && (
-                      <span className="fd-key shrink-0">{command.hint}</span>
-                    )}
-                    {index === activeIndex && <CornerDownLeft className="size-3 shrink-0" />}
+                    {command.hint && <Shortcut combo={command.hint} />}
                   </button>
                 ))}
               </div>
@@ -327,18 +330,25 @@ export function CommandPalette() {
           )}
         </div>
 
-        <div className="flex items-center gap-3 border-t-2 border-border-strong bg-surface-raised px-3 py-1.5 text-2xs text-text-subtle">
+        {/* Spelled out, key by key: the old footer's lone arrows and a ↵ glyph
+            left people unsure what to press. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t-2 border-border-strong bg-surface-raised px-3 py-1.5 text-2xs text-text-subtle">
           <span className="flex items-center gap-1">
             <Kbd>↑</Kbd>
-            <Kbd>↓</Kbd> навигация
+            <Kbd>↓</Kbd> выбрать
           </span>
           <span className="flex items-center gap-1">
-            <Kbd>↵</Kbd> открыть
+            <Kbd>Enter</Kbd> выполнить
           </span>
-          <span className="ml-auto flex items-center gap-1">
-            <ArrowRight className="size-3" />
-            {results?.issues.length ?? 0} задач найдено
+          <span className="flex items-center gap-1">
+            <Kbd>Esc</Kbd> закрыть
           </span>
+          {term.trim() && (
+            <span className="ml-auto flex items-center gap-1">
+              <ArrowRight className="size-3" />
+              Задач: {results?.issues.length ?? 0}
+            </span>
+          )}
         </div>
       </div>
     </div>,

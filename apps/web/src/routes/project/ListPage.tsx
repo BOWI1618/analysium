@@ -61,7 +61,7 @@ export function ListPage() {
   const canEdit = project?.permissions.includes(Permission.ISSUE_UPDATE) ?? false;
 
   const toggleSelect = useCallback(
-    (issueId: string, event: React.MouseEvent) => {
+    (issueId: string, event: { shiftKey: boolean }) => {
       // Shift-click selects the range since the previous click, like a file manager.
       if (event.shiftKey && lastClickedRef.current) {
         const from = issues.findIndex((i) => i.id === lastClickedRef.current);

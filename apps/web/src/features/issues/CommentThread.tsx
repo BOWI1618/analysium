@@ -7,9 +7,10 @@ import { Button, IconButton } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '~/ui/Menu';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { EmptyState, SkeletonText } from '~/ui/Feedback';
-import { Kbd } from '~/ui/Tooltip';
 import { relativeTime, fullDate } from '~/lib/format';
 import { RichTextEditor, RichTextViewer } from '~/components/RichText';
+import { Shortcut } from '~/ui/Shortcut';
+import { SHORTCUTS, comboText } from '~/lib/shortcuts';
 import { useComments, useCreateComment, useDeleteComment, useUpdateComment } from '~/features/comments/hooks';
 
 export function CommentThread({
@@ -69,14 +70,13 @@ export function CommentThread({
               value={draft}
               onChange={setDraft}
               users={members}
-              placeholder="Оставьте комментарий… (@ — упоминание, ⌘↵ — отправить)"
+              placeholder={`Оставьте комментарий… (@ — упоминание, ${comboText(SHORTCUTS.submit)} — отправить)`}
               minHeight="3.5rem"
               onSubmit={() => void submit()}
               footer={
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1 text-2xs text-text-subtle">
-                    <Kbd>⌘</Kbd>
-                    <Kbd>↵</Kbd> to send
+                    <Shortcut combo={SHORTCUTS.submit} /> отправить
                   </span>
                   <Button
                     size="sm"

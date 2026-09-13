@@ -3,7 +3,8 @@ import { ChevronRight, Menu as MenuIcon, Plus, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useUiStore } from '~/app/uiStore';
 import { Button, IconButton } from '~/ui/Button';
-import { Kbd } from '~/ui/Tooltip';
+import { Shortcut } from '~/ui/Shortcut';
+import { SHORTCUTS, comboText } from '~/lib/shortcuts';
 import { NotificationBell } from './NotificationCenter';
 
 export interface Crumb {
@@ -86,11 +87,11 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
           data-palette-anchor
           onClick={() => setCommandPaletteOpen(true)}
           className="flex w-56 items-center gap-2 border-2 border-border-strong bg-surface px-2.5 py-1 text-xs text-text-subtle transition-[box-shadow,translate] duration-100 hover:-translate-x-px hover:-translate-y-px hover:shadow-sm lg:w-72"
-          aria-label="Поиск — Cmd или Ctrl + K"
+          aria-label={`Поиск — ${comboText(SHORTCUTS.commandPalette)}`}
         >
           <Search className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">Поиск: ключ, слово, @человек…</span>
-          <Kbd>⌘K</Kbd>
+          <Shortcut combo={SHORTCUTS.commandPalette} />
         </button>
       </div>
 
@@ -114,7 +115,7 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
           variant="primary"
           iconLeft={<Plus className="size-3.5" />}
           onClick={() => openCreateIssue(currentProjectId ? { projectId: currentProjectId } : undefined)}
-          title="Создать задачу (C)"
+          title={`Создать задачу (${comboText(SHORTCUTS.createIssue)})`}
         >
           <span className="hidden sm:inline">Создать</span>
         </Button>

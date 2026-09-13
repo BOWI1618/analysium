@@ -47,7 +47,8 @@ export interface IssueRowProps {
   columns: ListColumn[];
   selected: boolean;
   focused?: boolean;
-  onToggleSelect: (event: React.MouseEvent) => void;
+  /** `shiftKey` extends the selection as a range, like a file manager. */
+  onToggleSelect: (event: { shiftKey: boolean }) => void;
   onOpen: () => void;
   /** Inline editing is disabled when the viewer lacks permission. */
   editable?: boolean;
@@ -78,12 +79,26 @@ export const IssueRow = memo(function IssueRow({
     <div
       role="row"
       tabIndex={0}
+      data-issue-row
       aria-selected={selected}
       onClick={onOpen}
       onKeyDown={(event) => {
+        // Only keys aimed at the row itself: a picker or checkbox inside handles its own.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter') {
           event.preventDefault();
           onOpen();
+        } else if (event.key === ' ') {
+          event.preventDefault();
+          onToggleSelect({ shiftKey: event.shiftKey });
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          // Rows across every group on the page, in reading order — grouped
+          // "Мои задачи" moves straight from one group into the next.
+          const rows = [...document.querySelectorAll<HTMLElement>('[data-issue-row]')];
+          const next = rows[rows.indexOf(event.currentTarget) + (event.key === 'ArrowDown' ? 1 : -1)];
+          next?.focus();
+          next?.scrollIntoView({ block: 'nearest' });
         }
       }}
       className={clsx(

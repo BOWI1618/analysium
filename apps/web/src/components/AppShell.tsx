@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { useUiStore } from '~/app/uiStore';
 import { useHotkeys } from '~/lib/hooks/useHotkeys';
+import { SHORTCUTS } from '~/lib/shortcuts';
 import { useIsMobile } from '~/lib/hooks/useMediaQuery';
 import { Sidebar } from './Sidebar';
 import { CommandPalette } from './CommandPalette';
@@ -35,25 +36,30 @@ export function AppShell() {
   const closeIssue = useUiStore((s) => s.closeIssue);
 
   useHotkeys({
-    c: () => openCreateIssue(currentProjectId ? { projectId: currentProjectId } : undefined),
-    '/': () => setCommandPaletteOpen(true),
-    'mod+k': () => setCommandPaletteOpen(true),
-    '?': () => setShortcutsOpen(true),
-    'g p': () => navigate('/projects'),
-    'g m': () => navigate('/my-work'),
-    'g i': () => navigate('/inbox'),
-    'g h': () => navigate('/'),
+    [SHORTCUTS.commandPalette]: () => setCommandPaletteOpen(true),
+    [SHORTCUTS.showShortcuts]: () => setShortcutsOpen(true),
+    [SHORTCUTS.createIssue]: () => openCreateIssue(currentProjectId ? { projectId: currentProjectId } : undefined),
+    [SHORTCUTS.goHome]: () => navigate('/'),
+    [SHORTCUTS.goMyWork]: () => navigate('/my-work'),
+    [SHORTCUTS.goInbox]: () => navigate('/inbox'),
+    [SHORTCUTS.goProjects]: () => navigate('/projects'),
     escape: () => {
       if (openIssueId) closeIssue();
       else setMobileNavOpen(false);
     },
   });
 
-
   // The mobile drawer must not survive a viewport change.
   useEffect(() => {
     if (!isMobile) setMobileNavOpen(false);
   }, [isMobile, setMobileNavOpen]);
+
+  // Nor a change of page. Closing it here rather than on each link covers
+  // every way of navigating — menu items, the account button, a project in the
+  // list, a link inside the page — including ones added later.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname, setMobileNavOpen]);
 
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">

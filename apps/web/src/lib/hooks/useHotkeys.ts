@@ -1,11 +1,19 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Global keyboard shortcuts.
+ * Keyboard shortcuts.
  *
- * Handles single keys ("c"), modifiers ("mod+k") and Linear-style sequences
- * ("g p" — press g, then p). Typing in an input or a rich-text editor never
- * triggers a shortcut, except for explicitly allowed combinations like Escape.
+ * Keys are matched by **physical position** (`event.code`), not by the
+ * character they produce. With a Russian layout active the key labelled C
+ * produces «С», and with Alt held on a Mac letters turn into symbols — matching
+ * characters silently broke every letter shortcut for both. Combos are written
+ * as `mod+alt+shift+key`, where `mod` is Ctrl or ⌘ and `key` is a lower-case
+ * letter, a digit, or a name such as `enter`, `escape`, `arrowdown`, `/`.
+ *
+ * While typing in a field or the rich-text editor only a short list of combos
+ * gets through — closing, submitting and opening search. Everything else stays
+ * with the field: Ctrl+Alt+digit makes a heading in the editor, and on some
+ * layouts Ctrl+Alt types a character.
  */
 export type HotkeyHandler = (event: KeyboardEvent) => void;
 
@@ -13,7 +21,19 @@ export interface HotkeyMap {
   [combo: string]: HotkeyHandler;
 }
 
-const SEQUENCE_TIMEOUT_MS = 900;
+const ALLOWED_WHILE_TYPING = new Set(['escape', 'mod+enter', 'mod+k', 'mod+/']);
+
+const CODE_KEYS: Record<string, string> = {
+  Slash: '/',
+  Enter: 'enter',
+  NumpadEnter: 'enter',
+  Escape: 'escape',
+  Space: 'space',
+  ArrowUp: 'arrowup',
+  ArrowDown: 'arrowdown',
+  ArrowLeft: 'arrowleft',
+  ArrowRight: 'arrowright',
+};
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -27,13 +47,20 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-function normalizeEvent(event: KeyboardEvent): string {
+function keyOf(event: KeyboardEvent): string {
+  const { code } = event;
+  if (code.startsWith('Key')) return code.slice(3).toLowerCase();
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad') && /\d$/.test(code)) return code.slice(-1);
+  return CODE_KEYS[code] ?? event.key.toLowerCase();
+}
+
+export function comboOf(event: KeyboardEvent): string {
   const parts: string[] = [];
-  if (event.metaKey || event.ctrlKey) parts.push('mod');
+  if (event.ctrlKey || event.metaKey) parts.push('mod');
   if (event.altKey) parts.push('alt');
-  if (event.shiftKey && event.key.length > 1) parts.push('shift');
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key.toLowerCase();
-  parts.push(key);
+  if (event.shiftKey) parts.push('shift');
+  parts.push(keyOf(event));
   return parts.join('+');
 }
 
@@ -45,60 +72,19 @@ export function useHotkeys(map: HotkeyMap, options: { enabled?: boolean } = {}):
   useEffect(() => {
     if (!enabled) return undefined;
 
-    let sequence: string[] = [];
-    let timer: number | undefined;
-
-    const resetSequence = () => {
-      sequence = [];
-      if (timer) window.clearTimeout(timer);
-      timer = undefined;
-    };
-
     const handler = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || event.isComposing) return;
 
-      const combo = normalizeEvent(event);
-      const handlers = mapRef.current;
-      const editable = isEditableTarget(event.target);
+      const combo = comboOf(event);
+      if (isEditableTarget(event.target) && !ALLOWED_WHILE_TYPING.has(combo)) return;
 
-      // Escape and mod-combos still work while typing; bare letters do not.
-      const allowWhileTyping = combo === 'escape' || combo.startsWith('mod+');
-      if (editable && !allowWhileTyping) {
-        resetSequence();
-        return;
-      }
-
-      // Try a two-key sequence first ("g p").
-      if (sequence.length > 0) {
-        const candidate = [...sequence, combo].join(' ');
-        const seqHandler = handlers[candidate];
-        resetSequence();
-        if (seqHandler) {
-          event.preventDefault();
-          seqHandler(event);
-          return;
-        }
-      }
-
-      const direct = handlers[combo];
-      if (direct) {
-        event.preventDefault();
-        direct(event);
-        return;
-      }
-
-      // Start a sequence when some registered shortcut begins with this key.
-      const startsSequence = Object.keys(handlers).some((k) => k.startsWith(`${combo} `));
-      if (startsSequence) {
-        sequence = [combo];
-        timer = window.setTimeout(resetSequence, SEQUENCE_TIMEOUT_MS);
-      }
+      const run = mapRef.current[combo];
+      if (!run) return;
+      event.preventDefault();
+      run(event);
     };
 
     window.addEventListener('keydown', handler);
-    return () => {
-      window.removeEventListener('keydown', handler);
-      resetSequence();
-    };
+    return () => window.removeEventListener('keydown', handler);
   }, [enabled]);
 }

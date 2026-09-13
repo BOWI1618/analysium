@@ -57,9 +57,9 @@ test.describe('основной сценарий', () => {
       await expect(page.getByText('Перетащите задачу сюда или создайте новую.').first()).toBeVisible();
     });
 
-    await test.step('задача создаётся с клавиатуры по «C»', async () => {
+    await test.step('задача создаётся с клавиатуры по Ctrl+Alt+N', async () => {
       await page.locator('body').click();
-      await page.keyboard.press('c');
+      await page.keyboard.press('Control+Alt+n');
       const dialog = page.getByRole('dialog', { name: 'Новая задача' });
       await expect(dialog).toBeVisible();
 
@@ -130,7 +130,7 @@ test.describe('основной сценарий', () => {
     await createProject(page, 'Поисковый проект', `S${unique().slice(0, 2).toUpperCase()}`);
 
     await page.locator('body').click();
-    await page.keyboard.press('c');
+    await page.keyboard.press('Control+Alt+n');
     const dialog = page.getByRole('dialog', { name: 'Новая задача' });
     await dialog.getByLabel('Название задачи').fill('Уникальная формулировка для поиска');
     await dialog.getByRole('button', { name: 'Создать', exact: true }).click();
@@ -140,7 +140,7 @@ test.describe('основной сценарий', () => {
     const palette = page.getByRole('dialog', { name: 'Командная палитра' });
     await expect(palette).toBeVisible();
 
-    await palette.getByRole('combobox').or(palette.getByPlaceholder(/Поиск задач/)).fill('Уникальная формулировка');
+    await palette.getByLabel('Поиск', { exact: true }).fill('Уникальная формулировка');
     await expect(palette.getByText('Уникальная формулировка для поиска')).toBeVisible({ timeout: 15_000 });
   });
 
