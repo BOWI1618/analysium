@@ -41,7 +41,7 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
           current page is the only thing in the display face. */}
       <nav
         aria-label="Навигационная цепочка"
-        className="flex min-w-0 flex-1 items-center gap-2 border-r-2 border-border-strong px-3 sm:flex-none sm:px-4"
+        className="flex min-w-0 flex-1 items-center gap-2 border-r-2 border-border-strong px-3 sm:px-4"
       >
         <ol className="flex min-w-0 items-center gap-2">
           {breadcrumbs.map((crumb, index) => {
@@ -77,12 +77,15 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
         </ol>
       </nav>
 
-      {/* Search sits in the open middle of the plate, like a newspaper index. */}
-      <div className="hidden min-w-0 flex-1 items-center px-4 sm:flex">
+      {/* Search sits at the right edge, next to the actions it belongs with; the
+          breadcrumbs take whatever width is left. The palette opens out of this
+          very field — it reads the button's position through the data attribute. */}
+      <div className="hidden shrink-0 items-center px-3 sm:flex">
         <button
           type="button"
+          data-palette-anchor
           onClick={() => setCommandPaletteOpen(true)}
-          className="flex w-full max-w-[20rem] items-center gap-2 border-2 border-border-strong bg-surface px-2.5 py-1 text-xs text-text-subtle transition-[box-shadow,translate] duration-100 hover:-translate-x-px hover:-translate-y-px hover:shadow-sm"
+          className="flex w-56 items-center gap-2 border-2 border-border-strong bg-surface px-2.5 py-1 text-xs text-text-subtle transition-[box-shadow,translate] duration-100 hover:-translate-x-px hover:-translate-y-px hover:shadow-sm lg:w-72"
           aria-label="Поиск — Cmd или Ctrl + K"
         >
           <Search className="size-3.5 shrink-0" />

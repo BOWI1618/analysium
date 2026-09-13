@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
@@ -210,7 +210,33 @@ export function CommandPalette() {
     listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex]);
 
+  // Where the search field is on screen. The palette opens out of it: its input
+  // lands on the field and the results drop below. Measured before paint so it
+  // never flashes in the middle first. When the field is not rendered — phone
+  // widths hide it — there is no anchor and the centred dialog is used instead.
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const measure = () => {
+      const field = [...document.querySelectorAll<HTMLElement>('[data-palette-anchor]')].find(
+        (el) => el.getBoundingClientRect().width > 0,
+      );
+      setAnchor(field ? field.getBoundingClientRect() : null);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open]);
+
   if (!open) return null;
+
+  // Wider than the field so results have room, but grown leftwards: the field
+  // is at the right edge, and the panel's right edge stays on the field's.
+  const MARGIN = 8;
+  const panelWidth = anchor ? Math.min(576, window.innerWidth - MARGIN * 2) : 0;
+  const panelLeft = anchor
+    ? Math.min(Math.max(anchor.right - panelWidth, MARGIN), window.innerWidth - panelWidth - MARGIN)
+    : 0;
 
   const grouped = commands.reduce<Record<string, { command: Command; index: number }[]>>((acc, command, index) => {
     (acc[command.group] ??= []).push({ command, index });
@@ -218,15 +244,32 @@ export function CommandPalette() {
   }, {});
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-start justify-center p-4 pt-[10vh]">
-      <div className="fixed inset-0 bg-[var(--overlay)] animate-in" onClick={() => setOpen(false)} aria-hidden="true" />
+    <div
+      className={clsx('fixed inset-0 z-[90]', !anchor && 'flex items-start justify-center p-4 pt-[10vh]')}
+    >
+      {/* A dropdown does not dim the page; the centred dialog does. Either way a
+          click outside closes it. */}
+      <div
+        className={clsx('fixed inset-0', anchor ? 'bg-transparent' : 'bg-[var(--overlay)] animate-in')}
+        onClick={() => setOpen(false)}
+        aria-hidden="true"
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Командная палитра"
-        className="relative z-10 w-full max-w-xl overflow-hidden border-2 border-border-strong bg-surface shadow-xl animate-slide-up"
+        className={clsx(
+          'z-10 overflow-hidden border-2 border-border-strong bg-surface shadow-xl',
+          anchor ? 'fixed animate-in' : 'relative w-full max-w-xl animate-slide-up',
+        )}
+        style={anchor ? { top: anchor.top, left: panelLeft, width: panelWidth } : undefined}
       >
-        <div className="flex items-center gap-2 border-b-2 border-border-strong bg-surface-raised px-3">
+        <div
+          className="flex items-center gap-2 border-b-2 border-border-strong bg-surface-raised px-3"
+          // Anchored, the input row matches the field it replaces, so the search
+          // box stays exactly where it was and only the list appears.
+          style={anchor ? { height: Math.max(anchor.height - 2, 28) } : undefined}
+        >
           <Search className="size-4 shrink-0 text-text-subtle" />
           <input
             autoFocus
@@ -234,7 +277,10 @@ export function CommandPalette() {
             onChange={(event) => setTerm(event.target.value)}
             placeholder="Поиск задач, проектов, людей — или команда…"
             aria-label="Поиск"
-            className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-text-subtle"
+            className={clsx(
+              'w-full bg-transparent outline-none placeholder:text-text-subtle',
+              anchor ? 'h-full text-xs' : 'h-11 text-sm',
+            )}
           />
           {isFetching && <Spinner className="size-3.5 text-text-subtle" />}
           <Kbd>Esc</Kbd>
