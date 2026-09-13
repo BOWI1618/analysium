@@ -86,7 +86,7 @@ export function HomePage() {
 
           {/* The four numbers that matter, set as a stepped row rather than a
               flat grid — the eye reads them in order instead of all at once. */}
-          <div className="grid grid-cols-1 gap-4 pt-7 pb-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 pt-7 pb-2 sm:gap-4 lg:grid-cols-4">
             <StatPlate
               to="/my-work"
               eyebrow="на мне"

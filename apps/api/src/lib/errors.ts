@@ -50,7 +50,14 @@ export const badRequest = (m: string, f?: Record<string, string>) => new AppErro
 export const validationError = (m: string, f?: Record<string, string>) => new AppError('VALIDATION_ERROR', m, f);
 export const unauthorized = (m = 'Требуется вход') => new AppError('UNAUTHORIZED', m);
 export const forbidden = (m = 'Недостаточно прав для этого действия') => new AppError('FORBIDDEN', m);
-export const notFound = (entity = 'Объект') => new AppError('NOT_FOUND', `${entity} не найден`);
+/** Russian agrees the participle with the noun: «задача не найдена», «пространство не найдено». */
+const FEMININE = new Set(['Задача', 'Метка', 'Связь']);
+const NEUTER = new Set(['Пространство', 'Уведомление']);
+export const notFound = (entity = 'Объект') =>
+  new AppError(
+    'NOT_FOUND',
+    `${entity} ${FEMININE.has(entity) ? 'не найдена' : NEUTER.has(entity) ? 'не найдено' : 'не найден'}`,
+  );
 export const conflict = (m: string, f?: Record<string, string>) => new AppError('CONFLICT', m, f);
 
 /**

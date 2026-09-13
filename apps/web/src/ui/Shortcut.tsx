@@ -11,7 +11,12 @@ import { Kbd } from './Tooltip';
 export function Shortcut({ combo, className }: { combo: string; className?: string }) {
   const keys = comboKeys(combo);
   return (
-    <span className={clsx('inline-flex shrink-0 items-center gap-0.5', className)} aria-label={comboText(combo)}>
+    // Hidden on touch screens: a phone has no Ctrl key, and the caps only take
+    // room from the label they sit next to.
+    <span
+      className={clsx('inline-flex shrink-0 items-center gap-0.5 [@media(hover:none)]:hidden', className)}
+      aria-label={comboText(combo)}
+    >
       {keys.map((key, index) => (
         <span key={`${key}-${index}`} className="inline-flex items-center gap-0.5">
           {index > 0 && !isMac && <span className="text-[10px] text-text-subtle" aria-hidden="true">+</span>}

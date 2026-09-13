@@ -171,6 +171,7 @@ export function ProfilePage() {
                         columns={[...DEFAULT_COLUMNS, 'project']}
                         selected={false}
                         onToggleSelect={() => undefined}
+                selectable={false}
                         onOpen={() => openIssue(issue.id)}
                       />
                     ));

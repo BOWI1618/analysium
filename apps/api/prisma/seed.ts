@@ -530,7 +530,7 @@ async function main(): Promise<void> {
               projectId: project.id,
               number: subKey.number,
               issueKey: subKey.issueKey,
-              title: `${title} — step ${i + 1}`,
+              title: `${title} — шаг ${i + 1}`,
               type: 'SUBTASK',
               statusId: subStatus.id,
               priority: 'MEDIUM',
@@ -636,11 +636,13 @@ async function main(): Promise<void> {
         actorId: pick(activeUsers).id,
         type: index % 3 === 0 ? 'ISSUE_ASSIGNED' : index % 3 === 1 ? 'ISSUE_COMMENTED' : 'ISSUE_STATUS_CHANGED',
         title:
+          // Same wording the live services produce, so demo notifications do
+          // not read differently from real ones.
           index % 3 === 0
-            ? `${issue.issueKey} was assigned to you`
+            ? `${issue.issueKey} назначена на вас`
             : index % 3 === 1
-              ? `New comment on ${issue.issueKey}`
-              : `${issue.issueKey} changed status`,
+              ? `Новый комментарий в ${issue.issueKey}`
+              : `Изменился статус у ${issue.issueKey}`,
         body: issue.title,
         issueId: issue.id,
         readAt: index > 4 ? daysAgo(1) : null,

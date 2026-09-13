@@ -336,8 +336,12 @@ function TreeRow({
         type="button"
         onClick={onOpen}
         className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        title={`${row.issueKey}: ${row.title}`}
       >
-        <span className="fd-key shrink-0">{row.issueKey}</span>
+        {/* On a phone the tree column is 160px; with the key and the avatar
+            beside it the title was cut to two or three letters. There the title
+            alone identifies the bar. */}
+        <span className="fd-key hidden shrink-0 sm:inline">{row.issueKey}</span>
         <span
           className={clsx(
             'min-w-0 flex-1 truncate text-xs',
@@ -354,7 +358,9 @@ function TreeRow({
           {row.storyPoints}
         </span>
       )}
-      <Avatar user={row.assignee} size="sm" showEmpty={false} />
+      <span className="hidden shrink-0 sm:inline-flex">
+        <Avatar user={row.assignee} size="sm" showEmpty={false} />
+      </span>
     </div>
   );
 }

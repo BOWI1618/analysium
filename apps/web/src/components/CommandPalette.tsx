@@ -108,14 +108,19 @@ export function CommandPalette() {
         group: 'Действия',
         run: () => navigate('/projects/new'),
       },
-      {
-        id: 'action-shortcuts',
-        label: 'Горячие клавиши',
-        hint: SHORTCUTS.showShortcuts,
-        icon: <Zap className="size-4" />,
-        group: 'Действия',
-        run: () => setShortcutsOpen(true),
-      },
+      // A phone has no keyboard to learn shortcuts for.
+      ...(typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
+        ? []
+        : [
+            {
+              id: 'action-shortcuts',
+              label: 'Горячие клавиши',
+              hint: SHORTCUTS.showShortcuts,
+              icon: <Zap className="size-4" />,
+              group: 'Действия',
+              run: () => setShortcutsOpen(true),
+            },
+          ]),
       {
         id: 'nav-settings',
         label: 'Настройки пространства',
@@ -289,7 +294,7 @@ export function CommandPalette() {
             )}
           />
           {isFetching && <Spinner className="size-3.5 text-text-subtle" />}
-          <Kbd>Esc</Kbd>
+          <Kbd className="[@media(hover:none)]:hidden">Esc</Kbd>
         </div>
 
         <div ref={listRef} className="max-h-[52vh] overflow-y-auto p-1.5 scrollbar-thin">
@@ -332,7 +337,7 @@ export function CommandPalette() {
 
         {/* Spelled out, key by key: the old footer's lone arrows and a ↵ glyph
             left people unsure what to press. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t-2 border-border-strong bg-surface-raised px-3 py-1.5 text-2xs text-text-subtle">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t-2 border-border-strong bg-surface-raised px-3 py-1.5 text-2xs text-text-subtle [@media(hover:none)]:hidden">
           <span className="flex items-center gap-1">
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd> выбрать

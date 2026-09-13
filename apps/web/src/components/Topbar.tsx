@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import clsx from 'clsx';
 import { ChevronRight, Menu as MenuIcon, Plus, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useUiStore } from '~/app/uiStore';
@@ -48,8 +49,13 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
           {breadcrumbs.map((crumb, index) => {
             const isLast = index === breadcrumbs.length - 1;
             return (
-              <li key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-2">
-                {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-text-subtle" />}
+              <li
+                key={`${crumb.label}-${index}`}
+                // On a phone the trail would truncate every crumb to a couple of
+                // letters; only the page you are on is shown, whole.
+                className={clsx('min-w-0 items-center gap-2', isLast ? 'flex' : 'hidden sm:flex')}
+              >
+                {index > 0 && <ChevronRight className="hidden size-3.5 shrink-0 text-text-subtle sm:block" />}
                 {crumb.to && !isLast ? (
                   <Link
                     to={crumb.to}

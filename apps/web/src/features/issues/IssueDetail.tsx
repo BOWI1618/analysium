@@ -248,7 +248,9 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
       <div
         className={clsx(
           'min-h-0 flex-1 overflow-y-auto scrollbar-thin',
-          variant === 'page' ? 'lg:flex lg:gap-6 lg:px-6 lg:py-5' : '',
+          // Below lg the page had no horizontal padding at all: the title and
+          // every section ran into the screen edge.
+          variant === 'page' ? 'px-4 py-4 lg:flex lg:gap-6 lg:px-6 lg:py-5' : '',
         )}
       >
         <div className={clsx(variant === 'page' ? 'min-w-0 flex-1' : 'px-4 py-4')}>
@@ -493,7 +495,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
 
         {/* ---------------------------------------------------------- sidebar */}
         <aside
-          className={clsx('shrink-0', variant === 'page' ? 'lg:w-72 lg:pt-6' : 'mt-4 px-4 pb-4')}
+          className={clsx('shrink-0', variant === 'page' ? 'mt-6 lg:mt-0 lg:w-72 lg:pt-6' : 'mt-4 px-4 pb-4')}
           aria-label="Свойства задачи"
         >
           <dl className="divide-y-2 divide-border-strong border-2 border-border-strong bg-surface shadow-lg">

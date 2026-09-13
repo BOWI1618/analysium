@@ -146,7 +146,9 @@ export function BoardPage() {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setDraggingIssue(null)}
       >
-        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-thin">
+        {/* On a phone one column fits the screen, so a swipe settles on the next
+            column instead of stopping halfway between two. */}
+        <div className="min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden scroll-px-4 scrollbar-thin sm:snap-none">
           <div className="flex h-full min-w-max items-stretch gap-4 p-4 pt-6">
             {isLoading
               ? Array.from({ length: 4 }).map((_, i) => (
@@ -216,7 +218,7 @@ function BoardColumn({
   return (
     <section
       className={clsx(
-        'flex w-72 shrink-0 flex-col border-2 border-border-strong',
+        'flex w-[min(18rem,calc(100vw-3rem))] shrink-0 snap-start flex-col border-2 border-border-strong sm:w-72',
         isActive ? 'bg-surface shadow-xl lg:-translate-y-2' : 'bg-bg-subtle shadow-md',
       )}
       aria-label={`Колонка «${column.status.name}»`}

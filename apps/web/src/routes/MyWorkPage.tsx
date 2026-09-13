@@ -139,7 +139,7 @@ export function MyWorkPage() {
           />
         ) : groupBy === 'none' ? (
           <>
-            <IssueRowHeader columns={[...DEFAULT_COLUMNS, 'project']} />
+            <IssueRowHeader columns={[...DEFAULT_COLUMNS, 'project']} selectable={false} />
             {issues.map((issue) => (
               <IssueRow
                 key={issue.id}
@@ -147,6 +147,7 @@ export function MyWorkPage() {
                 columns={[...DEFAULT_COLUMNS, 'project']}
                 selected={false}
                 onToggleSelect={() => undefined}
+                selectable={false}
                 onOpen={() => openIssue(issue.id)}
               />
             ))}
@@ -168,6 +169,7 @@ export function MyWorkPage() {
                   columns={[...DEFAULT_COLUMNS, 'project']}
                   selected={false}
                   onToggleSelect={() => undefined}
+                selectable={false}
                   onOpen={() => openIssue(issue.id)}
                 />
               ))}

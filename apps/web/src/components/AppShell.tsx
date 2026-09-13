@@ -76,8 +76,11 @@ export function AppShell() {
             onClick={() => setMobileNavOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative z-10 h-full w-64 animate-in shadow-xl">
-            <Sidebar onNavigate={() => setMobileNavOpen(false)} />
+          {/* Sized by the sidebar itself. A fixed w-64 wrapper was 12px wider
+              than the 244px rail, so the page showed through a gap and the hard
+              drop shadow drew a second black bar beyond it. */}
+          <div className="relative z-10 h-full w-fit max-w-[85vw] animate-in shadow-xl">
+            <Sidebar inDrawer onNavigate={() => setMobileNavOpen(false)} />
           </div>
         </div>
       )}

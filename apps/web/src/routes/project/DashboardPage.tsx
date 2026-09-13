@@ -61,7 +61,7 @@ export function DashboardPage() {
         ) : (
           <>
             {/* Totals */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard
                 label="В работе"
                 value={data.totals.open}
@@ -422,7 +422,7 @@ function BurndownChart({ data }: { data: { date: string; remaining: number | nul
 function DashboardSkeleton() {
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-24" />
         ))}

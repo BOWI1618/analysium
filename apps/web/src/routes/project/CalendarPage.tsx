@@ -219,14 +219,33 @@ export function CalendarPage() {
                         type="button"
                         onClick={() => openCreateIssue({ projectId })}
                         aria-label={`Добавить задачу со сроком ${format(day, 'd MMMM', { locale: ru })}`}
-                        className="ml-auto rounded-sm p-0.5 text-text-subtle opacity-0 hover:bg-surface-hover hover:text-text focus:opacity-100 [div:hover>&]:opacity-100"
+                        className="ml-auto rounded-sm p-0.5 text-text-subtle opacity-0 hover:bg-surface-hover hover:text-text focus:opacity-100 [div:hover>&]:opacity-100 [@media(hover:none)]:hidden"
                       >
                         <Plus className="size-3" />
                       </button>
                     )}
                   </div>
 
-                  <ul className="space-y-1">
+                  {/* A phone-width month cell is ~50px: chips there showed an icon
+                      and a clipped avatar, never a title. Phones get a dot per
+                      task instead, and tapping the day opens it in day view. */}
+                  {mode === 'month' && dayIssues.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnchor(day);
+                        setMode('day');
+                      }}
+                      aria-label={`Задачи на ${format(day, 'd MMMM', { locale: ru })}: ${dayIssues.length}`}
+                      className="flex w-full flex-wrap gap-1 py-1 sm:hidden"
+                    >
+                      {dayIssues.slice(0, 8).map((issue) => (
+                        <span key={issue.id} className="size-1.5 bg-accent" aria-hidden="true" />
+                      ))}
+                    </button>
+                  )}
+
+                  <ul className={clsx('space-y-1', mode === 'month' && 'hidden sm:block')}>
                     {dayIssues.map((issue) => (
                       <li key={issue.id}>
                         <button

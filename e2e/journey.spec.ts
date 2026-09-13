@@ -183,3 +183,37 @@ test.describe('основной сценарий', () => {
     await guestContext.close();
   });
 });
+
+test.describe('мобильная версия', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('боковое меню закрывается после перехода', async ({ page }) => {
+    await register(page, 'Мобильный Пользователь');
+
+    await page.getByRole('button', { name: 'Открыть меню' }).tap();
+    const closeMenu = page.getByRole('button', { name: 'Закрыть меню' });
+    await expect(closeMenu).toBeVisible();
+
+    // A link in the drawer navigates and must take the drawer away with it —
+    // it used to stay open on top of the page it had just opened.
+    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Мои задачи/ }).tap();
+    await expect(page).toHaveURL(/\/my-work$/);
+    await expect(closeMenu).toBeHidden();
+
+    // The case from the bug report: settings opened from the workspace menu
+    // inside the drawer. Menu items navigate in code, not through a link, and
+    // that path left the drawer open over the settings page.
+    await page.getByRole('button', { name: 'Открыть меню' }).tap();
+    await expect(closeMenu).toBeVisible();
+    await page.getByRole('button', { name: /пространство/ }).first().tap();
+    await page.getByRole('menuitem', { name: 'Настройки пространства' }).tap();
+    await expect(page).toHaveURL(/\/settings\/workspace$/);
+    await expect(closeMenu).toBeHidden();
+
+    // And the explicit close button works on its own.
+    await page.getByRole('button', { name: 'Открыть меню' }).tap();
+    await expect(closeMenu).toBeVisible();
+    await closeMenu.tap();
+    await expect(closeMenu).toBeHidden();
+  });
+});

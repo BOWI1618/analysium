@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   ChevronsLeft,
+  X,
   ChevronsRight,
   Home,
   Inbox,
@@ -95,12 +96,15 @@ function ProjectSwatch({ color }: { color?: string | null }) {
   );
 }
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => void; inDrawer?: boolean }) {
   const { user, workspace, workspaces, switchWorkspace, logout } = useSession();
   const { state: connection } = useRealtime();
   const navigate = useNavigate();
   const toast = useToast();
-  const collapsed = useUiStore((s) => s.sidebarCollapsed);
+  // The phone drawer is never the narrow rail: collapsing is a desktop
+  // preference, and a 56px drawer would hide every label on a small screen.
+  const collapsedPreference = useUiStore((s) => s.sidebarCollapsed);
+  const collapsed = inDrawer ? false : collapsedPreference;
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
 
@@ -187,10 +191,16 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </MenuContent>
         </Menu>
 
-        {!collapsed && (
-          <IconButton label="Свернуть панель" size="sm" variant="secondary" onClick={toggleSidebar}>
-            <ChevronsLeft className="size-4" />
+        {inDrawer ? (
+          <IconButton label="Закрыть меню" size="sm" variant="secondary" onClick={onNavigate}>
+            <X className="size-4" />
           </IconButton>
+        ) : (
+          !collapsed && (
+            <IconButton label="Свернуть панель" size="sm" variant="secondary" onClick={toggleSidebar}>
+              <ChevronsLeft className="size-4" />
+            </IconButton>
+          )
         )}
       </div>
 

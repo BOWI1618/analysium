@@ -106,6 +106,9 @@ export function ListPage() {
           });
         }}
         trailing={
+          // Hidden on phones: there every optional column is already folded
+          // away by width, so the menu toggled things nobody could see.
+          <div className="hidden sm:block">
           <Menu>
             <MenuTrigger>
               <Button size="xs" variant="ghost" iconLeft={<Columns3 className="size-3" />}>
@@ -132,6 +135,7 @@ export function ListPage() {
               ))}
             </MenuContent>
           </Menu>
+          </div>
         }
       />
 

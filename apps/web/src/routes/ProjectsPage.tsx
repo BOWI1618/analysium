@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { Archive, LayoutGrid, Plus, Star, StarOff } from 'lucide-react';
+import { Archive, FolderPlus, LayoutGrid, Plus, Star, StarOff } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useProjects, useToggleFavorite } from '~/features/projects/hooks';
 import { Topbar } from '~/components/Topbar';
@@ -32,7 +32,15 @@ export function ProjectsPage() {
         actions={
           canCreate ? (
             <Link to="/projects/new">
-              <Button size="sm" variant="secondary" iconLeft={<Plus className="size-3.5" />}>
+              {/* On phones the label is hidden, and a bare plus sat right next to
+                  the "create task" plus — two identical buttons doing different
+                  things. The folder icon keeps them apart. */}
+              <Button
+                size="sm"
+                variant="secondary"
+                iconLeft={<FolderPlus className="size-3.5" />}
+                aria-label="Новый проект"
+              >
                 <span className="hidden sm:inline">Новый проект</span>
               </Button>
             </Link>

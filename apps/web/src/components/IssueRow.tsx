@@ -49,6 +49,13 @@ export interface IssueRowProps {
   focused?: boolean;
   /** `shiftKey` extends the selection as a range, like a file manager. */
   onToggleSelect: (event: { shiftKey: boolean }) => void;
+  /**
+   * Whether this list supports selecting rows at all. Where it does not, the
+   * checkbox is left out instead of sitting there invisible: on a touch screen
+   * there is no hover to reveal it, yet tapping its empty square selected the
+   * row.
+   */
+  selectable?: boolean;
   onOpen: () => void;
   /** Inline editing is disabled when the viewer lacks permission. */
   editable?: boolean;
@@ -72,6 +79,7 @@ export const IssueRow = memo(function IssueRow({
   statuses = [],
   members = [],
   onPatch,
+  selectable = true,
 }: IssueRowProps) {
   const show = (column: ListColumn) => columns.includes(column);
 
@@ -88,7 +96,7 @@ export const IssueRow = memo(function IssueRow({
         if (event.key === 'Enter') {
           event.preventDefault();
           onOpen();
-        } else if (event.key === ' ') {
+        } else if (event.key === ' ' && selectable) {
           event.preventDefault();
           onToggleSelect({ shiftKey: event.shiftKey });
         } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -107,20 +115,24 @@ export const IssueRow = memo(function IssueRow({
         focused && 'ring-1 ring-accent ring-inset',
       )}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleSelect(event);
-        }}
-        onChange={() => undefined}
-        aria-label={`Выбрать ${issue.issueKey}`}
-        className={clsx(
-          'size-3.5 shrink-0 cursor-pointer rounded-xs accent-[var(--accent)]',
-          !selected && 'opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100',
-        )}
-      />
+      {selectable && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelect(event);
+          }}
+          onChange={() => undefined}
+          aria-label={`Выбрать ${issue.issueKey}`}
+          className={clsx(
+            'size-3.5 shrink-0 cursor-pointer rounded-xs accent-[var(--accent)]',
+            // Revealed on hover with a mouse; always shown on touch, which has no hover.
+            !selected &&
+              'opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100',
+          )}
+        />
+      )}
 
       <IssueTypeIcon type={issue.type} className="size-3.5 shrink-0" />
 
@@ -128,7 +140,8 @@ export const IssueRow = memo(function IssueRow({
         {issue.issueKey}
       </span>
 
-      <span className="min-w-40 flex-1 truncate text-sm font-bold text-text group-hover:text-accent">
+      {/* Two lines on a phone rather than a few truncated words; one line from sm up. */}
+      <span className="line-clamp-2 min-w-0 flex-1 text-sm font-bold break-words text-text group-hover:text-accent sm:line-clamp-none sm:min-w-40 sm:truncate">
         {issue.title}
         {issue.subtaskCount > 0 && (
           <span className="fd-num ml-2 text-2xs font-normal text-text-subtle">
@@ -235,7 +248,7 @@ export const IssueRow = memo(function IssueRow({
 });
 
 /** Sticky header describing the visible columns. */
-export function IssueRowHeader({ columns }: { columns: ListColumn[] }) {
+export function IssueRowHeader({ columns, selectable = true }: { columns: ListColumn[]; selectable?: boolean }) {
   const show = (column: ListColumn) => columns.includes(column);
 
   return (
@@ -243,12 +256,13 @@ export function IssueRowHeader({ columns }: { columns: ListColumn[] }) {
       role="row"
       className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-border-strong bg-surface-sunken px-3 py-1.5 text-2xs font-bold tracking-wide text-text-subtle uppercase"
     >
-      <span className="size-3.5 shrink-0" />
+      {/* Spacers mirror the row: the checkbox (only where rows are selectable) and the type icon. */}
+      {selectable && <span className="size-3.5 shrink-0" />}
       <span className="size-3.5 shrink-0" />
       <span className="shrink-0" style={{ width: 'var(--key-rail)' }}>
         Ключ
       </span>
-      <span className="min-w-40 flex-1">Задача</span>
+      <span className="min-w-0 flex-1 sm:min-w-40">Задача</span>
       {show('labels') && <span className="hidden w-32 shrink-0 xl:block">Метки</span>}
       {show('epic') && <span className="hidden w-32 shrink-0 xl:block">Эпик</span>}
       {show('project') && <span className="hidden w-24 shrink-0 xl:block">Проект</span>}
