@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AcceptInviteInput,
+  JoinWithCodeInput,
   LoginInput,
   RegisterInput,
   SessionDto,
@@ -21,6 +22,8 @@ interface SessionContextValue {
   login: (input: LoginInput) => Promise<void>;
   /** Resolves to `true` when a verification link was sent instead of a session. */
   register: (input: RegisterInput) => Promise<boolean>;
+  /** Redeems a join code. Resolves to `true` when a verification link was sent instead of a session. */
+  joinWithCode: (input: JoinWithCodeInput) => Promise<boolean>;
   /** Turns an invitation link into a signed-in account. */
   acceptInvite: (input: AcceptInviteInput) => Promise<void>;
   logout: () => Promise<void>;
@@ -81,6 +84,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const joinMutation = useMutation({
+    mutationFn: (input: JoinWithCodeInput) =>
+      api.post<SessionDto | PendingVerification>('/auth/join', input),
+    onSuccess: (result) => {
+      if ('verificationRequired' in result) return;
+      queryClient.setQueryData(qk.session, result);
+      setPreferredWorkspaceId(result.activeWorkspaceId);
+    },
+  });
+
   const acceptInviteMutation = useMutation({
     mutationFn: (input: AcceptInviteInput) => api.post<SessionDto>('/auth/accept-invite', input),
     onSuccess: (session) => {
@@ -110,11 +123,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const result = await registerMutation.mutateAsync(input);
         return 'verificationRequired' in result;
       },
+      joinWithCode: async (input) => {
+        const result = await joinMutation.mutateAsync(input);
+        return 'verificationRequired' in result;
+      },
       acceptInvite: async (input) => void (await acceptInviteMutation.mutateAsync(input)),
       logout: async () => void (await logoutMutation.mutateAsync()),
       refresh: async () => void (await queryClient.invalidateQueries({ queryKey: qk.session })),
     }),
-    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, registerMutation, acceptInviteMutation, logoutMutation, queryClient],
+    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, registerMutation, joinMutation, acceptInviteMutation, logoutMutation, queryClient],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -139,4 +156,15 @@ export function useWorkspace(): WorkspaceDto {
   return workspace;
 }
 
-
+/**
+ * Whether open sign-up is allowed. Fetched without a session, so the sign-in
+ * screens can offer the path that actually works — a closed registration form
+ * would otherwise be a dead end for someone holding a join code.
+ */
+export function useAuthConfig() {
+  return useQuery({
+    queryKey: ['auth-config'],
+    queryFn: () => api.get<{ registrationOpen: boolean }>('/auth/config'),
+    staleTime: 5 * 60_000,
+  });
+}

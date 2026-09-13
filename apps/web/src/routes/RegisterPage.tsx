@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '~/lib/api';
-import { useSession } from '~/app/session';
+import { useAuthConfig, useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
 import { Input } from '~/ui/Input';
 
 export function RegisterPage() {
   const { register } = useSession();
+  const { data: authConfig } = useAuthConfig();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ name: '', email: '', password: '', workspaceName: '' });
@@ -52,6 +53,31 @@ export function RegisterPage() {
       setPending(false);
     }
   };
+
+  // Closed sign-up: filling in the form would only end in a refusal, so point
+  // straight at the way in that works.
+  if (authConfig && !authConfig.registrationOpen) {
+    return (
+      <AuthLayout
+        title="Регистрация по приглашению"
+        subtitle="Открытая регистрация в этом пространстве выключена. Попросите у администратора код приглашения."
+        footer={
+          <>
+            Уже есть аккаунт?{' '}
+            <Link to="/login" className="font-bold text-accent hover:underline">
+              Войти
+            </Link>
+          </>
+        }
+      >
+        <Link to="/join">
+          <Button variant="primary" size="lg" fullWidth>
+            У меня есть код
+          </Button>
+        </Link>
+      </AuthLayout>
+    );
+  }
 
   // The account exists but has no session yet — nothing to do here but open the
   // message, so the form is replaced rather than left on screen half-usable.

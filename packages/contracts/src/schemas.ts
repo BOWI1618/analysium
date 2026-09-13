@@ -77,6 +77,20 @@ export const verifyEmailSchema = z.object({
 });
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 
+export const createInviteCodeSchema = z.object({
+  role: z.enum(WORKSPACE_ROLES as [string, ...string[]]),
+});
+export type CreateInviteCodeInput = z.infer<typeof createInviteCodeSchema>;
+
+export const joinWithCodeSchema = z.object({
+  /** Typed by a person, so separators and case are forgiven server-side. */
+  code: z.string().trim().min(4).max(32),
+  name: z.string().trim().min(2).max(80),
+  email: z.string().trim().toLowerCase().email().max(200),
+  password: passwordSchema,
+});
+export type JoinWithCodeInput = z.infer<typeof joinWithCodeSchema>;
+
 export const acceptInviteSchema = z.object({
   token: z.string().min(10).max(200),
   name: z.string().trim().min(2).max(80),

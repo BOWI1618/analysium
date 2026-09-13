@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '~/lib/api';
-import { useSession } from '~/app/session';
+import { useAuthConfig, useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
 import { Input } from '~/ui/Input';
@@ -11,6 +11,7 @@ const DEMO = { email: 'alex@acme.test', password: 'demo1234' };
 
 export function LoginPage() {
   const { login } = useSession();
+  const { data: authConfig } = useAuthConfig();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/';
@@ -51,10 +52,18 @@ export function LoginPage() {
       subtitle="С возвращением — продолжим с того же места."
       footer={
         <>
-          Впервые здесь?{' '}
-          <Link to="/register" className="font-bold text-accent hover:underline">
-            Создать аккаунт
+          Есть код приглашения?{' '}
+          <Link to="/join" className="font-bold text-accent hover:underline">
+            Присоединиться
           </Link>
+          {authConfig?.registrationOpen && (
+            <>
+              {' · '}
+              <Link to="/register" className="font-bold text-accent hover:underline">
+                Создать аккаунт
+              </Link>
+            </>
+          )}
         </>
       }
     >

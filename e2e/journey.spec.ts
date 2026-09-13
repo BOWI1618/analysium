@@ -153,23 +153,23 @@ test.describe('основной сценарий', () => {
     const guestEmail = `guest-${unique()}@test.local`;
     await page.goto('/settings/workspace');
     await page.getByRole('button', { name: 'Участники' }).click();
-    await page.getByLabel('Почта').fill(guestEmail);
-    await page.getByLabel('Роль').selectOption('GUEST');
-    await page.getByRole('button', { name: 'Добавить' }).click();
+    await page.getByLabel('Роль').first().selectOption('GUEST');
+    await page.getByRole('button', { name: 'Создать код' }).click();
 
-    // Mail is off here, so the link on screen is the only way in — the same
-    // situation as a server without SMTP.
-    const linkField = page.getByLabel('Ссылка приглашения');
-    await expect(linkField).toBeVisible({ timeout: 15_000 });
-    const inviteUrl = await linkField.inputValue();
+    // The code is shown once, on creation — the only moment it exists in plain.
+    const codeBox = page.getByLabel('Код приглашения');
+    await expect(codeBox).toBeVisible({ timeout: 15_000 });
+    const code = (await codeBox.textContent())!.trim();
 
-    // The guest opens it in a browser of their own.
+    // The guest joins from a browser of their own, choosing their own details.
     const guestContext = await browser.newContext();
     const guest = await guestContext.newPage();
-    await guest.goto(inviteUrl);
+    await guest.goto('/join');
+    await guest.getByLabel('Код приглашения').fill(code);
     await guest.getByLabel('Ваше имя').fill('Гость Пространства');
+    await guest.getByLabel('Почта для входа').fill(guestEmail);
     await guest.getByLabel('Пароль').fill('guest12345');
-    await guest.getByRole('button', { name: 'Принять приглашение' }).click();
+    await guest.getByRole('button', { name: 'Присоединиться' }).click();
     await expect(guest.getByRole('heading', { level: 1 })).toContainText('Гость', { timeout: 20_000 });
 
     // Signed in, but a guest outside the project must not be able to add work

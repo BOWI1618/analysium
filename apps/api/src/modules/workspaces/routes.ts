@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
   createWorkspaceSchema,
+  createInviteCodeSchema,
   inviteMemberSchema,
   paginationSchema,
   updateMemberSchema,
@@ -11,6 +12,7 @@ import { parse } from '../../lib/validate';
 import { workspaceContext } from '../../lib/context';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import * as service from './service';
+import * as inviteCodes from './inviteCodes';
 
 interface WorkspaceParams {
   workspaceId: string;
@@ -50,6 +52,27 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
     const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
     return service.listMembers(actor);
   });
+
+  app.get<{ Params: WorkspaceParams }>('/workspaces/:workspaceId/invite-codes', async (req) => {
+    const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
+    return inviteCodes.listInviteCodes(actor);
+  });
+
+  app.post<{ Params: WorkspaceParams }>('/workspaces/:workspaceId/invite-codes', async (req, reply) => {
+    const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
+    const { role } = parse(createInviteCodeSchema, req.body);
+    const created = await inviteCodes.createInviteCode(actor, role as WorkspaceRole, req.ip);
+    return reply.status(201).send(created);
+  });
+
+  app.delete<{ Params: WorkspaceParams & { codeId: string } }>(
+    '/workspaces/:workspaceId/invite-codes/:codeId',
+    async (req, reply) => {
+      const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
+      await inviteCodes.revokeInviteCode(actor, req.params.codeId);
+      return reply.status(204).send();
+    },
+  );
 
   app.post<{ Params: WorkspaceParams }>('/workspaces/:workspaceId/members', async (req, reply) => {
     const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);

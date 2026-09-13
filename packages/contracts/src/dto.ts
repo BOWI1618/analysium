@@ -56,6 +56,21 @@ export interface MemberDto {
   invite?: { url: string; emailSent: boolean };
 }
 
+/** An unused join code as the admin sees it. The code itself is never listed:
+ *  only its hash is stored, so it is shown exactly once, when created. */
+export interface InviteCodeDto {
+  id: string;
+  role: WorkspaceRole;
+  createdAt: string;
+  expiresAt: string;
+  createdBy: { id: string; name: string } | null;
+}
+
+/** Returned once, at creation — the only moment the plain code exists. */
+export interface CreatedInviteCodeDto extends InviteCodeDto {
+  code: string;
+}
+
 export interface StatusDto {
   id: string;
   name: string;

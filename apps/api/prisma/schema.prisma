@@ -167,16 +167,24 @@ model WorkspaceMember {
   @@map("workspace_members")
 }
 
+/// A join code for a workspace.
+///
+/// Not tied to an address: whoever holds the code picks their own name, e-mail
+/// and password when redeeming it. That is what makes it usable without mail —
+/// the admin hands the code over however they like. Only the hash is stored,
+/// each code works once, and it expires.
 model Invitation {
-  id          String        @id @default(cuid())
-  workspaceId String
-  email       String
-  role        WorkspaceRole @default(MEMBER)
-  tokenHash   String        @unique
-  invitedById String
-  acceptedAt  DateTime?
-  expiresAt   DateTime
-  createdAt   DateTime      @default(now())
+  id           String        @id @default(cuid())
+  workspaceId  String
+  /// Legacy: codes carry no address. Kept nullable so the column can stay.
+  email        String?
+  role         WorkspaceRole @default(MEMBER)
+  tokenHash    String        @unique
+  invitedById  String
+  acceptedAt   DateTime?
+  acceptedById String?
+  expiresAt    DateTime
+  createdAt    DateTime      @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 

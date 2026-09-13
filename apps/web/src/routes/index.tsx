@@ -7,6 +7,7 @@ import { LoginPage } from './LoginPage';
 import { RegisterPage } from './RegisterPage';
 import { VerifyEmailPage } from './VerifyEmailPage';
 import { AcceptInvitePage } from './AcceptInvitePage';
+import { JoinPage } from './JoinPage';
 import { HomePage } from './HomePage';
 import { MyWorkPage } from './MyWorkPage';
 import { InboxPage } from './InboxPage';
@@ -85,6 +86,14 @@ export function AppRoutes() {
             a session — an invited account does not even have a password yet. */}
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/accept-invite" element={<AcceptInvitePage />} />
+        <Route
+          path="/join"
+          element={
+            <RedirectIfSignedIn>
+              <JoinPage />
+            </RedirectIfSignedIn>
+          }
+        />
         <Route
           path="/workspaces/new"
           element={

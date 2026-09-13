@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import type { AuditLogDto, WorkspaceRole } from '@flowdesk/contracts';
+import type { AuditLogDto, CreatedInviteCodeDto, WorkspaceRole } from '@flowdesk/contracts';
 import { Permission, WORKSPACE_ROLES, can, outranks } from '@flowdesk/contracts';
 import { Check, Copy, Link2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { api } from '~/lib/api';
@@ -9,8 +9,10 @@ import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
 import { useRealtime } from '~/app/realtime';
 import {
-  useInviteMember,
+  useCreateInviteCode,
+  useInviteCodes,
   useMembers,
+  useRevokeInviteCode,
   useRemoveMember,
   useUpdateMemberRole,
   useUpdateWorkspace,
@@ -173,56 +175,44 @@ function MembersSection() {
   const { onlineUserIds } = useRealtime();
 
   const { data: members, isLoading } = useMembers(workspaceId);
-  const invite = useInviteMember(workspaceId);
   const updateRole = useUpdateMemberRole(workspaceId);
   const removeMember = useRemoveMember(workspaceId);
 
-  const [email, setEmail] = useState('');
+  // Computed before the early return: the codes query below is a hook and has
+  // to run on every render, and only managers are allowed to list codes.
+  const canManage =
+    workspace && user
+      ? can({ userId: user.id, workspaceId, workspaceRole: workspace.role }, Permission.WORKSPACE_MANAGE_MEMBERS)
+      : false;
+  const { data: codes } = useInviteCodes(workspaceId, canManage);
+  const createCode = useCreateInviteCode(workspaceId);
+  const revokeCode = useRevokeInviteCode(workspaceId);
+
   const [role, setRole] = useState<string>('MEMBER');
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
-  const [lastInvite, setLastInvite] = useState<{ email: string; url: string; emailSent: boolean } | null>(null);
-
-  const sendInvite = (inviteEmail: string, inviteRole: string, onDone?: () => void) =>
-    invite.mutate(
-      { email: inviteEmail, role: inviteRole },
-      {
-        onSuccess: (member) => {
-          if (member.invite) setLastInvite({ email: member.user.email, ...member.invite });
-          onDone?.();
-        },
-      },
-    );
+  const [created, setCreated] = useState<CreatedInviteCodeDto | null>(null);
 
   if (!workspace || !user) return null;
-  const actor = { userId: user.id, workspaceId, workspaceRole: workspace.role };
-  const canManage = can(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
 
   return (
     <>
       {canManage && (
-        <Card title="Добавить участника" description="Существующие аккаунты попадают в пространство сразу. Новым людям уходит ссылка-приглашение.">
+        <Card
+          title="Пригласить в команду"
+          description="Создайте код и передайте его человеку. Он введёт код на странице входа, а имя, почту и пароль задаст сам."
+        >
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!email.trim()) return;
-              sendInvite(email.trim(), role, () => setEmail(''));
+              createCode.mutate(role, { onSuccess: (code) => setCreated(code) });
             }}
           >
-            <div className="min-w-48 flex-1">
-              <Input
-                label="Почта"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="coworker@company.com"
-              />
-            </div>
             <Select
               label="Роль"
               value={role}
               onChange={(event) => setRole((event.target as HTMLSelectElement).value)}
-              className="w-36"
+              className="w-40"
             >
               {WORKSPACE_ROLES.filter((r) => r !== 'OWNER').map((option) => (
                 <option key={option} value={option}>
@@ -230,12 +220,44 @@ function MembersSection() {
                 </option>
               ))}
             </Select>
-            <Button type="submit" variant="secondary" iconLeft={<Plus className="size-3.5" />} loading={invite.isPending}>
-              Добавить
+            <Button type="submit" variant="secondary" iconLeft={<Plus className="size-3.5" />} loading={createCode.isPending}>
+              Создать код
             </Button>
           </form>
 
-          {lastInvite && <InviteLinkPanel invite={lastInvite} onClose={() => setLastInvite(null)} />}
+          {created && <InviteCodePanel invite={created} onClose={() => setCreated(null)} />}
+
+          {codes && codes.length > 0 && (
+            <div className="mt-4">
+              <p className="fd-eyebrow mb-2">Действующие коды</p>
+              <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
+                {codes.map((code) => (
+                  <li key={code.id} className="flex flex-wrap items-center gap-2.5 p-2.5 text-xs">
+                    <Badge tone="neutral">{ROLE_LABEL[code.role]}</Badge>
+                    <span className="min-w-0 flex-1 text-text-muted">
+                      {code.createdBy ? `создал(а) ${code.createdBy.name}` : 'создатель удалён'} ·{' '}
+                      <span title={fullDate(code.createdAt)}>{relativeTime(code.createdAt)}</span>
+                    </span>
+                    <span className="fd-num text-text-subtle" title={fullDate(code.expiresAt)}>
+                      до {fullDate(code.expiresAt)}
+                    </span>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      loading={revokeCode.isPending && revokeCode.variables === code.id}
+                      onClick={() => revokeCode.mutate(code.id)}
+                    >
+                      Отозвать
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-2xs text-text-subtle">
+                Сам код здесь не показывается — он хранится в зашифрованном виде и виден только при создании.
+                Потеряли — отзовите и создайте новый.
+              </p>
+            </div>
+          )}
         </Card>
       )}
 
@@ -270,17 +292,6 @@ function MembersSection() {
                   </div>
 
                   {member.user.status === 'INVITED' && <Badge tone="warning">Приглашён</Badge>}
-                  {member.user.status === 'INVITED' && canChange && (
-                    <Button
-                      size="xs"
-                      variant="secondary"
-                      iconLeft={<Link2 className="size-3" />}
-                      loading={invite.isPending && invite.variables?.email === member.user.email}
-                      onClick={() => sendInvite(member.user.email, member.role)}
-                    >
-                      Ссылка
-                    </Button>
-                  )}
 
                   <span className="fd-num hidden text-2xs text-text-subtle sm:inline">
                     {member.user.lastActiveAt ? relativeTime(member.user.lastActiveAt) : 'не заходил(а)'}
@@ -336,59 +347,57 @@ function MembersSection() {
 }
 
 /**
- * The link from the latest invitation.
+ * The code that was just created.
  *
- * Shown whether or not the e-mail went out: without SMTP it is the only way the
- * invitation reaches anyone, and even with it a message can land in spam. The
- * link is single-use, so handing it over by messenger is as safe as mailing it.
+ * This is the only time it can be shown: the server keeps a hash, not the code.
+ * Both forms are offered — the bare code to dictate or type, and a link that
+ * opens the join page with the code already filled in.
  */
-function InviteLinkPanel({
-  invite,
-  onClose,
-}: {
-  invite: { email: string; url: string; emailSent: boolean };
-  onClose: () => void;
-}) {
-  const [copied, setCopied] = useState(false);
+function InviteCodePanel({ invite, onClose }: { invite: CreatedInviteCodeDto; onClose: () => void }) {
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const link = `${window.location.origin}/join?code=${encodeURIComponent(invite.code)}`;
 
-  const copy = async () => {
+  const copy = async (what: 'code' | 'link') => {
     try {
-      await navigator.clipboard.writeText(invite.url);
+      await navigator.clipboard.writeText(what === 'code' ? invite.code : link);
     } catch {
-      // Clipboard access can be refused; selecting the text still lets the
-      // admin copy it by hand.
-      document.getElementById('invite-link')?.focus();
+      // Clipboard access can be refused; the values stay selectable on screen.
       return;
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    setCopied(what);
+    window.setTimeout(() => setCopied(null), 2000);
   };
 
   return (
     <div className="mt-3 border-2 border-border-strong bg-surface-sunken p-3">
-      <p className="text-sm font-bold">Приглашение для {invite.email}</p>
+      <p className="text-sm font-bold">Код для роли «{ROLE_LABEL[invite.role]}»</p>
       <p className="mt-0.5 text-xs text-text-muted">
-        {invite.emailSent
-          ? 'Письмо отправлено. Если оно не дойдёт, перешлите ссылку сами — например, в мессенджере.'
-          : 'Письмо не отправлено: почта не настроена или сервер недоступен. Перешлите ссылку сами.'}{' '}
-        Ссылка одноразовая, по ней человек задаст имя и пароль.
+        Скопируйте сейчас — после закрытия код больше не покажется. Он одноразовый и действует до{' '}
+        {fullDate(invite.expiresAt)}.
       </p>
-      <div className="mt-2 flex gap-2">
-        <input
-          id="invite-link"
-          readOnly
-          value={invite.url}
-          onFocus={(event) => event.target.select()}
-          aria-label="Ссылка приглашения"
-          className="fd-num h-8 min-w-0 flex-1 border-2 border-border-strong bg-surface px-2 text-xs"
-        />
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span
+          aria-label="Код приглашения"
+          className="fd-num select-all border-2 border-border-strong bg-surface px-3 py-1.5 text-xl font-bold tracking-[0.2em]"
+        >
+          {invite.code}
+        </span>
         <Button
           size="sm"
           variant="primary"
-          iconLeft={copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          onClick={() => void copy()}
+          iconLeft={copied === 'code' ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          onClick={() => void copy('code')}
         >
-          {copied ? 'Скопировано' : 'Скопировать'}
+          {copied === 'code' ? 'Скопировано' : 'Код'}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          iconLeft={copied === 'link' ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
+          onClick={() => void copy('link')}
+        >
+          {copied === 'link' ? 'Скопировано' : 'Ссылка с кодом'}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose}>
           Готово

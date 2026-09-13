@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
   acceptInviteSchema,
+  joinWithCodeSchema,
   loginSchema,
   registerSchema,
   resendVerificationSchema,
@@ -22,6 +23,7 @@ import {
 import { buildSession, login, register } from './service';
 import { acceptInvite, sendVerificationEmail, verificationRequired, verifyEmail } from './verification';
 import { prisma } from '../../lib/prisma';
+import { joinWithCode } from './join';
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // Credential endpoints get a much tighter budget than the global limit.
@@ -29,9 +31,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     config: { rateLimit: { max: env.AUTH_RATE_LIMIT_MAX, timeWindow: '5 minutes' } },
   };
 
+  // What the sign-in screens need to know before anyone is signed in: whether
+  // to offer "create an account" at all, or only joining with a code.
+  app.get('/auth/config', async () => ({ registrationOpen: env.ALLOW_PUBLIC_REGISTRATION }));
+
   app.post('/auth/register', strictLimit, async (req, reply) => {
     if (!env.ALLOW_PUBLIC_REGISTRATION) {
-      throw forbidden('Регистрация закрыта. Попросите приглашение у администратора пространства.');
+      throw forbidden('Регистрация закрыта. Попросите у администратора пространства код приглашения.');
     }
     const input = parse(registerSchema, req.body);
     const user = await register(input, req.ip);
@@ -56,6 +62,25 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const { token } = parse(verifyEmailSchema, req.body);
     await verifyEmail(token);
     return reply.status(204).send();
+  });
+
+  app.post('/auth/join', strictLimit, async (req, reply) => {
+    const input = parse(joinWithCodeSchema, req.body);
+    const { user } = await joinWithCode(input, req.ip);
+
+    // Same fork as registration: with mail on the address has to be proven
+    // before a session exists; with it off the person is simply in.
+    if (verificationRequired()) {
+      await sendVerificationEmail(user);
+      return reply.status(201).send({ verificationRequired: true, email: user.email });
+    }
+
+    const { token, expiresAt } = await createSession(user.id, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+    });
+    setSessionCookie(reply, token, expiresAt);
+    return reply.status(201).send(await buildSession(user.id));
   });
 
   app.post('/auth/accept-invite', strictLimit, async (req, reply) => {

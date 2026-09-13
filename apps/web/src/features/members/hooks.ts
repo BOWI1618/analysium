@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { MemberDto, WorkspaceDto } from '@flowdesk/contracts';
+import type { CreatedInviteCodeDto, InviteCodeDto, MemberDto, WorkspaceDto } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
-import { ROLE_LABEL } from '~/lib/labels';
 import { useToast } from '~/app/toast';
 
 export function useMembers(workspaceId: string | undefined) {
@@ -14,22 +13,37 @@ export function useMembers(workspaceId: string | undefined) {
   });
 }
 
-export function useInviteMember(workspaceId: string) {
+export function useInviteCodes(workspaceId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: qk.inviteCodes(workspaceId ?? ''),
+    queryFn: () => api.get<InviteCodeDto[]>(`/workspaces/${workspaceId}/invite-codes`),
+    enabled: Boolean(workspaceId) && enabled,
+  });
+}
+
+export function useCreateInviteCode(workspaceId: string) {
   const queryClient = useQueryClient();
   const toast = useToast();
 
   return useMutation({
-    mutationFn: (input: { email: string; role: string }) =>
-      api.post<MemberDto>(`/workspaces/${workspaceId}/members`, input),
-    onSuccess: (member) => {
-      void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
-      // A pending invitation is reported by the panel with the link, not a
-      // toast: the admin needs something to copy, not a message that fades.
-      if (!member.invite) {
-        toast.success(`${member.user.email} добавлен(а)`, `Роль: ${ROLE_LABEL[member.role] ?? member.role}`);
-      }
+    mutationFn: (role: string) =>
+      api.post<CreatedInviteCodeDto>(`/workspaces/${workspaceId}/invite-codes`, { role }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.inviteCodes(workspaceId) }),
+    onError: (error) => toast.error(error, 'Не удалось создать код'),
+  });
+}
+
+export function useRevokeInviteCode(workspaceId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (codeId: string) => api.delete<void>(`/workspaces/${workspaceId}/invite-codes/${codeId}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.inviteCodes(workspaceId) });
+      toast.success('Код отозван', 'Войти по нему больше нельзя.');
     },
-    onError: (error) => toast.error(error, 'Не удалось пригласить участника'),
+    onError: (error) => toast.error(error, 'Не удалось отозвать код'),
   });
 }
 
