@@ -168,13 +168,15 @@ export const updateMemberSchema = z.object({
 
 export const createProjectSchema = z.object({
   name: z.string().trim().min(2).max(80),
+  /** Normally left out: the server derives a unique key from the name. */
   key: z
     .string()
     .trim()
     .toUpperCase()
     .min(2)
     .max(6)
-    .regex(/^[A-Z][A-Z0-9]+$/, '2–6 заглавных латинских букв или цифр, первая — буква'),
+    .regex(/^[A-Z][A-Z0-9]+$/, '2–6 заглавных латинских букв или цифр, первая — буква')
+    .optional(),
   description: z.string().trim().max(2000).optional(),
   icon: z.string().max(8).optional(),
   color: hexColor.optional(),

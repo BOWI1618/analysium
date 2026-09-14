@@ -11,19 +11,8 @@ import { Input, Select, Textarea } from '~/ui/Input';
 import { PROJECT_ICONS, PROJECT_COLORS } from '~/lib/projectMeta';
 import { Marker, Masthead } from '~/ui/Masthead';
 
-/** Derives a project key from the name: "Mobile App" → "MOB". */
-function suggestKey(name: string): string {
-  const words = name.trim().toUpperCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '';
-  if (words.length === 1) return words[0]!.replace(/[^A-Z0-9]/g, '').slice(0, 4);
-  return words
-    .map((word) => word.replace(/[^A-Z0-9]/g, '')[0] ?? '')
-    .join('')
-    .slice(0, 4);
-}
-
 export function NewProjectPage() {
-  const { workspace } = useSession();
+  const { workspace, user } = useSession();
   const navigate = useNavigate();
   const workspaceId = workspace?.id ?? '';
 
@@ -32,14 +21,12 @@ export function NewProjectPage() {
 
   const [form, setForm] = useState({
     name: '',
-    key: '',
     description: '',
     icon: PROJECT_ICONS[0]!.name,
     color: PROJECT_COLORS[0]!.value,
     projectType: 'KANBAN',
     leadId: '',
   });
-  const [keyTouched, setKeyTouched] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const submit = async (event: React.FormEvent) => {
@@ -47,8 +34,8 @@ export function NewProjectPage() {
     setFieldErrors({});
     try {
       const project = await createProject.mutateAsync({
+        // No key: the server derives a unique one from the name.
         name: form.name.trim(),
-        key: form.key.trim().toUpperCase(),
         description: form.description.trim() || undefined,
         icon: form.icon,
         color: form.color,
@@ -85,26 +72,8 @@ export function NewProjectPage() {
               required
               value={form.name}
               error={fieldErrors.name}
-              onChange={(event) => {
-                const name = event.target.value;
-                setForm((f) => ({ ...f, name, key: keyTouched ? f.key : suggestKey(name) }));
-              }}
+              onChange={(event) => setForm((f) => ({ ...f, name: event.target.value }))}
               placeholder="Мобильное приложение"
-            />
-
-            <Input
-              label="Ключ"
-              required
-              value={form.key}
-              error={fieldErrors.key}
-              onChange={(event) => {
-                setKeyTouched(true);
-                setForm((f) => ({ ...f, key: event.target.value.toUpperCase() }));
-              }}
-              hint="2–6 символов. Задачи получат номера вида MOB-1, MOB-2 — изменить потом нельзя."
-              maxLength={6}
-              className="fd-num uppercase"
-              placeholder="MOB"
             />
 
             <Textarea
@@ -186,7 +155,8 @@ export function NewProjectPage() {
               onChange={(event) => setForm((f) => ({ ...f, leadId: (event.target as HTMLSelectElement).value }))}
             >
               <option value="">Я</option>
-              {members?.map((member) => (
+              {/* "Я" above already stands for the current user. */}
+              {members?.filter((member) => member.user.id !== user?.id).map((member) => (
                 <option key={member.user.id} value={member.user.id}>
                   {member.user.name}
                 </option>
@@ -202,7 +172,7 @@ export function NewProjectPage() {
               type="submit"
               variant="primary"
               loading={createProject.isPending}
-              disabled={!form.name.trim() || form.key.trim().length < 2}
+              disabled={!form.name.trim()}
             >
               Создать проект
             </Button>

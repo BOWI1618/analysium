@@ -8,16 +8,6 @@ import { expect, test, type Page } from '@playwright/test';
 const password = 'password123';
 const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-/** Project keys must start with a letter, so digits are never used as the seed. */
-let keyCounter = 0;
-const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-function projectKey(prefix: string): string {
-  keyCounter += 1;
-  const a = LETTERS[keyCounter % 26]!;
-  const b = LETTERS[Math.floor(Math.random() * 26)]!;
-  return `${prefix}${a}${b}`;
-}
-
 async function register(page: Page, name: string) {
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill(name);
@@ -30,10 +20,9 @@ async function register(page: Page, name: string) {
   });
 }
 
-async function createProject(page: Page, key: string) {
+async function createProject(page: Page) {
   await page.goto('/projects/new');
   await page.getByLabel('Название').fill('План проекта');
-  await page.getByLabel('Ключ').fill(key);
   await page.getByRole('button', { name: 'Создать проект' }).click();
   // `/projects/new` also matches a loose pattern — assert we actually navigated
   // to a created project, or a validation failure would leak "new" as the id.
@@ -64,13 +53,13 @@ async function createScheduledIssue(
 test.describe('диаграмма Ганта', () => {
   test('показывает запланированную работу и связи', async ({ page }) => {
     await register(page, 'Галина Планова');
-    const projectId = await createProject(page, projectKey('G'));
+    const projectId = await createProject(page);
 
     const first = await createScheduledIssue(page, projectId, 'Подготовить макеты', 1, 5);
     const second = await createScheduledIssue(page, projectId, 'Свёрстать страницу', 6, 10);
 
     await test.step('пустая шкала объясняет, чего не хватает', async () => {
-      const empty = await createProject(page, projectKey('E'));
+      const empty = await createProject(page);
       await page.goto(`/projects/${empty}/gantt`);
       await expect(page.getByText('Нечего показать на диаграмме')).toBeVisible({ timeout: 20_000 });
     });
@@ -118,7 +107,7 @@ test.describe('диаграмма Ганта', () => {
 
   test('перенос предлагает сдвинуть зависимые задачи', async ({ page }) => {
     await register(page, 'Роман Сдвигов');
-    const projectId = await createProject(page, projectKey('S'));
+    const projectId = await createProject(page);
 
     const first = await createScheduledIssue(page, projectId, 'Первый этап', 1, 3);
     const second = await createScheduledIssue(page, projectId, 'Второй этап', 4, 8);

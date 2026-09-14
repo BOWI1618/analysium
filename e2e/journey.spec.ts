@@ -28,10 +28,9 @@ async function register(page: Page, name: string) {
   return email;
 }
 
-async function createProject(page: Page, name: string, key: string) {
+async function createProject(page: Page, name: string) {
   await page.goto('/projects/new');
   await page.getByLabel('Название').fill(name);
-  await page.getByLabel('Ключ').fill(key);
   await page.getByRole('button', { name: 'Создать проект' }).click();
   // `/projects/new` itself matches a bare `/projects/<segment>` pattern, which
   // let this wait succeed before the redirect — exclude it explicitly.
@@ -40,15 +39,13 @@ async function createProject(page: Page, name: string, key: string) {
 
 test.describe('основной сценарий', () => {
   test('от регистрации до завершённой задачи', async ({ page }) => {
-    const key = `E${unique().slice(0, 2).toUpperCase()}`;
-
     await test.step('регистрация создаёт пространство', async () => {
       await register(page, 'Ольга Тестова');
       await expect(page.getByRole('button', { name: 'Команда E2E' })).toBeVisible();
     });
 
     await test.step('создание проекта открывает его доску', async () => {
-      await createProject(page, 'Проект E2E', key);
+      await createProject(page, 'Проект E2E');
       await page.getByRole('link', { name: 'Доска' }).click();
       await expect(page.getByRole('region', { name: /Колонка «Бэклог»/ })).toBeVisible();
     });
@@ -127,7 +124,7 @@ test.describe('основной сценарий', () => {
 
   test('поиск находит задачу по названию', async ({ page }) => {
     await register(page, 'Пётр Поиск');
-    await createProject(page, 'Поисковый проект', `S${unique().slice(0, 2).toUpperCase()}`);
+    await createProject(page, 'Поисковый проект');
 
     await page.locator('body').click();
     await page.keyboard.press('Control+Alt+n');
@@ -147,7 +144,7 @@ test.describe('основной сценарий', () => {
   test('гость не может создавать задачи', async ({ page, browser }) => {
     // The owner sets up a project and invites a guest.
     await register(page, 'Хозяин Пространства');
-    await createProject(page, 'Закрытый проект', `G${unique().slice(0, 2).toUpperCase()}`);
+    await createProject(page, 'Закрытый проект');
     const projectId = new URL(page.url()).pathname.split('/')[2]!;
 
     const guestEmail = `guest-${unique()}@test.local`;

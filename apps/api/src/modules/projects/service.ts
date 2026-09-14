@@ -13,6 +13,7 @@ import { conflict, forbidden, notFound, badRequest } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { emit } from '../../realtime/eventBus';
 import { DEFAULT_LABELS, DEFAULT_STATUSES, isDoneCategory, nextCompletedAt } from '../../domain/issueRules';
+import { uniqueProjectKey } from './key';
 import { labelSelect, statusSelect, toLabel, toSprint, toStatus, toUserSummary, sprintInclude } from '../../lib/serialize';
 
 const projectSelect = {
@@ -101,11 +102,19 @@ export async function createProject(
 ): Promise<ProjectDetailDto> {
   assertCan(actor, Permission.PROJECT_CREATE);
 
-  const existing = await prisma.project.findUnique({
-    where: { workspaceId_key: { workspaceId: actor.workspaceId, key: input.key } },
-    select: { id: true },
-  });
-  if (existing) throw conflict('Такой ключ проекта уже занят', { key: 'Такой ключ уже занят' });
+  let key = input.key;
+  if (key) {
+    const existing = await prisma.project.findUnique({
+      where: { workspaceId_key: { workspaceId: actor.workspaceId, key } },
+      select: { id: true },
+    });
+    if (existing) throw conflict('Такой ключ проекта уже занят', { key: 'Такой ключ уже занят' });
+  } else {
+    // Archived projects and the list of tasks without a project keep their
+    // keys too, so every key in the workspace counts as taken.
+    const taken = await prisma.project.findMany({ where: { workspaceId: actor.workspaceId }, select: { key: true } });
+    key = uniqueProjectKey(input.name, new Set(taken.map((p) => p.key)));
+  }
   if (input.leadId) await assertLeadIsMember(actor.workspaceId, input.leadId);
 
   const project = await prisma.$transaction(async (tx) => {
@@ -113,7 +122,7 @@ export async function createProject(
       data: {
         workspaceId: actor.workspaceId,
         name: input.name,
-        key: input.key,
+        key,
         description: input.description ?? null,
         icon: input.icon ?? '📦',
         color: input.color ?? '#6366f1',

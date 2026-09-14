@@ -94,6 +94,21 @@ describe('задачи без проекта', () => {
     expect(created.json().issueKey).not.toMatch(/^TASK-/);
   });
 
+  it('ключ проекта создаётся сам, из русского названия и без повторов', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Ключи сами' });
+    const create = () =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/workspaces/${owner.workspaceId}/projects`,
+        headers: { cookie: owner.cookie },
+        payload: { name: 'Алабуга Старт' },
+      });
+    const first = await create();
+    expect(first.statusCode).toBe(201);
+    expect(first.json().key).toBe('AS');
+    expect((await create()).json().key).toBe('AS2');
+  });
+
   it('без проекта и без пространства запрос отклоняется', async () => {
     const owner = await registerUser(app, { workspaceName: 'Нет адресата' });
     const response = await app.inject({
