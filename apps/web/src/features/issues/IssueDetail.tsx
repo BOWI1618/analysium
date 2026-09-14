@@ -121,7 +121,9 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
   // to detect that a teammate saved while we were typing.
   const descriptionBaseRef = useRef<unknown>(undefined);
 
-  const members = useMemo<UserSummaryDto[]>(() => project?.members.map((m) => m.user) ?? [], [project]);
+  // Everyone who can open this project — the explicit role list would leave out
+  // most of the team (a new project holds only its lead).
+  const members = useMemo<UserSummaryDto[]>(() => project?.assignees ?? [], [project]);
   const epics = useMemo(
     () => (epicPages?.pages.flatMap((p) => p.items) ?? []).filter((e) => e.id !== issue.id),
     [epicPages, issue.id],
@@ -620,7 +622,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
               </Field>
             )}
 
-            <Field label="Стори-поинты">
+            <Field label="Оценка (сторипоинты)">
               <input
                 type="number"
                 min={0}

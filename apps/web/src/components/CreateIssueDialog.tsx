@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { CreateIssueInput, IssuePriority, IssueType } from '@flowdesk/contracts';
 import { EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
-import { ChevronDown, CornerDownLeft } from 'lucide-react';
+import { ChevronDown, CornerDownLeft, FolderPlus } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useToast } from '~/app/toast';
@@ -29,6 +30,7 @@ export function CreateIssueDialog() {
   const openIssue = useUiStore((s) => s.openIssue);
   const { workspace } = useSession();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const { data: projects } = useProjects(workspace?.id ?? '');
   const [projectId, setProjectId] = useState<string>('');
@@ -119,7 +121,7 @@ export function CreateIssueDialog() {
     if (first) setProjectId(first);
   }, [open, projectId, projects]);
 
-  const members = project?.members.map((m) => m.user) ?? [];
+  const members = project?.assignees ?? [];
   const statuses = project?.statuses ?? [];
   const selectedStatus = statuses.find((s) => s.id === statusId) ?? statuses[0];
   const canSubmit = title.trim().length > 0 && Boolean(projectId) && !createIssue.isPending;
@@ -165,6 +167,42 @@ export function CreateIssueDialog() {
   };
 
   if (!projects) return null;
+
+  // Tasks live in projects. With none yet, the form had nothing to offer: an
+  // empty project dropdown, nobody to assign, and a Create button that could
+  // never enable. Say why and point at the one step that unblocks it.
+  if (projects.length === 0) {
+    return (
+      <Dialog
+        open={open}
+        onClose={close}
+        title="Новая задача"
+        footer={
+          <div className="ml-auto flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={close}>
+              Закрыть
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              iconLeft={<FolderPlus className="size-3.5" />}
+              onClick={() => {
+                close();
+                navigate('/projects/new');
+              }}
+            >
+              Создать проект
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-text-muted">
+          Задачи создаются внутри проекта, а в пространстве пока нет ни одного. Создайте первый — доска,
+          список и участники появятся сразу, и сюда можно будет вернуться.
+        </p>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog
@@ -356,9 +394,10 @@ export function CreateIssueDialog() {
             max={100}
             value={storyPoints}
             onChange={(event) => setStoryPoints(event.target.value)}
-            placeholder="СП"
-            aria-label="Стори-поинты"
-            className="h-7 w-16 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
+            placeholder="Оценка"
+            aria-label="Оценка сложности в сторипоинтах"
+            title="Оценка сложности в сторипоинтах: условные единицы, чтобы сравнивать задачи между собой. Необязательно."
+            className="h-7 w-20 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
           />
 
           <div className="w-36">

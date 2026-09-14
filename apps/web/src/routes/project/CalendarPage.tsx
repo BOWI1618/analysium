@@ -114,7 +114,7 @@ export function CalendarPage() {
         onChange={setFilters}
         statuses={project?.statuses}
         labels={project?.labels}
-        members={project?.members.map((m) => m.user)}
+        members={project?.assignees}
         currentUserId={user?.id ?? ''}
         sortOptions={false}
       />

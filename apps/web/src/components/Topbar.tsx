@@ -122,6 +122,8 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
           iconLeft={<Plus className="size-3.5" />}
           onClick={() => openCreateIssue(currentProjectId ? { projectId: currentProjectId } : undefined)}
           title={`Создать задачу (${comboText(SHORTCUTS.createIssue)})`}
+          // On phones the label is hidden and only a plus remains.
+          aria-label="Создать задачу"
         >
           <span className="hidden sm:inline">Создать</span>
         </Button>

@@ -110,7 +110,15 @@ export interface ProjectDto {
 export interface ProjectDetailDto extends ProjectDto {
   statuses: StatusDto[];
   labels: LabelDto[];
+  /** Explicit project roles (lead, member). Not the list of people who can work here — see `assignees`. */
   members: { userId: string; role: ProjectRole; user: UserSummaryDto }[];
+  /**
+   * Everyone who can see this project and so can be assigned or mentioned:
+   * every non-guest member of the workspace, plus guests added to the project.
+   * The explicit role list above is far shorter — a fresh project holds only
+   * its lead — and offering that list made teammates impossible to assign.
+   */
+  assignees: UserSummaryDto[];
   activeSprint: SprintDto | null;
   permissions: Permission[];
 }

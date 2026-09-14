@@ -129,7 +129,7 @@ export function BoardPage() {
         onChange={setFilters}
         statuses={project?.statuses}
         labels={project?.labels}
-        members={project?.members.map((m) => m.user)}
+        members={project?.assignees}
         sprints={sprints}
         epics={epics}
         currentUserId={user?.id ?? ''}

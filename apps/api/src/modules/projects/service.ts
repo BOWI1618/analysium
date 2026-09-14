@@ -157,6 +157,24 @@ export async function createProject(
   return getProject({ ...actor, projectRole: 'LEAD' }, project.id);
 }
 
+/**
+ * People who can see a project: non-guest workspace members, plus guests who
+ * were added to it. The same rule `canAccessProject` applies to reading, so
+ * nobody is offered as an assignee who could not open the issue.
+ */
+export async function projectAssignees(workspaceId: string, projectId: string) {
+  const rows = await prisma.workspaceMember.findMany({
+    where: {
+      workspaceId,
+      user: { status: { not: 'DEACTIVATED' } },
+      OR: [{ role: { not: 'GUEST' } }, { user: { projectRoles: { some: { projectId } } } }],
+    },
+    select: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+    orderBy: { user: { name: 'asc' } },
+  });
+  return rows.map((r) => toUserSummary(r.user)!);
+}
+
 export async function getProject(actor: ActorContext, projectId: string): Promise<ProjectDetailDto> {
   const project = await prisma.project.findFirst({
     where: { id: projectId, workspaceId: actor.workspaceId },
@@ -224,6 +242,7 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
       role: m.role,
       user: toUserSummary(m.user)!,
     })),
+    assignees: await projectAssignees(project.workspaceId, project.id),
     activeSprint: activeSprint ? toSprint(activeSprint) : null,
     permissions: permissionsFor(actor),
   };

@@ -276,13 +276,25 @@ async function validateLabels(projectId: string, labelIds: string[]): Promise<vo
   if (count !== labelIds.length) throw badRequest('Неизвестная метка для этого проекта');
 }
 
-async function validateAssignee(workspaceId: string, assigneeId: string | null | undefined): Promise<void> {
+/**
+ * The assignee must be able to open the issue. Workspace membership alone was
+ * not enough: a guest outside the project could be handed work in a project
+ * they cannot see.
+ */
+async function validateAssignee(
+  workspaceId: string,
+  projectId: string,
+  assigneeId: string | null | undefined,
+): Promise<void> {
   if (!assigneeId) return;
   const member = await prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId: assigneeId } },
-    select: { id: true },
+    select: { role: true, user: { select: { projectRoles: { where: { projectId }, select: { id: true } } } } },
   });
   if (!member) throw badRequest('Исполнитель не состоит в этом пространстве');
+  if (member.role === 'GUEST' && member.user.projectRoles.length === 0) {
+    throw badRequest('Гость не добавлен в этот проект и не может быть исполнителем');
+  }
 }
 
 async function validateSprint(projectId: string, sprintId: string | null | undefined): Promise<void> {
@@ -306,7 +318,7 @@ export async function createIssue(
   });
   await Promise.all([
     validateLabels(input.projectId, input.labelIds ?? []),
-    validateAssignee(actor.workspaceId, input.assigneeId),
+    validateAssignee(actor.workspaceId, input.projectId, input.assigneeId),
     validateSprint(input.projectId, input.sprintId),
   ]);
 
@@ -490,7 +502,7 @@ export async function updateIssue(
 
   await Promise.all([
     patch.labelIds ? validateLabels(before.projectId, patch.labelIds) : Promise.resolve(),
-    validateAssignee(actor.workspaceId, patch.assigneeId),
+    validateAssignee(actor.workspaceId, before.projectId, patch.assigneeId),
     validateSprint(before.projectId, patch.sprintId),
   ]);
 
@@ -941,7 +953,10 @@ export async function bulkUpdate(
   }
 
   const status = patch.statusId ? await resolveStatus(projectIds[0]!, patch.statusId) : null;
-  if (patch.assigneeId !== undefined) await validateAssignee(actor.workspaceId, patch.assigneeId);
+  // Per project: a guest may belong to one of the selected issues' projects and not another.
+  if (patch.assigneeId !== undefined) {
+    await Promise.all(projectIds.map((pid) => validateAssignee(actor.workspaceId, pid, patch.assigneeId)));
+  }
 
   // Reject cross-project links exactly like single-issue updates do: sprints
   // and labels per project, hierarchy per issue.

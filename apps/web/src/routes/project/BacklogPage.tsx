@@ -71,7 +71,7 @@ export function BacklogPage() {
         onChange={setFilters}
         statuses={project?.statuses}
         labels={project?.labels}
-        members={project?.members.map((m) => m.user)}
+        members={project?.assignees}
         currentUserId={user?.id ?? ''}
         trailing={
           canManageSprints ? (
@@ -147,7 +147,7 @@ description="Всё уже запланировано — или задач ещ
                       selected={selected.includes(issue.id)}
                       editable={canEdit}
                       statuses={project?.statuses ?? []}
-                      members={project?.members.map((m) => m.user) ?? []}
+                      members={project?.assignees ?? []}
                       onToggleSelect={() =>
                         setSelected((prev) =>
                           prev.includes(issue.id) ? prev.filter((x) => x !== issue.id) : [...prev, issue.id],
@@ -180,7 +180,7 @@ description="Всё уже запланировано — или задач ещ
       <BulkActionBar
         count={selected.length}
         statuses={project?.statuses ?? []}
-        members={project?.members.map((m) => m.user) ?? []}
+        members={project?.assignees ?? []}
         onClear={() => setSelected([])}
         onApply={(patch) => bulkUpdate.mutate({ issueIds: selected, patch }, { onSuccess: () => setSelected([]) })}
         pending={bulkUpdate.isPending}
@@ -376,7 +376,7 @@ description="Перетащите задачи из бэклога или доб
                 selected={selected.includes(issue.id)}
                 editable={canEdit}
                 statuses={project?.statuses ?? []}
-                members={project?.members.map((m) => m.user) ?? []}
+                members={project?.assignees ?? []}
                 onToggleSelect={() => onToggleSelect(issue.id)}
                 onOpen={() => onOpen(issue.id)}
               />

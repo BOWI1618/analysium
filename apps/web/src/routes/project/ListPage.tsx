@@ -88,7 +88,7 @@ export function ListPage() {
         onChange={setFilters}
         statuses={project?.statuses}
         labels={project?.labels}
-        members={project?.members.map((m) => m.user)}
+        members={project?.assignees}
         sprints={sprints}
         epics={epics}
         currentUserId={user?.id ?? ''}
@@ -183,7 +183,7 @@ description="Ослабьте фильтры или создайте перву�
                     selected={selected.includes(issue.id)}
                     editable={canEdit}
                     statuses={project?.statuses ?? []}
-                    members={project?.members.map((m) => m.user) ?? []}
+                    members={project?.assignees ?? []}
                     onToggleSelect={(event) => toggleSelect(issue.id, event)}
                     onOpen={() => openIssue(issue.id)}
                     onPatch={(patch) => patchIssue.mutate({ issueId: issue.id, patch })}
@@ -211,7 +211,7 @@ description="Ослабьте фильтры или создайте перву�
       <BulkActionBar
         count={selected.length}
         statuses={project?.statuses ?? []}
-        members={project?.members.map((m) => m.user) ?? []}
+        members={project?.assignees ?? []}
         onClear={() => setSelected([])}
         onApply={(patch) =>
           bulkUpdate.mutate({ issueIds: selected, patch }, { onSuccess: () => setSelected([]) })

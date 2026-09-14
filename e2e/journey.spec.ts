@@ -184,6 +184,85 @@ test.describe('основной сценарий', () => {
   });
 });
 
+test.describe('первый запуск без демо-данных', () => {
+  test('новое пространство: проект, код, второй участник получает задачу и работает с ней', async ({
+    page,
+    browser,
+  }) => {
+    // A brand-new workspace, exactly as on a real server: no projects, nobody else.
+    await register(page, 'Владелец Команды');
+
+    // With no projects, quick-create must explain itself instead of showing an
+    // empty project list and a Create button that can never enable.
+    await page.getByRole('button', { name: /Создать задачу/ }).first().click();
+    const emptyCreate = page.getByRole('dialog', { name: 'Новая задача' });
+    await expect(emptyCreate.getByText(/нет ни одного/)).toBeVisible();
+    await emptyCreate.getByRole('button', { name: 'Создать проект' }).click();
+    await expect(page).toHaveURL(/\/projects\/new$/);
+
+    await createProject(page, 'Первый проект', `F${unique().slice(0, 2).toUpperCase()}`);
+
+    // Code for a teammate.
+    await page.goto('/settings/workspace');
+    await page.getByRole('button', { name: 'Участники' }).click();
+    await page.getByRole('button', { name: 'Создать код' }).click();
+    const code = (await page.getByLabel('Код приглашения').textContent())!.trim();
+
+    // The teammate joins from their own browser.
+    const mateEmail = `mate-${unique()}@test.local`;
+    const mateContext = await browser.newContext();
+    const mate = await mateContext.newPage();
+    await mate.goto('/join');
+    await mate.getByLabel('Код приглашения').fill(code);
+    await mate.getByLabel('Ваше имя').fill('Коллега Второй');
+    await mate.getByLabel('Почта для входа').fill(mateEmail);
+    await mate.getByLabel('Пароль').fill(password);
+    await mate.getByRole('button', { name: 'Присоединиться' }).click();
+    await expect(mate.getByRole('heading', { level: 1 })).toContainText('Коллега', { timeout: 20_000 });
+
+    // The owner creates a task and assigns it to the teammate — the step that
+    // failed: only the project's explicit role list was offered, which in a new
+    // project holds nobody but its lead.
+    await page.goto('/projects');
+    await page.getByRole('link', { name: /Первый проект/ }).first().click();
+    await page.getByRole('button', { name: /Создать задачу/ }).first().click();
+    const create = page.getByRole('dialog', { name: 'Новая задача' });
+    await create.getByLabel('Название задачи').fill('Задача для коллеги');
+    await create.getByRole('button', { name: 'Исполнитель' }).click();
+    await page.getByRole('menuitem', { name: /Коллега Второй/ }).click();
+    await create.getByRole('button', { name: 'Создать', exact: true }).click();
+    await expect(create).toBeHidden({ timeout: 15_000 });
+
+    // The teammate finds it in their own work and moves it on.
+    await mate.goto('/my-work');
+    await mate.getByText('Задача для коллеги').click();
+    await mate.getByRole('button', { name: 'Изменить статус' }).click();
+    await mate.getByRole('menuitem', { name: 'В работе' }).click();
+    await expect(mate.getByRole('button', { name: 'Изменить статус' })).toContainText('В работе', {
+      timeout: 15_000,
+    });
+
+    // They can talk about it…
+    // The comment editor is the last rich-text field in the issue.
+    await mate.locator('[contenteditable="true"]').last().click();
+    await mate.keyboard.type('Взял в работу, сегодня сделаю');
+    await mate.getByRole('button', { name: 'Отправить' }).click();
+    await expect(mate.getByRole('list', { name: 'Комментарии' }).getByText('Взял в работу, сегодня сделаю')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // …and add work of their own.
+    await mate.keyboard.press('Escape');
+    await mate.getByRole('button', { name: /Создать задачу/ }).first().click();
+    const mateCreate = mate.getByRole('dialog', { name: 'Новая задача' });
+    await mateCreate.getByLabel('Название задачи').fill('Задача от коллеги');
+    await mateCreate.getByRole('button', { name: 'Создать', exact: true }).click();
+    await expect(mateCreate).toBeHidden({ timeout: 15_000 });
+
+    await mateContext.close();
+  });
+});
+
 test.describe('мобильная версия', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
