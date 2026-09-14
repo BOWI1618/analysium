@@ -100,6 +100,14 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  app.post<{ Params: WorkspaceParams & { memberId: string } }>(
+    '/workspaces/:workspaceId/members/:memberId/reset-password',
+    async (req) => {
+      const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
+      return service.resetMemberPassword(actor, req.params.memberId, req.ip);
+    },
+  );
+
   /* ---------------------------------------------------------- audit log */
 
   app.get<{ Params: WorkspaceParams }>('/workspaces/:workspaceId/audit-logs', async (req) => {

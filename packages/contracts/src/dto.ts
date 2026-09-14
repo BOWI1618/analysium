@@ -54,6 +54,18 @@ export interface MemberDto {
    * be passed on through any messenger.
    */
   invite?: { url: string; emailSent: boolean };
+  /**
+   * Until when the person may sign in without a password after an admin reset
+   * it. Only people who manage members see it; for everyone else it is null.
+   */
+  passwordResetExpiresAt: string | null;
+}
+
+/** Sign-in answer while an admin's password reset is pending: no session yet,
+ *  only a token that is good for choosing the new password. */
+export interface PasswordResetRequired {
+  passwordResetRequired: true;
+  token: string;
 }
 
 /** An unused join code as the admin sees it. The code itself is never listed:

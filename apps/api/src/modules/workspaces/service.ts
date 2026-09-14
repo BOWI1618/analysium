@@ -1,5 +1,5 @@
 import type { ActorContext, MemberDto, WorkspaceDto } from '@flowdesk/contracts';
-import { AuditAction, Permission, WorkspaceRole, outranks } from '@flowdesk/contracts';
+import { AuditAction, Permission, WorkspaceRole, can, outranks } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
 import { assertCan, workspaceContext } from '../../lib/context';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
@@ -144,6 +144,7 @@ export async function deleteWorkspace(actor: ActorContext, ip?: string): Promise
 /* ---------------------------------------------------------------- members */
 
 export async function listMembers(actor: ActorContext): Promise<MemberDto[]> {
+  const canManage = can(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
   const members = await prisma.workspaceMember.findMany({
     where: { workspaceId: actor.workspaceId },
     orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
@@ -159,10 +160,12 @@ export async function listMembers(actor: ActorContext): Promise<MemberDto[]> {
           avatarUrl: true,
           status: true,
           lastActiveAt: true,
+          passwordResetExpiresAt: true,
         },
       },
     },
   });
+  const now = Date.now();
 
   return members.map((m) => ({
     id: m.id,
@@ -176,6 +179,10 @@ export async function listMembers(actor: ActorContext): Promise<MemberDto[]> {
       status: m.user.status,
       lastActiveAt: m.user.lastActiveAt?.toISOString() ?? null,
     },
+    passwordResetExpiresAt:
+      canManage && m.user.passwordResetExpiresAt && m.user.passwordResetExpiresAt.getTime() > now
+        ? m.user.passwordResetExpiresAt.toISOString()
+        : null,
   }));
 }
 
@@ -274,6 +281,7 @@ export async function inviteMember(
     id: member.id,
     role: member.role,
     joinedAt: member.joinedAt.toISOString(),
+    passwordResetExpiresAt: null,
     user: {
       id: member.user.id,
       name: member.user.name,
@@ -346,6 +354,73 @@ export async function removeMember(actor: ActorContext, memberId: string, ip?: s
     metadata: { userId: member.userId, self: isSelf },
     ip,
   });
+}
+
+/** How long a reset password lets the person in with the address alone. */
+export const PASSWORD_RESET_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * An admin's password reset for someone who forgot theirs. The old password
+ * stops working and every device is signed out; for a day the person can sign
+ * in with the address alone and is made to choose a new password first.
+ *
+ * The same ladder as changing roles: an owner resets anyone but themselves, an
+ * admin only people below them. An account is shared across workspaces, so it
+ * cannot be reset from here if it runs another workspace that other people
+ * work in: that would hand this workspace's admin the keys to someone else's.
+ * A personal workspace nobody else is in does not count.
+ */
+export async function resetMemberPassword(
+  actor: ActorContext,
+  memberId: string,
+  ip?: string,
+): Promise<{ expiresAt: string }> {
+  assertCan(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: { id: memberId, workspaceId: actor.workspaceId },
+    select: { id: true, role: true, userId: true, user: { select: { status: true } } },
+  });
+  if (!member) throw notFound('Участник');
+  if (member.userId === actor.userId) throw badRequest('Свой пароль меняется в профиле');
+  if (member.role === WorkspaceRole.OWNER || !outranks(actor.workspaceRole, member.role)) {
+    throw forbidden('Нельзя сбросить пароль участнику вашего уровня или выше');
+  }
+  if (member.user.status !== 'ACTIVE') {
+    throw badRequest('Этот человек ещё не входил — пароля у него пока нет');
+  }
+
+  const managesElsewhere = await prisma.workspaceMember.count({
+    where: {
+      userId: member.userId,
+      workspaceId: { not: actor.workspaceId },
+      role: { in: [WorkspaceRole.OWNER, WorkspaceRole.ADMIN] },
+      workspace: { members: { some: { userId: { not: member.userId } } } },
+    },
+  });
+  if (managesElsewhere > 0) {
+    throw forbidden('Этот человек управляет другим пространством — пароль он может сменить только сам');
+  }
+
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: member.userId },
+      data: { passwordHash: null, passwordResetExpiresAt: expiresAt, passwordResetTokenHash: null },
+    }),
+    prisma.session.deleteMany({ where: { userId: member.userId } }),
+  ]);
+
+  audit({
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    action: AuditAction.MEMBER_PASSWORD_RESET,
+    entityType: 'User',
+    entityId: member.userId,
+    metadata: { memberId: member.id },
+    ip,
+  });
+  return { expiresAt: expiresAt.toISOString() };
 }
 
 export async function listAuditLogs(actor: ActorContext, limit: number, cursor?: string) {

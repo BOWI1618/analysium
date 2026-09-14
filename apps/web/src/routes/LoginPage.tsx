@@ -10,7 +10,7 @@ import { Input } from '~/ui/Input';
 const DEMO = { email: 'alex@acme.test', password: 'demo1234' };
 
 export function LoginPage() {
-  const { login } = useSession();
+  const { login, setNewPassword } = useSession();
   const { data: authConfig } = useAuthConfig();
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,28 +23,125 @@ export function LoginPage() {
   const [resent, setResent] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
+  // Set when an admin has reset the password: the next step is a new one.
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [newPassword, setNewPasswordValue] = useState('');
+  const [repeatPassword, setRepeatPassword] = useState('');
+
+  const showError = (err: unknown) => {
+    if (err instanceof ApiError) {
+      setError(err.message);
+      setFieldErrors(err.fields);
+      // The password was right — the address just has not been proven yet, so
+      // the useful next step is another link, not another attempt.
+      setNeedsVerification(err.code === 'EMAIL_NOT_VERIFIED');
+    } else {
+      setError('Сервер недоступен. API запущен?');
+    }
+  };
 
   const submit = async (credentials: { email: string; password: string }) => {
     setPending(true);
     setError(null);
     setFieldErrors({});
     try {
-      await login(credentials);
+      const reset = await login(credentials);
+      if (reset) {
+        setResetToken(reset.token);
+        setPassword('');
+        return;
+      }
       navigate(from, { replace: true });
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-        setFieldErrors(err.fields);
-        // The password was right — the address just has not been proven yet, so
-        // the useful next step is another link, not another attempt.
-        setNeedsVerification(err.code === 'EMAIL_NOT_VERIFIED');
-      } else {
-        setError('Сервер недоступен. API запущен?');
-      }
+      showError(err);
     } finally {
       setPending(false);
     }
   };
+
+  const saveNewPassword = async () => {
+    setError(null);
+    setFieldErrors({});
+    if (newPassword !== repeatPassword) {
+      setFieldErrors({ repeat: 'Пароли не совпадают' });
+      return;
+    }
+    setPending(true);
+    try {
+      await setNewPassword({ token: resetToken!, password: newPassword });
+      navigate(from, { replace: true });
+    } catch (err) {
+      showError(err);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  if (resetToken) {
+    return (
+      <AuthLayout
+        title="Новый пароль"
+        subtitle="Администратор сбросил ваш пароль. Придумайте новый — дальше входите с ним."
+        footer={
+          <button
+            type="button"
+            className="font-bold text-accent hover:underline"
+            onClick={() => {
+              setResetToken(null);
+              setError(null);
+              setFieldErrors({});
+            }}
+          >
+            Назад ко входу
+          </button>
+        }
+      >
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveNewPassword();
+          }}
+        >
+          {error && (
+            <div role="alert" className="rounded-md border-2 border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger font-medium">
+              {error}
+            </div>
+          )}
+
+          <p className="truncate text-sm text-text-muted">{email}</p>
+
+          <Input
+            label="Новый пароль"
+            type="password"
+            autoComplete="new-password"
+            autoFocus
+            required
+            inputSize="lg"
+            value={newPassword}
+            error={fieldErrors.password}
+            hint="Минимум 8 символов, включая букву и цифру."
+            onChange={(event) => setNewPasswordValue(event.target.value)}
+          />
+
+          <Input
+            label="Повторите пароль"
+            type="password"
+            autoComplete="new-password"
+            required
+            inputSize="lg"
+            value={repeatPassword}
+            error={fieldErrors.repeat}
+            onChange={(event) => setRepeatPassword(event.target.value)}
+          />
+
+          <Button type="submit" variant="primary" size="lg" fullWidth loading={pending}>
+            Сохранить и войти
+          </Button>
+        </form>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -110,7 +207,6 @@ export function LoginPage() {
           label="Пароль"
           type="password"
           autoComplete="current-password"
-          required
           inputSize="lg"
           value={password}
           error={fieldErrors.password}

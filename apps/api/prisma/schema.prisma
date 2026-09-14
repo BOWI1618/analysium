@@ -48,6 +48,14 @@ model User {
   /// link in the message is opened.
   emailVerifiedAt DateTime?
 
+  /// Set when an admin resets the password. Until this moment the person may
+  /// sign in with the address alone and is asked to choose a new password
+  /// before anything else. The old password stops working at once.
+  passwordResetExpiresAt DateTime?
+  /// Hash of the one-time token issued by that password-less sign-in. It is
+  /// good only for choosing the new password, never as a session.
+  passwordResetTokenHash String?   @unique
+
   sessions           Session[]
   ownedWorkspaces    Workspace[]         @relation("WorkspaceOwner")
   memberships        WorkspaceMember[]

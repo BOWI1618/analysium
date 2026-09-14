@@ -62,6 +62,18 @@ export function useUpdateMemberRole(workspaceId: string) {
   });
 }
 
+export function useResetMemberPassword(workspaceId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (memberId: string) =>
+      api.post<{ expiresAt: string }>(`/workspaces/${workspaceId}/members/${memberId}/reset-password`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) }),
+    onError: (error) => toast.error(error, 'Не удалось сбросить пароль'),
+  });
+}
+
 export function useRemoveMember(workspaceId: string) {
   const queryClient = useQueryClient();
   const toast = useToast();

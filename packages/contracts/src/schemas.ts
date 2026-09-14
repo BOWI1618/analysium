@@ -105,9 +105,16 @@ export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
-  password: z.string().min(1).max(200),
+  /** May be empty: after an admin's reset the address alone is enough. */
+  password: z.string().max(200),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const setNewPasswordSchema = z.object({
+  token: z.string().min(10).max(200),
+  password: passwordSchema,
+});
+export type SetNewPasswordInput = z.infer<typeof setNewPasswordSchema>;
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),

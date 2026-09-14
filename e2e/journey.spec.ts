@@ -267,6 +267,55 @@ test.describe('первый запуск без демо-данных', () => {
   });
 });
 
+test.describe('сброс пароля', () => {
+  test('администратор сбрасывает пароль, человек входит без него и задаёт новый', async ({ page, browser }) => {
+    await register(page, 'Админ Сброса');
+    await page.goto('/settings/workspace');
+    await page.getByRole('button', { name: 'Участники' }).click();
+    await page.getByRole('button', { name: 'Создать код' }).click();
+    const code = (await page.getByLabel('Код приглашения').textContent())!.trim();
+
+    const mateEmail = `forgot-${unique()}@test.local`;
+    const mateContext = await browser.newContext();
+    const mate = await mateContext.newPage();
+    await mate.goto('/join');
+    await mate.getByLabel('Код приглашения').fill(code);
+    await mate.getByLabel('Ваше имя').fill('Забыл Пароль');
+    await mate.getByLabel('Почта для входа').fill(mateEmail);
+    await mate.getByLabel('Пароль').fill(password);
+    await mate.getByRole('button', { name: 'Присоединиться' }).click();
+    await expect(mate.getByRole('heading', { level: 1 })).toContainText('Забыл', { timeout: 20_000 });
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Участники' }).click();
+    await page.getByRole('button', { name: 'Сбросить пароль: Забыл Пароль' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Сбросить пароль' }).click();
+    await expect(page.getByText('Пароль сброшен').first()).toBeVisible({ timeout: 15_000 });
+
+    // Signed out on their device; the address alone gets them in.
+    await mate.goto('/login');
+    await mate.getByLabel('Почта').fill(mateEmail);
+    await mate.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(mate.getByRole('heading', { name: 'Новый пароль' })).toBeVisible({ timeout: 15_000 });
+    await mate.getByLabel('Новый пароль').fill('fresh12345');
+    await mate.getByLabel('Повторите пароль').fill('fresh12345');
+    await mate.getByRole('button', { name: 'Сохранить и войти' }).click();
+    await expect(mate.getByRole('heading', { level: 1 })).toContainText('Забыл', { timeout: 20_000 });
+
+    // And the new password is the one that works from now on.
+    const fresh = await browser.newContext();
+    const again = await fresh.newPage();
+    await again.goto('/login');
+    await again.getByLabel('Почта').fill(mateEmail);
+    await again.getByLabel('Пароль').fill('fresh12345');
+    await again.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(again.getByRole('heading', { level: 1 })).toContainText('Забыл', { timeout: 20_000 });
+
+    await fresh.close();
+    await mateContext.close();
+  });
+});
+
 test.describe('мобильная версия', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

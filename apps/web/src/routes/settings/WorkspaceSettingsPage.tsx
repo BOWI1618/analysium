@@ -3,17 +3,19 @@ import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { AuditLogDto, CreatedInviteCodeDto, WorkspaceRole } from '@flowdesk/contracts';
 import { Permission, WORKSPACE_ROLES, can, outranks } from '@flowdesk/contracts';
-import { Check, Copy, Link2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Check, Copy, KeyRound, Link2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
 import { useRealtime } from '~/app/realtime';
+import { useToast } from '~/app/toast';
 import {
   useCreateInviteCode,
   useInviteCodes,
   useMembers,
   useRevokeInviteCode,
   useRemoveMember,
+  useResetMemberPassword,
   useUpdateMemberRole,
   useUpdateWorkspace,
 } from '~/features/members/hooks';
@@ -177,6 +179,8 @@ function MembersSection() {
   const { data: members, isLoading } = useMembers(workspaceId);
   const updateRole = useUpdateMemberRole(workspaceId);
   const removeMember = useRemoveMember(workspaceId);
+  const resetPassword = useResetMemberPassword(workspaceId);
+  const toast = useToast();
 
   // Computed before the early return: the codes query below is a hook and has
   // to run on every render, and only managers are allowed to list codes.
@@ -190,6 +194,7 @@ function MembersSection() {
 
   const [role, setRole] = useState<string>('MEMBER');
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+  const [resetting, setResetting] = useState<{ id: string; name: string; email: string } | null>(null);
   const [created, setCreated] = useState<CreatedInviteCodeDto | null>(null);
 
   if (!workspace || !user) return null;
@@ -292,6 +297,11 @@ function MembersSection() {
                   </div>
 
                   {member.user.status === 'INVITED' && <Badge tone="warning">Приглашён</Badge>}
+                  {member.passwordResetExpiresAt && (
+                    <span title={`Может войти без пароля до ${fullDate(member.passwordResetExpiresAt)}`}>
+                      <Badge tone="warning">Пароль сброшен</Badge>
+                    </span>
+                  )}
 
                   <span className="fd-num hidden text-2xs text-text-subtle sm:inline">
                     {member.user.lastActiveAt ? relativeTime(member.user.lastActiveAt) : 'не заходил(а)'}
@@ -312,6 +322,18 @@ function MembersSection() {
                     </select>
                   ) : (
                     <Badge tone={member.role === 'OWNER' ? 'accent' : 'neutral'}>{ROLE_LABEL[member.role]}</Badge>
+                  )}
+
+                  {canChange && !isSelf && member.user.status === 'ACTIVE' && (
+                    <IconButton
+                      label={`Сбросить пароль: ${member.user.name}`}
+                      size="xs"
+                      onClick={() =>
+                        setResetting({ id: member.id, name: member.user.name, email: member.user.email })
+                      }
+                    >
+                      <KeyRound className="size-3.5" />
+                    </IconButton>
                   )}
 
                   {(canChange || isSelf) && member.role !== 'OWNER' && (
@@ -340,6 +362,27 @@ function MembersSection() {
         title={`Убрать ${removing?.name}?`}
         message="Доступ к пространству пропадёт сразу. Задачи и комментарии останутся."
         confirmLabel="Убрать"
+        danger
+      />
+
+      <ConfirmDialog
+        open={Boolean(resetting)}
+        onClose={() => setResetting(null)}
+        onConfirm={() => {
+          const target = resetting;
+          setResetting(null);
+          if (!target) return;
+          resetPassword.mutate(target.id, {
+            onSuccess: () =>
+              toast.success(
+                'Пароль сброшен',
+                `${target.name} может в течение суток войти по почте ${target.email} с пустым паролем и задать новый. Сообщите об этом.`,
+              ),
+          });
+        }}
+        title={`Сбросить пароль: ${resetting?.name}?`}
+        message="Текущий пароль перестанет работать, а все входы на устройствах завершатся. В течение суток человек сможет войти только по почте, оставив пароль пустым, — и сразу задаст новый. Сообщите ему об этом сами."
+        confirmLabel="Сбросить пароль"
         danger
       />
     </>

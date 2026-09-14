@@ -1,8 +1,15 @@
-import type { LoginInput, RegisterInput, SessionDto, WorkspaceDto } from '@flowdesk/contracts';
+import type {
+  LoginInput,
+  PasswordResetRequired,
+  RegisterInput,
+  SessionDto,
+  SetNewPasswordInput,
+  WorkspaceDto,
+} from '@flowdesk/contracts';
 import { AuditAction, WorkspaceRole } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
-import { hashPassword, verifyPassword } from '../../lib/password';
-import { AppError, conflict, unauthorized } from '../../lib/errors';
+import { generateToken, hashPassword, hashToken, verifyPassword } from '../../lib/password';
+import { AppError, badRequest, conflict, unauthorized } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { slugify, uniqueSlug } from '../workspaces/slug';
 import { env } from '../../config/env';
@@ -44,11 +51,30 @@ export async function register(input: RegisterInput, ip?: string) {
   return user;
 }
 
-export async function login(input: LoginInput, ip?: string) {
+export async function login(
+  input: LoginInput,
+  ip?: string,
+): Promise<{ user: { id: string }; reset?: undefined } | { user?: undefined; reset: PasswordResetRequired }> {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
+
+  // An admin reset the password: the address alone lets the person in, but only
+  // as far as choosing a new password. Whatever was typed as a password is
+  // ignored — the old one no longer exists.
+  const resetPending = Boolean(user?.passwordResetExpiresAt && user.passwordResetExpiresAt.getTime() > Date.now());
+  if (user && resetPending && user.status !== 'DEACTIVATED') {
+    if (verificationRequired() && !user.emailVerifiedAt) {
+      throw new AppError('EMAIL_NOT_VERIFIED', 'Почта не подтверждена. Откройте ссылку из письма.');
+    }
+    const { token, hash } = generateToken();
+    await prisma.user.update({ where: { id: user.id }, data: { passwordResetTokenHash: hash } });
+    return { reset: { passwordResetRequired: true, token } };
+  }
 
   // Always run a verification so timing does not reveal whether the email exists.
   const ok = await verifyPassword(input.password, user?.passwordHash ?? null);
+  if (user && !user.passwordHash && user.passwordResetExpiresAt) {
+    throw unauthorized('Сброс пароля истёк. Попросите администратора сбросить пароль ещё раз.');
+  }
   if (!user || !ok) throw unauthorized('Неверная почта или пароль');
   if (user.status === 'DEACTIVATED') throw unauthorized('Этот аккаунт отключён');
 
@@ -59,6 +85,33 @@ export async function login(input: LoginInput, ip?: string) {
   }
 
   audit({ actorId: user.id, action: AuditAction.USER_LOGIN, entityType: 'User', entityId: user.id, ip });
+  return { user };
+}
+
+/** The new password after an admin's reset. Signs out anything left and returns the user to sign in. */
+export async function setNewPassword(input: SetNewPasswordInput, ip?: string): Promise<{ id: string }> {
+  const user = await prisma.user.findUnique({
+    where: { passwordResetTokenHash: hashToken(input.token) },
+    select: { id: true, status: true, passwordResetExpiresAt: true },
+  });
+  if (
+    !user ||
+    user.status === 'DEACTIVATED' ||
+    !user.passwordResetExpiresAt ||
+    user.passwordResetExpiresAt.getTime() <= Date.now()
+  ) {
+    throw badRequest('Ссылка на смену пароля устарела. Войдите по почте ещё раз.');
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, passwordResetExpiresAt: null, passwordResetTokenHash: null, lastActiveAt: new Date() },
+    }),
+    prisma.session.deleteMany({ where: { userId: user.id } }),
+  ]);
+  audit({ actorId: user.id, action: AuditAction.USER_PASSWORD_SET, entityType: 'User', entityId: user.id, ip });
   return user;
 }
 
@@ -89,7 +142,7 @@ export async function buildSession(userId: string): Promise<SessionDto> {
           logo: true,
           ownerId: true,
           createdAt: true,
-          _count: { select: { members: true, projects: true } },
+          _count: { select: { members: true, projects: { where: { isSystem: false } } } },
         },
       },
     },

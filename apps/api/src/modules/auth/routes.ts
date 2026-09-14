@@ -5,6 +5,7 @@ import {
   loginSchema,
   registerSchema,
   resendVerificationSchema,
+  setNewPasswordSchema,
   verifyEmailSchema,
   AuditAction,
 } from '@flowdesk/contracts';
@@ -20,7 +21,7 @@ import {
   requireAuth,
   setSessionCookie,
 } from '../../plugins/auth';
-import { buildSession, login, register } from './service';
+import { buildSession, login, register, setNewPassword } from './service';
 import { acceptInvite, sendVerificationEmail, verificationRequired, verifyEmail } from './verification';
 import { prisma } from '../../lib/prisma';
 import { joinWithCode } from './join';
@@ -114,13 +115,27 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/auth/login', strictLimit, async (req, reply) => {
     const input = parse(loginSchema, req.body);
-    const user = await login(input, req.ip);
+    const result = await login(input, req.ip);
+    // A reset is pending: no session until a new password is chosen.
+    if (result.reset) return reply.send(result.reset);
+    const { user } = result;
     const { token, expiresAt } = await createSession(user.id, {
       userAgent: req.headers['user-agent'],
       ip: req.ip,
     });
     setSessionCookie(reply, token, expiresAt);
     return reply.send(await buildSession(user.id));
+  });
+
+  app.post('/auth/set-password', strictLimit, async (req, reply) => {
+    const input = parse(setNewPasswordSchema, req.body);
+    const { id } = await setNewPassword(input, req.ip);
+    const { token, expiresAt } = await createSession(id, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+    });
+    setSessionCookie(reply, token, expiresAt);
+    return reply.send(await buildSession(id));
   });
 
   app.post('/auth/logout', { preHandler: requireAuth }, async (req, reply) => {

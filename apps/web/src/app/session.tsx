@@ -4,8 +4,10 @@ import type {
   AcceptInviteInput,
   JoinWithCodeInput,
   LoginInput,
+  PasswordResetRequired,
   RegisterInput,
   SessionDto,
+  SetNewPasswordInput,
   UserDto,
   WorkspaceDto,
 } from '@flowdesk/contracts';
@@ -19,7 +21,12 @@ interface SessionContextValue {
   workspace: WorkspaceDto | null;
   isLoading: boolean;
   switchWorkspace: (workspaceId: string) => void;
-  login: (input: LoginInput) => Promise<void>;
+  /**
+   * Resolves to a reset token instead of signing in when an admin has reset the
+   * password: the person has to choose a new one first (`setNewPassword`).
+   */
+  login: (input: LoginInput) => Promise<PasswordResetRequired | null>;
+  setNewPassword: (input: SetNewPasswordInput) => Promise<void>;
   /** Resolves to `true` when a verification link was sent instead of a session. */
   register: (input: RegisterInput) => Promise<boolean>;
   /** Redeems a join code. Resolves to `true` when a verification link was sent instead of a session. */
@@ -65,7 +72,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [workspaces, preferredWorkspaceId]);
 
   const loginMutation = useMutation({
-    mutationFn: (input: LoginInput) => api.post<SessionDto>('/auth/login', input),
+    mutationFn: (input: LoginInput) => api.post<SessionDto | PasswordResetRequired>('/auth/login', input),
+    onSuccess: (result) => {
+      if ('passwordResetRequired' in result) return;
+      queryClient.setQueryData(qk.session, result);
+      setPreferredWorkspaceId(result.activeWorkspaceId);
+    },
+  });
+
+  const setPasswordMutation = useMutation({
+    mutationFn: (input: SetNewPasswordInput) => api.post<SessionDto>('/auth/set-password', input),
     onSuccess: (session) => {
       queryClient.setQueryData(qk.session, session);
       setPreferredWorkspaceId(session.activeWorkspaceId);
@@ -118,7 +134,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       workspace,
       isLoading,
       switchWorkspace: (id: string) => setPreferredWorkspaceId(id),
-      login: async (input) => void (await loginMutation.mutateAsync(input)),
+      login: async (input) => {
+        const result = await loginMutation.mutateAsync(input);
+        return 'passwordResetRequired' in result ? result : null;
+      },
+      setNewPassword: async (input) => void (await setPasswordMutation.mutateAsync(input)),
       register: async (input) => {
         const result = await registerMutation.mutateAsync(input);
         return 'verificationRequired' in result;
@@ -131,7 +151,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       logout: async () => void (await logoutMutation.mutateAsync()),
       refresh: async () => void (await queryClient.invalidateQueries({ queryKey: qk.session })),
     }),
-    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, registerMutation, joinMutation, acceptInviteMutation, logoutMutation, queryClient],
+    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, setPasswordMutation, registerMutation, joinMutation, acceptInviteMutation, logoutMutation, queryClient],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
