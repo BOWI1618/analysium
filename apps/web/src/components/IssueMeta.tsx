@@ -12,7 +12,7 @@ import {
   Zap,
   GitBranch,
 } from 'lucide-react';
-import { dueDateLabel, hexWithAlpha, plural } from '~/lib/format';
+import { dueDateLabel, hexWithAlpha } from '~/lib/format';
 import { Tooltip } from '~/ui/Tooltip';
 
 /* ------------------------------------------------------------ issue type */
@@ -260,17 +260,3 @@ export function EpicChip({
   );
 }
 
-export function StoryPoints({ points, className }: { points: number | null; className?: string }) {
-  if (points === null) return null;
-  return (
-    <span
-      className={clsx(
-        'fd-num inline-flex size-4.5 min-w-4.5 items-center justify-center border-2 border-border-strong bg-surface-active px-1 text-2xs font-bold text-text-muted',
-        className,
-      )}
-      title={`${points} ${plural(points, ['стори-поинт', 'стори-поинта', 'стори-поинтов'])}`}
-    >
-      {points}
-    </span>
-  );
-}

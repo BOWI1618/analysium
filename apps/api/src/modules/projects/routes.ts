@@ -8,9 +8,10 @@ import {
   updateProjectSchema,
   updateStatusSchema,
   type ProjectRole,
+  Permission,
 } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
-import { projectContext, workspaceContext } from '../../lib/context';
+import { assertCan, projectContext, workspaceContext } from '../../lib/context';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import * as service from './service';
 
@@ -100,6 +101,19 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const input = parse(createLabelSchema, req.body);
     const label = await service.createLabel(actor, req.params.projectId, input);
     return reply.status(201).send(label);
+  });
+
+  // A label for tasks without a project, which may be wanted before the first
+  // such task has created their list.
+  app.post<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/projectless/labels', async (req, reply) => {
+    const userId = currentUser(req).id;
+    const workspaceActor = await workspaceContext(userId, req.params.workspaceId);
+    assertCan(workspaceActor, Permission.ISSUE_CREATE);
+    const input = parse(createLabelSchema, req.body);
+    const systemProject = await service.ensureSystemProject(workspaceActor.workspaceId);
+    const { actor } = await projectContext(userId, systemProject.id);
+    const label = await service.createLabel(actor, systemProject.id, input);
+    return reply.status(201).send({ ...label, projectId: systemProject.id });
   });
 
   app.patch<{ Params: P & { labelId: string } }>('/projects/:projectId/labels/:labelId', async (req) => {

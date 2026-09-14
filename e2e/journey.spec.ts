@@ -220,6 +220,14 @@ test.describe('первый запуск без демо-данных', () => {
     await create.getByLabel('Название задачи').fill('Задача для коллеги');
     await create.getByRole('button', { name: 'Исполнитель' }).click();
     await page.getByRole('menuitem', { name: /Коллега Второй/ }).click();
+    // A label that does not exist yet is created right from the label list.
+    await create.getByRole('button', { name: 'Метки' }).click();
+    await page.getByPlaceholder('Найти или создать…').fill('срочно');
+    await page.getByPlaceholder('Найти или создать…').press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'срочно' })).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press('Escape');
+    await expect(create.getByText('срочно')).toBeVisible();
+    await expect(create.getByPlaceholder('Оценка')).toHaveCount(0);
     await create.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(create).toBeHidden({ timeout: 15_000 });
 
@@ -231,6 +239,7 @@ test.describe('первый запуск без демо-данных', () => {
     // The teammate finds it in their own work and moves it on.
     await mate.goto('/my-work');
     await mate.getByText('Задача для коллеги').click();
+    await expect(mate.getByRole('button', { name: 'Изменить метки' })).toContainText('срочно');
     await mate.getByRole('button', { name: 'Изменить статус' }).click();
     await mate.getByRole('menuitem', { name: 'В работе' }).click();
     await expect(mate.getByRole('button', { name: 'Изменить статус' })).toContainText('В работе', {

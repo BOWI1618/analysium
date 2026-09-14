@@ -339,19 +339,19 @@ function VelocityChart({
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="truncate">{sprint.name}</span>
             <span className="fd-num text-text-subtle">
-              {sprint.completed}/{sprint.committed} SP
+              {sprint.completed}/{sprint.committed} задач
             </span>
           </div>
           <div className="relative h-4 w-full overflow-hidden rounded-sm bg-surface-active">
             <div
               className="absolute inset-y-0 left-0 rounded-sm bg-accent/25"
               style={{ width: `${(sprint.committed / max) * 100}%` }}
-              title={`Взято в спринт: ${sprint.committed} SP`}
+              title={`Взято в спринт: ${sprint.committed} задач`}
             />
             <div
               className="absolute inset-y-0 left-0 rounded-sm bg-success"
               style={{ width: `${(sprint.completed / max) * 100}%` }}
-              title={`Завершено: ${sprint.completed} SP`}
+              title={`Завершено: ${sprint.completed} задач`}
             />
           </div>
         </div>

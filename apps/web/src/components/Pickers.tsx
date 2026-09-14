@@ -9,7 +9,7 @@ import {
   type StatusDto,
   type UserSummaryDto,
 } from '@flowdesk/contracts';
-import { Search, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Avatar } from '~/ui/Avatar';
 import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
@@ -218,7 +218,14 @@ export function LabelPicker({
     return q ? labels.filter((l) => l.name.toLowerCase().includes(q)) : labels;
   }, [labels, term]);
 
-  const exactMatch = filtered.some((l) => l.name.toLowerCase() === term.trim().toLowerCase());
+  const name = term.trim();
+  const exactMatch = labels.some((l) => l.name.toLowerCase() === name.toLowerCase());
+  const canCreate = Boolean(onCreate && name && !exactMatch);
+  const create = () => {
+    if (!canCreate) return;
+    onCreate!(name);
+    setTerm('');
+  };
 
   return (
     <Menu onOpenChange={(open) => !open && setTerm('')}>
@@ -231,7 +238,14 @@ export function LabelPicker({
               autoFocus
               value={term}
               onChange={(event) => setTerm(event.target.value)}
-              placeholder="Поиск меток…"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && canCreate) {
+                  event.preventDefault();
+                  create();
+                }
+              }}
+              placeholder={onCreate ? 'Найти или создать…' : 'Поиск меток…'}
+              maxLength={30}
               className="w-full bg-transparent text-sm outline-none placeholder:text-text-subtle"
             />
           </div>
@@ -250,14 +264,18 @@ export function LabelPicker({
               {label.name}
             </MenuItem>
           ))}
-          {onCreate && term.trim() && !exactMatch && (
+          {canCreate && (
             <>
-              <MenuSeparator />
-              <MenuItem onSelect={() => onCreate(term.trim())}>Создать «{term.trim()}»</MenuItem>
+              {filtered.length > 0 && <MenuSeparator />}
+              <MenuItem keepOpen icon={<Plus className="size-3.5" />} onSelect={create}>
+                Создать метку «{name}»
+              </MenuItem>
             </>
           )}
-          {filtered.length === 0 && !onCreate && (
-            <p className="px-2 py-3 text-center text-xs text-text-subtle">Меток нет</p>
+          {filtered.length === 0 && !canCreate && (
+            <p className="px-2 py-3 text-center text-xs text-text-subtle">
+              {onCreate && !name ? 'Меток пока нет — введите название' : 'Меток нет'}
+            </p>
           )}
         </MenuContent>
       )}

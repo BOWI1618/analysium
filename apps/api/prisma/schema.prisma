@@ -327,7 +327,7 @@ model Sprint {
   endDate         DateTime?
   completedAt     DateTime?
   position        Int          @default(0)
-  /// Story points committed at sprint start — the basis for velocity.
+  /// Number of tasks committed at sprint start — the basis for velocity.
   committedPoints Int          @default(0)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt

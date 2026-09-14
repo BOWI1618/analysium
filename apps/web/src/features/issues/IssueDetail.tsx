@@ -21,7 +21,7 @@ import { useUiStore } from '~/app/uiStore';
 import { useHotkeys } from '~/lib/hooks/useHotkeys';
 import { SHORTCUTS } from '~/lib/shortcuts';
 import { useToast } from '~/app/toast';
-import { useProject } from '~/features/projects/hooks';
+import { nextLabelColor, useCreateLabel, useProject } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import {
   useDeleteAttachment,
@@ -134,6 +134,14 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
   const canComment = can(Permission.COMMENT_CREATE);
 
   const patch = (values: Parameters<typeof updateIssue.mutate>[0]) => updateIssue.mutate(values);
+
+  const createLabel = useCreateLabel(issue.projectId);
+  // A label created from the list is put on the task straight away.
+  const addLabel = (name: string) =>
+    createLabel.mutate(
+      { name, color: nextLabelColor(project?.labels ?? []) },
+      { onSuccess: (label) => patch({ labelIds: [...issue.labels.map((l) => l.id), label.id] }) },
+    );
 
   const copyLink = async () => {
     const url = `${window.location.origin}/issue/${issue.issueKey}`;
@@ -564,6 +572,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                 value={issue.labels.map((l) => l.id)}
                 disabled={!canEdit}
                 onChange={(labelIds) => patch({ labelIds })}
+                onCreate={addLabel}
               >
                 <FieldButton disabled={!canEdit} wrap label="Изменить метки">
                   {issue.labels.length === 0 ? (
@@ -621,24 +630,6 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
                 </select>
               </Field>
             )}
-
-            <Field label="Оценка (сторипоинты)">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                disabled={!canEdit}
-                defaultValue={issue.storyPoints ?? ''}
-                key={issue.storyPoints ?? 'none'}
-                onBlur={(event) => {
-                  const raw = event.target.value;
-                  const next = raw === '' ? null : Number(raw);
-                  if (next !== issue.storyPoints) patch({ storyPoints: next });
-                }}
-                placeholder="—"
-                className="h-7 w-full border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
-              />
-            </Field>
 
             <Field label="Срок">
               <DateField

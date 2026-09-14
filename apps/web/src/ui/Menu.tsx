@@ -155,6 +155,13 @@ export function MenuContent({
       );
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        (triggerRef.current?.querySelector('button') ?? triggerRef.current)?.focus?.();
+        return;
+      }
       const list = items();
       if (list.length === 0) return;
       const index = list.indexOf(document.activeElement as HTMLElement);
@@ -171,17 +178,16 @@ export function MenuContent({
       } else if (event.key === 'End') {
         event.preventDefault();
         list[list.length - 1]?.focus();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        setOpen(false);
-        (triggerRef.current?.querySelector('button') ?? triggerRef.current)?.focus?.();
       }
     };
 
     document.addEventListener('keydown', onKeyDown, true);
-    // Focus the first item so the menu is immediately keyboard-navigable.
-    const raf = requestAnimationFrame(() => items()[0]?.focus());
+    // Focus the first item so the menu is immediately keyboard-navigable —
+    // unless something inside already took focus, like a search field one
+    // types into straight away.
+    const raf = requestAnimationFrame(() => {
+      if (!contentRef.current?.contains(document.activeElement)) items()[0]?.focus();
+    });
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
       cancelAnimationFrame(raf);

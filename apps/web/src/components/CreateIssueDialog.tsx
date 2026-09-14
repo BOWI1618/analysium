@@ -5,7 +5,13 @@ import { ChevronDown, CornerDownLeft } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useToast } from '~/app/toast';
-import { useProject, useProjects } from '~/features/projects/hooks';
+import {
+  nextLabelColor,
+  useCreateLabel,
+  useCreateProjectlessLabel,
+  useProject,
+  useProjects,
+} from '~/features/projects/hooks';
 import { useMembers } from '~/features/members/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import { useCreateIssue, useIssueList } from '~/features/issues/hooks';
@@ -42,7 +48,6 @@ export function CreateIssueDialog() {
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const [sprintId, setSprintId] = useState<string | null>(null);
   const [epicId, setEpicId] = useState<string | null>(null);
-  const [storyPoints, setStoryPoints] = useState<string>('');
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [createAnother, setCreateAnother] = useState(false);
 
@@ -65,6 +70,8 @@ export function CreateIssueDialog() {
   const epics = useMemo(() => epicPages?.pages.flatMap((p) => p.items) ?? [], [epicPages]);
 
   const createIssue = useCreateIssue();
+  const createLabel = useCreateLabel(effectiveProjectId);
+  const createProjectlessLabel = useCreateProjectlessLabel(workspace?.id ?? '');
 
   // Latest values without making them effect dependencies — a background
   // refetch of `projects` must never wipe what the user is typing.
@@ -94,7 +101,6 @@ export function CreateIssueDialog() {
     setPriority('MEDIUM');
     setAssigneeId(null);
     setLabelIds([]);
-    setStoryPoints('');
     setDueDate(null);
   }, [open]);
 
@@ -107,6 +113,19 @@ export function CreateIssueDialog() {
     : (workspaceMembers ?? []).filter((m) => m.role !== 'GUEST').map((m) => m.user);
   const statuses = project?.statuses ?? [];
   const selectedStatus = statuses.find((s) => s.id === statusId) ?? statuses[0];
+  // A new label is added to the same list the task goes to and picked at once.
+  const addLabel = async (name: string) => {
+    const input = { name, color: nextLabelColor(project?.labels ?? []) };
+    try {
+      const label = effectiveProjectId
+        ? await createLabel.mutateAsync(input)
+        : await createProjectlessLabel.mutateAsync(input);
+      setLabelIds((ids) => [...ids, label.id]);
+    } catch {
+      /* the mutation's onError already surfaced a toast */
+    }
+  };
+
   const canSubmit = title.trim().length > 0 && Boolean(workspace) && !createIssue.isPending;
 
   const submit = async (openAfter: boolean) => {
@@ -123,7 +142,6 @@ export function CreateIssueDialog() {
       ...(sprintId ? { sprintId } : {}),
       ...(epicId ? { epicId } : {}),
       ...(defaults?.parentId ? { parentId: defaults.parentId } : {}),
-      ...(storyPoints ? { storyPoints: Number(storyPoints) } : {}),
       ...(dueDate ? { dueDate } : {}),
       ...(isDocEmpty(description) ? {} : { description: description as Record<string, unknown> }),
     };
@@ -291,7 +309,12 @@ export function CreateIssueDialog() {
             </button>
           </UserPicker>
 
-          <LabelPicker labels={project?.labels ?? []} value={labelIds} onChange={setLabelIds}>
+          <LabelPicker
+            labels={project?.labels ?? []}
+            value={labelIds}
+            onChange={setLabelIds}
+            onCreate={(name) => void addLabel(name)}
+          >
             <button
               type="button"
               className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs"
@@ -345,18 +368,6 @@ export function CreateIssueDialog() {
               ))}
             </select>
           )}
-
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={storyPoints}
-            onChange={(event) => setStoryPoints(event.target.value)}
-            placeholder="Оценка"
-            aria-label="Оценка сложности в сторипоинтах"
-            title="Оценка сложности в сторипоинтах: условные единицы, чтобы сравнивать задачи между собой. Необязательно."
-            className="h-7 w-20 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
-          />
 
           <div className="w-36">
             <DateField value={dueDate} onChange={setDueDate} />

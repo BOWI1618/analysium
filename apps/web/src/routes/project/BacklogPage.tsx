@@ -287,17 +287,16 @@ function SprintSection({
         )}
 
         <span className="fd-num text-2xs text-text-subtle">
-          {sprint.completedIssueCount}/{sprint.issueCount} готово · {sprint.completedPoints}/
-          {sprint.totalPoints} SP
+          {sprint.completedIssueCount}/{sprint.issueCount} готово
         </span>
 
-        {sprint.totalPoints > 0 && (
+        {sprint.issueCount > 0 && (
           <ProgressBar
-            value={sprint.completedPoints}
-            max={sprint.totalPoints}
+            value={sprint.completedIssueCount}
+            max={sprint.issueCount}
             className="w-24"
             tone="success"
-            label={`Выполнено ${sprint.completedPoints} из ${sprint.totalPoints} SP`}
+            label={`Выполнено ${sprint.completedIssueCount} из ${sprint.issueCount} задач`}
           />
         )}
 

@@ -180,6 +180,31 @@ export function useCreateLabel(projectId: string) {
   });
 }
 
+/** A label for tasks without a project; their list is created if it does not exist yet. */
+export function useCreateProjectlessLabel(workspaceId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (input: { name: string; color: string }) =>
+      api.post<LabelDto & { projectId: string }>(`/workspaces/${workspaceId}/projectless/labels`, input),
+    onSuccess: (label) => {
+      void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
+      void queryClient.invalidateQueries({ queryKey: qk.labels(label.projectId) });
+      void queryClient.invalidateQueries({ queryKey: qk.project(label.projectId) });
+    },
+    onError: (error) => toast.error(error, 'Не удалось создать метку'),
+  });
+}
+
+const LABEL_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#14b8a6', '#ef4444', '#22c55e', '#64748b'];
+
+/** Colour for a label added from the label list: the next one not yet in use. */
+export function nextLabelColor(existing: { color: string }[]): string {
+  const used = new Set(existing.map((l) => l.color.toLowerCase()));
+  return LABEL_COLORS.find((c) => !used.has(c)) ?? LABEL_COLORS[existing.length % LABEL_COLORS.length]!;
+}
+
 export function useUpdateLabel(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

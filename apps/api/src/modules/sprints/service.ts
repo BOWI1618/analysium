@@ -93,9 +93,10 @@ export async function startSprint(actor: ActorContext, sprintId: string): Promis
 
     const issues = await tx.issue.findMany({
       where: { sprintId },
-      select: { storyPoints: true, assigneeId: true },
+      select: { assigneeId: true },
     });
-    const committedPoints = issues.reduce((sum, i) => sum + (i.storyPoints ?? 0), 0);
+    // Progress is measured in tasks: estimates are not used.
+    const committedPoints = issues.length;
 
     // Check-and-act in a single conditional update: either this sprint is still
     // PLANNED with no ACTIVE sibling, or nothing is updated.

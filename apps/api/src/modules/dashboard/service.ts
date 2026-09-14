@@ -145,15 +145,15 @@ export async function projectDashboard(
       return {
         sprintId: s.id,
         name: s.name,
-        committed: s.committedPoints ?? dto.totalPoints,
-        completed: dto.completedPoints,
+        committed: s.committedPoints ?? dto.issueCount,
+        completed: dto.completedIssueCount,
       };
     }),
   };
 }
 
 /**
- * Burndown for the active sprint: remaining points per day against the ideal
+ * Burndown for the active sprint: remaining tasks per day against the ideal
  * straight line. Derived from `completedAt`, so it stays correct even if an
  * issue is completed and then reopened.
  */
@@ -163,14 +163,14 @@ async function burndown(sprintId: string): Promise<{ date: string; remaining: nu
     select: {
       startDate: true,
       endDate: true,
-      issues: { select: { storyPoints: true, completedAt: true } },
+      issues: { select: { completedAt: true } },
     },
   });
   if (!sprint?.startDate || !sprint.endDate) return [];
 
   const start = new Date(sprint.startDate);
   const end = new Date(sprint.endDate);
-  const totalPoints = sprint.issues.reduce((sum, i) => sum + (i.storyPoints ?? 1), 0);
+  const totalPoints = sprint.issues.length;
   const dayCount = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / DAY_MS));
 
   const points: { date: string; remaining: number | null; ideal: number }[] = [];
@@ -183,7 +183,7 @@ async function burndown(sprintId: string): Promise<{ date: string; remaining: nu
     }
     const burned = sprint.issues
       .filter((issue) => issue.completedAt && issue.completedAt.getTime() <= day.getTime() + DAY_MS - 1)
-      .reduce((sum, issue) => sum + (issue.storyPoints ?? 1), 0);
+      .length;
     points.push({
       date: dayKey(day),
       remaining: totalPoints - burned,

@@ -353,11 +353,6 @@ function TreeRow({
         </span>
       </button>
 
-      {row.storyPoints !== null && (
-        <span className="fd-num hidden shrink-0 text-2xs text-text-subtle sm:inline">
-          {row.storyPoints}
-        </span>
-      )}
       <span className="hidden shrink-0 sm:inline-flex">
         <Avatar user={row.assignee} size="sm" showEmpty={false} />
       </span>

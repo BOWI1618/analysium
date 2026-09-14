@@ -510,7 +510,10 @@ export async function createLabel(
   projectId: string,
   input: { name: string; color: string },
 ) {
-  assertCan(actor, Permission.PROJECT_UPDATE);
+  // Adding a label is part of tagging a task, so whoever may edit tasks may add
+  // one from the label list. Renaming and deleting stay with project managers:
+  // those change every task that already carries the label.
+  assertCan(actor, Permission.ISSUE_UPDATE);
   const label = await prisma.label.create({
     data: { projectId, name: input.name, color: input.color },
     select: labelSelect,

@@ -10,7 +10,6 @@ import {
   LabelChip,
   PriorityIcon,
   StatusPill,
-  StoryPoints,
 } from './IssueMeta';
 import { PriorityPicker, StatusPicker, UserPicker } from './Pickers';
 
@@ -23,7 +22,6 @@ export type ListColumn =
   | 'sprint'
   | 'epic'
   | 'dueDate'
-  | 'points'
   | 'updated'
   | 'project';
 
@@ -35,7 +33,6 @@ export const ALL_COLUMNS: { key: ListColumn; label: string; width: string }[] = 
   { key: 'labels', label: 'Labels', width: 'w-40' },
   { key: 'epic', label: 'Epic', width: 'w-32' },
   { key: 'project', label: 'Project', width: 'w-24' },
-  { key: 'points', label: 'Points', width: 'w-12' },
   { key: 'dueDate', label: 'Due', width: 'w-24' },
   { key: 'updated', label: 'Updated', width: 'w-20' },
 ];
@@ -174,12 +171,6 @@ export const IssueRow = memo(function IssueRow({
         </span>
       )}
 
-      {show('points') && (
-        <span className="hidden w-10 shrink-0 justify-center lg:flex">
-          <StoryPoints points={issue.storyPoints} />
-        </span>
-      )}
-
       {show('dueDate') && (
         <span className="hidden w-24 shrink-0 justify-end lg:flex">
           <DueDateChip value={issue.dueDate} />
@@ -266,7 +257,6 @@ export function IssueRowHeader({ columns, selectable = true }: { columns: ListCo
       {show('labels') && <span className="hidden w-32 shrink-0 xl:block">Метки</span>}
       {show('epic') && <span className="hidden w-32 shrink-0 xl:block">Эпик</span>}
       {show('project') && <span className="hidden w-24 shrink-0 xl:block">Проект</span>}
-      {show('points') && <span className="hidden w-10 shrink-0 text-center lg:block">SP</span>}
       {show('dueDate') && <span className="hidden w-24 shrink-0 text-right lg:block">Срок</span>}
       {show('status') && <span className="hidden w-32 shrink-0 sm:block">Статус</span>}
       {show('priority') && <span className="w-5 shrink-0" aria-label="Приоритет" />}

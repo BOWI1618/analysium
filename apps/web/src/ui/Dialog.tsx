@@ -56,6 +56,9 @@ export function Dialog({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // A list opened from inside the dialog closes first; the dialog, with
+        // everything typed into it, stays.
+        if (document.querySelector('[role="menu"]')) return;
         event.stopPropagation();
         onClose();
         return;

@@ -4,7 +4,7 @@ import type { IssueSummaryDto } from '@flowdesk/contracts';
 import { MessageSquare, Paperclip, ListChecks } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
 import { pluralize } from '~/lib/format';
-import { DueDateChip, EpicChip, IssueTypeIcon, LabelChip, PriorityIcon, StoryPoints } from './IssueMeta';
+import { DueDateChip, EpicChip, IssueTypeIcon, LabelChip, PriorityIcon } from './IssueMeta';
 
 export interface IssueCardProps {
   issue: IssueSummaryDto;
@@ -31,7 +31,7 @@ export const IssueCard = memo(function IssueCard({
   className,
 }: IssueCardProps) {
   const hasFooterMeta =
-    issue.commentCount > 0 || issue.attachmentCount > 0 || issue.subtaskCount > 0 || issue.storyPoints !== null;
+    issue.commentCount > 0 || issue.attachmentCount > 0 || issue.subtaskCount > 0;
 
   return (
     <article
@@ -117,7 +117,6 @@ export const IssueCard = memo(function IssueCard({
         )}
 
         <span className="ml-auto flex items-center gap-1.5">
-          <StoryPoints points={issue.storyPoints} />
           <Avatar user={issue.assignee} size="md" showEmpty={false} />
         </span>
       </div>
