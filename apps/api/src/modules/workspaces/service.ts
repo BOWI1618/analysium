@@ -21,7 +21,7 @@ export async function listWorkspaces(userId: string): Promise<WorkspaceDto[]> {
           logo: true,
           ownerId: true,
           createdAt: true,
-          _count: { select: { members: true, projects: true } },
+          _count: { select: { members: true, projects: { where: { isSystem: false } } } },
         },
       },
     },
@@ -93,7 +93,7 @@ export async function getWorkspace(actor: ActorContext): Promise<WorkspaceDto> {
       logo: true,
       ownerId: true,
       createdAt: true,
-      _count: { select: { members: true, projects: true } },
+      _count: { select: { members: true, projects: { where: { isSystem: false } } } },
     },
   });
   if (!ws) throw notFound('Пространство');

@@ -185,22 +185,12 @@ test.describe('основной сценарий', () => {
 });
 
 test.describe('первый запуск без демо-данных', () => {
-  test('новое пространство: проект, код, второй участник получает задачу и работает с ней', async ({
+  test('новое пространство без проектов: задача назначается коллеге и он работает с ней', async ({
     page,
     browser,
   }) => {
     // A brand-new workspace, exactly as on a real server: no projects, nobody else.
     await register(page, 'Владелец Команды');
-
-    // With no projects, quick-create must explain itself instead of showing an
-    // empty project list and a Create button that can never enable.
-    await page.getByRole('button', { name: /Создать задачу/ }).first().click();
-    const emptyCreate = page.getByRole('dialog', { name: 'Новая задача' });
-    await expect(emptyCreate.getByText(/нет ни одного/)).toBeVisible();
-    await emptyCreate.getByRole('button', { name: 'Создать проект' }).click();
-    await expect(page).toHaveURL(/\/projects\/new$/);
-
-    await createProject(page, 'Первый проект', `F${unique().slice(0, 2).toUpperCase()}`);
 
     // Code for a teammate.
     await page.goto('/settings/workspace');
@@ -220,18 +210,23 @@ test.describe('первый запуск без демо-данных', () => {
     await mate.getByRole('button', { name: 'Присоединиться' }).click();
     await expect(mate.getByRole('heading', { level: 1 })).toContainText('Коллега', { timeout: 20_000 });
 
-    // The owner creates a task and assigns it to the teammate — the step that
-    // failed: only the project's explicit role list was offered, which in a new
-    // project holds nobody but its lead.
-    await page.goto('/projects');
-    await page.getByRole('link', { name: /Первый проект/ }).first().click();
+    // Still no project anywhere. The owner creates a task and assigns it to
+    // the teammate — both used to be impossible: a task needed a project, and
+    // only a project's explicit roster was offered as assignees.
+    await page.goto('/');
     await page.getByRole('button', { name: /Создать задачу/ }).first().click();
     const create = page.getByRole('dialog', { name: 'Новая задача' });
+    await expect(create.getByLabel('Проект')).toHaveValue('');
     await create.getByLabel('Название задачи').fill('Задача для коллеги');
     await create.getByRole('button', { name: 'Исполнитель' }).click();
     await page.getByRole('menuitem', { name: /Коллега Второй/ }).click();
     await create.getByRole('button', { name: 'Создать', exact: true }).click();
     await expect(create).toBeHidden({ timeout: 15_000 });
+
+    // Tasks without a project have a home of their own in the sidebar.
+    await expect(page.getByRole('link', { name: /Без проекта/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     // The teammate finds it in their own work and moves it on.
     await mate.goto('/my-work');

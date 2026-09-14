@@ -1,13 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  Permission,
   bulkUpdateSchema,
-  createIssueSchema,
+  createIssueRequestSchema,
   issueFilterSchema,
   moveIssueSchema,
   updateIssueSchema,
 } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
-import { issueContext, projectContext, workspaceContext } from '../../lib/context';
+import { assertCan, issueContext, projectContext, workspaceContext } from '../../lib/context';
+import { ensureSystemProject } from '../projects/service';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import * as service from './service';
 
@@ -42,9 +44,21 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/issues', async (req, reply) => {
-    const input = parse(createIssueSchema, req.body);
-    const { actor, project } = await projectContext(currentUser(req).id, input.projectId);
-    const issue = await service.createIssue(actor, input, project.key);
+    const { workspaceId, projectId: requestedProjectId, ...fields } = parse(createIssueRequestSchema, req.body);
+    const userId = currentUser(req).id;
+
+    // No project: the task goes to the workspace's list of tasks without one.
+    // Permission is checked before that list is created, so someone who may not
+    // create tasks cannot make it appear as a side effect.
+    let projectId = requestedProjectId;
+    if (!projectId) {
+      const workspaceActor = await workspaceContext(userId, workspaceId!);
+      assertCan(workspaceActor, Permission.ISSUE_CREATE);
+      projectId = (await ensureSystemProject(workspaceActor.workspaceId)).id;
+    }
+
+    const { actor, project } = await projectContext(userId, projectId);
+    const issue = await service.createIssue(actor, { ...fields, projectId }, project.key);
     return reply.status(201).send(issue);
   });
 

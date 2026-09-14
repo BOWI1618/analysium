@@ -98,6 +98,8 @@ export interface ProjectDto {
   color: string;
   projectType: ProjectType;
   isArchived: boolean;
+  /** The workspace's list of tasks without a project — not a project to people. */
+  isSystem: boolean;
   lead: UserSummaryDto | null;
   createdAt: string;
   updatedAt: string;

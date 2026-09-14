@@ -63,7 +63,9 @@ export function ProjectLayout() {
     { to: `${base}/gantt`, label: 'Гант', icon: <GanttChartSquare className="size-3.5" /> },
     { to: `${base}/calendar`, label: 'Календарь', icon: <CalendarDays className="size-3.5" /> },
     { to: `${base}/dashboard`, label: 'Аналитика', icon: <PieChart className="size-3.5" /> },
-    ...(project.permissions.includes(Permission.PROJECT_UPDATE)
+    // The list of tasks without a project has nothing to configure: it cannot
+    // be renamed, archived or deleted, and the server refuses to.
+    ...(project.permissions.includes(Permission.PROJECT_UPDATE) && !project.isSystem
       ? [{ to: `${base}/settings`, label: 'Настройки', icon: <Settings className="size-3.5" /> }]
       : []),
   ];
@@ -72,10 +74,11 @@ export function ProjectLayout() {
     <>
       <Topbar
         breadcrumbs={[
-          { label: 'Проекты', to: '/projects' },
+          ...(project.isSystem ? [] : [{ label: 'Проекты', to: '/projects' }]),
           { label: project.name, icon: <ProjectIcon icon={project.icon} color={project.color} size="sm" /> },
         ]}
         actions={
+          project.isSystem ? undefined : (
           <IconButton
             label={project.isFavorite ? 'Убрать из избранного' : 'В избранное'}
             size="sm"
@@ -87,6 +90,7 @@ export function ProjectLayout() {
               <StarOff className="size-4" />
             )}
           </IconButton>
+          )
         }
       />
 

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { CreateIssueInput, IssuePriority, IssueType } from '@flowdesk/contracts';
+import type { CreateIssueRequest, IssuePriority, IssueType } from '@flowdesk/contracts';
 import { EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
-import { ChevronDown, CornerDownLeft, FolderPlus } from 'lucide-react';
+import { ChevronDown, CornerDownLeft } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useToast } from '~/app/toast';
 import { useProject, useProjects } from '~/features/projects/hooks';
+import { useMembers } from '~/features/members/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import { useCreateIssue, useIssueList } from '~/features/issues/hooks';
 import { Dialog } from '~/ui/Dialog';
@@ -30,9 +30,8 @@ export function CreateIssueDialog() {
   const openIssue = useUiStore((s) => s.openIssue);
   const { workspace } = useSession();
   const toast = useToast();
-  const navigate = useNavigate();
 
-  const { data: projects } = useProjects(workspace?.id ?? '');
+  const { data: projects } = useProjects(workspace?.id ?? '', false, { includeSystem: true });
   const [projectId, setProjectId] = useState<string>('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState<unknown>(EMPTY_DOC);
@@ -47,12 +46,21 @@ export function CreateIssueDialog() {
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [createAnother, setCreateAnother] = useState(false);
 
-  const { data: project } = useProject(projectId || undefined);
-  const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? projectId : undefined);
+  // An empty choice means "without a project". Such tasks live in the
+  // workspace's list of tasks without a project; once that list exists its
+  // statuses and labels are offered like any project's. Until the first such
+  // task creates it, there is nothing project-scoped to pick yet.
+  const regularProjects = useMemo(() => (projects ?? []).filter((p) => !p.isSystem), [projects]);
+  const systemProjectId = projects?.find((p) => p.isSystem)?.id;
+  const effectiveProjectId = projectId || systemProjectId || '';
+
+  const { data: project } = useProject(effectiveProjectId || undefined);
+  const { data: workspaceMembers } = useMembers(workspace?.id);
+  const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? effectiveProjectId : undefined);
   const { data: epicPages } = useIssueList(
-    { projectId: projectId || undefined },
+    { projectId: effectiveProjectId || undefined },
     { type: ['EPIC'], includeDone: true },
-    { enabled: Boolean(projectId) },
+    { enabled: Boolean(effectiveProjectId) },
   );
   const epics = useMemo(() => epicPages?.pages.flatMap((p) => p.items) ?? [], [epicPages]);
 
@@ -74,7 +82,9 @@ export function CreateIssueDialog() {
     wasOpen.current = true;
 
     const { defaults: seed, projects: list } = latest.current;
-    setProjectId(seed?.projectId ?? list?.[0]?.id ?? '');
+    // From a project page the task belongs there; from anywhere else it starts
+    // without a project, and a project can be picked if wanted.
+    setProjectId(seed?.projectId && list?.some((p) => p.id === seed.projectId && !p.isSystem) ? seed.projectId : '');
     setStatusId(seed?.statusId);
     setSprintId(seed?.sprintId ?? null);
     setEpicId(seed?.epicId ?? null);
@@ -88,49 +98,22 @@ export function CreateIssueDialog() {
     setDueDate(null);
   }, [open]);
 
-  // Switching project invalidates project-scoped selections, but only when the
-  // user actually changes it — not while the dialog is being seeded.
-  const seededProject = useRef<string | null>(null);
-  useEffect(() => {
-    if (!open || !projectId) return;
-    if (seededProject.current === null) {
-      seededProject.current = projectId;
-      return;
-    }
-    if (seededProject.current === projectId) return;
-    seededProject.current = projectId;
-    setStatusId(undefined);
-    setLabelIds([]);
-    setEpicId(null);
-    setSprintId(null);
-  }, [open, projectId]);
 
-  // Forget the seeded project once the dialog closes.
-  useEffect(() => {
-    if (!open) seededProject.current = null;
-  }, [open]);
 
-  // The dialog can open before the project list has loaded — from the global
-  // shortcut right after a project is created, for instance. The native select
-  // would then display the first option while the state stayed empty, leaving
-  // the form permanently unsubmittable, so adopt the first project when it
-  // arrives and nothing has been chosen yet.
-  useEffect(() => {
-    if (!open || projectId) return;
-    const first = projects?.[0]?.id;
-    if (first) setProjectId(first);
-  }, [open, projectId, projects]);
-
-  const members = project?.assignees ?? [];
+  // Anyone in the workspace who can see the task. Without a project list yet,
+  // that is every non-guest member — the same people who will see it.
+  const members = project
+    ? project.assignees
+    : (workspaceMembers ?? []).filter((m) => m.role !== 'GUEST').map((m) => m.user);
   const statuses = project?.statuses ?? [];
   const selectedStatus = statuses.find((s) => s.id === statusId) ?? statuses[0];
-  const canSubmit = title.trim().length > 0 && Boolean(projectId) && !createIssue.isPending;
+  const canSubmit = title.trim().length > 0 && Boolean(workspace) && !createIssue.isPending;
 
   const submit = async (openAfter: boolean) => {
     if (!canSubmit) return;
 
-    const input: CreateIssueInput = {
-      projectId,
+    const input: CreateIssueRequest = {
+      ...(effectiveProjectId ? { projectId: effectiveProjectId } : { workspaceId: workspace!.id }),
       title: title.trim(),
       type,
       priority,
@@ -167,42 +150,6 @@ export function CreateIssueDialog() {
   };
 
   if (!projects) return null;
-
-  // Tasks live in projects. With none yet, the form had nothing to offer: an
-  // empty project dropdown, nobody to assign, and a Create button that could
-  // never enable. Say why and point at the one step that unblocks it.
-  if (projects.length === 0) {
-    return (
-      <Dialog
-        open={open}
-        onClose={close}
-        title="Новая задача"
-        footer={
-          <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={close}>
-              Закрыть
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              iconLeft={<FolderPlus className="size-3.5" />}
-              onClick={() => {
-                close();
-                navigate('/projects/new');
-              }}
-            >
-              Создать проект
-            </Button>
-          </div>
-        }
-      >
-        <p className="text-sm text-text-muted">
-          Задачи создаются внутри проекта, а в пространстве пока нет ни одного. Создайте первый — доска,
-          список и участники появятся сразу, и сюда можно будет вернуться.
-        </p>
-      </Dialog>
-    );
-  }
 
   return (
     <Dialog
@@ -248,13 +195,24 @@ export function CreateIssueDialog() {
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
+            onChange={(event) => {
+              // Statuses, labels, epics and sprints belong to a project: a
+              // choice made for one means nothing in another.
+              if (event.target.value !== projectId) {
+                setStatusId(undefined);
+                setLabelIds([]);
+                setEpicId(null);
+                setSprintId(null);
+              }
+              setProjectId(event.target.value);
+            }}
             aria-label="Проект"
             className="h-7 rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
           >
-            {projects.map((p) => (
+            <option value="">Без проекта</option>
+            {regularProjects.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.icon} {p.name}
+                {p.name}
               </option>
             ))}
           </select>

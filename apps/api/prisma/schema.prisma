@@ -214,6 +214,12 @@ model Project {
   leadId       String?
   projectType  ProjectType @default(KANBAN)
   isArchived   Boolean     @default(false)
+  /// The workspace's list of tasks without a project. One per workspace,
+  /// created on the first such task. It gives those tasks what every task needs
+  /// — statuses, a key, comments, access rules — without making the project
+  /// optional everywhere. Kept out of project lists and cannot be renamed,
+  /// archived or deleted.
+  isSystem     Boolean     @default(false)
   /// Monotonic counter backing issue keys (WEB-1, WEB-2 …). Incremented inside
   /// the same transaction that creates the issue.
   issueCounter Int         @default(0)
@@ -230,6 +236,7 @@ model Project {
 
   @@unique([workspaceId, key])
   @@index([workspaceId, isArchived])
+  @@index([workspaceId, isSystem])
   @@index([leadId])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("projects")

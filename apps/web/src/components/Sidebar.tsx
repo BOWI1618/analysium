@@ -108,11 +108,15 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
 
-  const { data: projects } = useProjects(workspace?.id ?? '');
+  const { data: projects } = useProjects(workspace?.id ?? '', false, { includeSystem: true });
   const unread = useUnreadCount(workspace?.id ?? '');
 
-  const favorites = useMemo(() => projects?.filter((p) => p.isFavorite) ?? [], [projects]);
-  const recent = useMemo(() => (projects ?? []).slice(0, 8), [projects]);
+  // The list of tasks without a project is not one of "the projects": it gets
+  // its own line above them, and never counts as a project.
+  const systemProject = useMemo(() => projects?.find((p) => p.isSystem), [projects]);
+  const realProjects = useMemo(() => (projects ?? []).filter((p) => !p.isSystem), [projects]);
+  const favorites = useMemo(() => realProjects.filter((p) => p.isFavorite), [realProjects]);
+  const recent = useMemo(() => realProjects.slice(0, 8), [realProjects]);
 
   if (!workspace || !user) return null;
 
@@ -292,6 +296,20 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
               </Tooltip>
             </h2>
             <div className="flex flex-col gap-0.5">
+              {systemProject && (
+                <NavItem
+                  to={`/projects/${systemProject.id}/list`}
+                  icon={<Inbox className="size-3.5 shrink-0 text-text-subtle" />}
+                  label="Без проекта"
+                  collapsed={false}
+                  onClick={onNavigate}
+                  badge={
+                    systemProject.openIssueCount ? (
+                      <span className="fd-num shrink-0 text-2xs opacity-60">{systemProject.openIssueCount}</span>
+                    ) : undefined
+                  }
+                />
+              )}
               {recent.map((project) => (
                 <NavItem
                   key={project.id}
@@ -307,7 +325,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
                   }
                 />
               ))}
-              {projects?.length === 0 && (
+              {realProjects.length === 0 && projects && (
                 <p className="px-2 py-2 text-xs text-text-subtle">Проектов пока нет</p>
               )}
             </div>

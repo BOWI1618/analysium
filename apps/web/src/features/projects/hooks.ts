@@ -11,13 +11,23 @@ import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useToast } from '~/app/toast';
 
-export function useProjects(workspaceId: string, includeArchived = false) {
+/**
+ * Projects of a workspace.
+ *
+ * The list of tasks without a project comes back from the API alongside the
+ * projects but is filtered out here unless asked for: it is not a project to
+ * anyone, and every place that lists or counts projects would otherwise have
+ * to remember to drop it. Only the sidebar and quick-create ask for it.
+ */
+export function useProjects(workspaceId: string, includeArchived = false, options: { includeSystem?: boolean } = {}) {
+  const includeSystem = options.includeSystem ?? false;
   return useQuery({
     queryKey: [...qk.projects(workspaceId), includeArchived],
     queryFn: () =>
       api.get<ProjectDto[]>(`/workspaces/${workspaceId}/projects`, {
         query: { includeArchived: includeArchived || undefined },
       }),
+    select: includeSystem ? undefined : (projects) => projects.filter((p) => !p.isSystem),
     staleTime: 30_000,
   });
 }

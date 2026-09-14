@@ -25,6 +25,7 @@ const projectSelect = {
   color: true,
   projectType: true,
   isArchived: true,
+  isSystem: true,
   createdAt: true,
   updatedAt: true,
   lead: { select: { id: true, name: true, email: true, avatarUrl: true } },
@@ -42,7 +43,7 @@ export async function listProjects(
       ...(opts.includeArchived ? {} : { isArchived: false }),
       ...(allowed === 'ALL' ? {} : { id: { in: allowed } }),
     },
-    orderBy: [{ isArchived: 'asc' }, { name: 'asc' }],
+    orderBy: [{ isSystem: 'desc' }, { isArchived: 'asc' }, { name: 'asc' }],
     select: {
       ...projectSelect,
       members: { where: { userId: actor.userId }, select: { role: true } },
@@ -82,6 +83,7 @@ export async function listProjects(
     color: p.color,
     projectType: p.projectType,
     isArchived: p.isArchived,
+    isSystem: p.isSystem,
     lead: toUserSummary(p.lead),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -228,6 +230,7 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
     color: project.color,
     projectType: project.projectType,
     isArchived: project.isArchived,
+    isSystem: project.isSystem,
     lead: toUserSummary(project.lead),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
@@ -248,6 +251,78 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
   };
 }
 
+async function assertNotSystem(projectId: string): Promise<void> {
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { isSystem: true } });
+  if (project?.isSystem) {
+    throw badRequest('Это общий список задач без проекта — его нельзя переименовать, архивировать или удалить');
+  }
+}
+
+/** Name and key of the list of tasks without a project. */
+export const SYSTEM_PROJECT_NAME = 'Без проекта';
+const SYSTEM_PROJECT_KEYS = ['TASK', 'TSK', 'TODO', 'ZAD'];
+
+/**
+ * The workspace's list of tasks without a project, created on first use.
+ *
+ * Deliberately not a permission-gated action: creating a task without a
+ * project must not require the right to create projects. Two people creating
+ * the first such task at the same moment race on the unique key; the loser
+ * simply reads what the winner created.
+ */
+export async function ensureSystemProject(workspaceId: string): Promise<{ id: string; key: string }> {
+  const existing = await prisma.project.findFirst({
+    where: { workspaceId, isSystem: true },
+    select: { id: true, key: true },
+  });
+  if (existing) return existing;
+
+  const taken = new Set(
+    (await prisma.project.findMany({ where: { workspaceId }, select: { key: true } })).map((p) => p.key),
+  );
+  const key = SYSTEM_PROJECT_KEYS.find((k) => !taken.has(k)) ?? `T${Date.now().toString(36).slice(-4).toUpperCase()}`;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: {
+          workspaceId,
+          name: SYSTEM_PROJECT_NAME,
+          key,
+          description: 'Задачи, не привязанные к проекту.',
+          icon: 'package',
+          color: '#78716c',
+          projectType: 'SIMPLE',
+          isSystem: true,
+        },
+        select: { id: true, key: true },
+      });
+      await tx.workflowStatus.createMany({
+        data: DEFAULT_STATUSES.map((s, index) => ({
+          projectId: created.id,
+          name: s.name,
+          category: s.category as never,
+          color: s.color,
+          position: index,
+          wipLimit: null,
+          isDefault: index === 1,
+        })),
+      });
+      await tx.label.createMany({
+        data: DEFAULT_LABELS.map((l) => ({ projectId: created.id, name: l.name, color: l.color })),
+      });
+      return created;
+    });
+  } catch (error) {
+    const winner = await prisma.project.findFirst({
+      where: { workspaceId, isSystem: true },
+      select: { id: true, key: true },
+    });
+    if (winner) return winner;
+    throw error;
+  }
+}
+
 export async function updateProject(
   actor: ActorContext,
   projectId: string,
@@ -255,6 +330,7 @@ export async function updateProject(
   ip?: string,
 ): Promise<ProjectDetailDto> {
   assertCan(actor, Permission.PROJECT_UPDATE);
+  await assertNotSystem(projectId);
   if (typeof patch.leadId === 'string') await assertLeadIsMember(actor.workspaceId, patch.leadId);
   await prisma.project.update({ where: { id: projectId }, data: patch as never });
   audit({
@@ -276,6 +352,7 @@ export async function updateProject(
 
 export async function deleteProject(actor: ActorContext, projectId: string, ip?: string): Promise<void> {
   assertCan(actor, Permission.PROJECT_DELETE);
+  await assertNotSystem(projectId);
   await prisma.project.delete({ where: { id: projectId } });
   audit({
     workspaceId: actor.workspaceId,

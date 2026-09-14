@@ -235,6 +235,22 @@ export const createIssueSchema = z.object({
 });
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 
+/**
+ * What a client sends to create a task. `projectId` may be left out for a task
+ * without a project; the workspace then has to be named, and the task lands in
+ * that workspace's list of tasks without a project.
+ */
+export const createIssueRequestSchema = createIssueSchema
+  .extend({
+    projectId: cuidLike.nullable().optional(),
+    workspaceId: cuidLike.optional(),
+  })
+  .refine((value) => Boolean(value.projectId || value.workspaceId), {
+    message: 'Укажите проект или пространство',
+    path: ['projectId'],
+  });
+export type CreateIssueRequest = z.infer<typeof createIssueRequestSchema>;
+
 export const updateIssueSchema = z
   .object({
     title: z.string().trim().min(1).max(300).optional(),

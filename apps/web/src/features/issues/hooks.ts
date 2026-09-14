@@ -6,7 +6,7 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query';
 import type {
-  CreateIssueInput,
+  CreateIssueRequest,
   IssueDetailDto,
   IssueSummaryDto,
   MoveIssueInput,
@@ -110,10 +110,15 @@ export function useCreateIssue() {
   const toast = useToast();
 
   return useMutation({
-    mutationFn: (input: CreateIssueInput) => api.post<IssueDetailDto>('/issues', input),
+    mutationFn: (input: CreateIssueRequest) => api.post<IssueDetailDto>('/issues', input),
     onSuccess: (issue) => {
       queryClient.setQueryData(qk.issue(issue.id), issue);
       invalidateIssueViews(queryClient, issue.projectId);
+      // The first task without a project creates that list on the server; the
+      // sidebar learns about it (and its count moves) through the project list.
+      void queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'workspace' && query.queryKey[2] === 'projects',
+      });
     },
     onError: (error) => toast.error(error, 'Не удалось создать задачу'),
   });
