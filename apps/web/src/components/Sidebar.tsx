@@ -17,7 +17,8 @@ import {
   Keyboard,
   Briefcase,
 } from 'lucide-react';
-import { useSession } from '~/app/session';
+import { useSession, useWorkspaceCan } from '~/app/session';
+import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useProjects } from '~/features/projects/hooks';
 import { useUnreadCount } from '~/features/notifications/hooks';
@@ -99,6 +100,7 @@ function ProjectSwatch({ color }: { color?: string | null }) {
 export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => void; inDrawer?: boolean }) {
   const { user, workspace, workspaces, switchWorkspace, logout } = useSession();
   const { state: connection } = useRealtime();
+  const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
   const navigate = useNavigate();
   const toast = useToast();
   // The phone drawer is never the narrow rail: collapsing is a desktop
@@ -284,6 +286,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           <section className="border-t-2 border-border-strong pt-3.5">
             <h2 className="fd-eyebrow flex items-center justify-between px-2 pb-2.5">
               Проекты
+              {canCreateProject && (
               <Tooltip content="Новый проект">
                 <button
                   type="button"
@@ -294,6 +297,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
                   <Plus className="size-3" />
                 </button>
               </Tooltip>
+              )}
             </h2>
             <div className="flex flex-col gap-0.5">
               {systemProject && (

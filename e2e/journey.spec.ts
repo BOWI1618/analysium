@@ -180,6 +180,10 @@ test.describe('основной сценарий', () => {
     });
     expect([403, 404]).toContain(attempt.status());
 
+    // Nor is it offered: no create buttons that would only end in an error.
+    await expect(guest.getByRole('button', { name: 'Создать задачу' })).toHaveCount(0);
+    await expect(guest.getByRole('button', { name: 'Новый проект' })).toHaveCount(0);
+
     await guestContext.close();
   });
 });

@@ -7,7 +7,9 @@ import type {
   ProjectDto,
   StatusDto,
 } from '@flowdesk/contracts';
+import { Permission } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
+import { useWorkspaceCan } from '~/app/session';
 import { qk } from '~/lib/queryKeys';
 import { useToast } from '~/app/toast';
 
@@ -39,6 +41,17 @@ export function useProject(projectId: string | undefined) {
     enabled: Boolean(projectId),
     staleTime: 20_000,
   });
+}
+
+/**
+ * Whether «create task» should be offered: anywhere for members, and inside a
+ * project where a guest has been given a role that allows it. Guests used to
+ * get the button everywhere and an error on submit.
+ */
+export function useCanCreateIssue(projectId?: string): boolean {
+  const workspaceCan = useWorkspaceCan(Permission.ISSUE_CREATE);
+  const { data: project } = useProject(workspaceCan ? undefined : projectId);
+  return workspaceCan || Boolean(project?.permissions.includes(Permission.ISSUE_CREATE));
 }
 
 export function useCreateProject(workspaceId: string) {

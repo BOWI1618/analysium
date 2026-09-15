@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { Archive, FolderPlus, LayoutGrid, Plus, Star, StarOff } from 'lucide-react';
-import { useSession } from '~/app/session';
+import { useSession, useWorkspaceCan } from '~/app/session';
+import { Permission } from '@flowdesk/contracts';
 import { useProjects, useToggleFavorite } from '~/features/projects/hooks';
 import { Topbar } from '~/components/Topbar';
 import { Marker, Masthead } from '~/ui/Masthead';
@@ -22,7 +23,10 @@ export function ProjectsPage() {
   const { data: projects, isLoading, error, refetch } = useProjects(workspaceId, showArchived);
   const toggleFavorite = useToggleFavorite(workspaceId);
 
-  const canCreate = workspace?.role !== 'GUEST';
+  const canCreate = useWorkspaceCan(Permission.PROJECT_CREATE);
+  // Counted even when hidden, so an empty page can say that everything is archived.
+  const { data: withArchived } = useProjects(workspaceId, true);
+  const archivedCount = (withArchived ?? []).filter((p) => p.isArchived).length;
 
   return (
     <>
@@ -78,6 +82,17 @@ export function ProjectsPage() {
                 <Skeleton key={i} className="h-36" />
               ))}
             </div>
+          ) : projects && projects.length === 0 && !showArchived && archivedCount > 0 ? (
+            <EmptyState
+              icon={<Archive className="size-6" />}
+              title="Все проекты в архиве"
+              description={`${pluralize(archivedCount, ['проект', 'проекта', 'проектов'])} в архиве. Их можно открыть и вернуть обратно.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={() => setShowArchived(true)}>
+                  Показать архивные
+                </Button>
+              }
+            />
           ) : projects && projects.length === 0 ? (
             <EmptyState
               icon={<LayoutGrid className="size-6" />}

@@ -12,7 +12,15 @@ interface UiState {
   mobileNavOpen: boolean;
   commandPaletteOpen: boolean;
   createIssueOpen: boolean;
-  createIssueDefaults: { projectId?: string; statusId?: string; sprintId?: string; parentId?: string; epicId?: string } | null;
+  createIssueDefaults: {
+    projectId?: string;
+    statusId?: string;
+    sprintId?: string;
+    parentId?: string;
+    epicId?: string;
+    /** ISO date, e.g. from a calendar day's «+». */
+    dueDate?: string;
+  } | null;
   shortcutsOpen: boolean;
   /** Issue currently shown in the side panel (null = closed). */
   openIssueId: string | null;

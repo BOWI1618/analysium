@@ -195,6 +195,7 @@ export function CalendarPage() {
                   className={clsx(
                     'min-h-24 bg-surface p-1.5',
                     mode === 'day' && 'min-h-[60vh]',
+                    mode === 'week' && 'min-h-[50vh]',
                     outside && 'bg-surface-sunken',
                   )}
                 >
@@ -217,7 +218,10 @@ export function CalendarPage() {
                     {canEdit && (
                       <button
                         type="button"
-                        onClick={() => openCreateIssue({ projectId })}
+                        onClick={() =>
+                          // Noon UTC, as on drop: the date stays the same in every time zone.
+                          openCreateIssue({ projectId, dueDate: new Date(`${key}T12:00:00.000Z`).toISOString() })
+                        }
                         aria-label={`Добавить задачу со сроком ${format(day, 'd MMMM', { locale: ru })}`}
                         className="ml-auto rounded-sm p-0.5 text-text-subtle opacity-0 hover:bg-surface-hover hover:text-text focus:opacity-100 [div:hover>&]:opacity-100 [@media(hover:none)]:hidden"
                       >
@@ -243,6 +247,12 @@ export function CalendarPage() {
                         <span key={issue.id} className="size-1.5 bg-accent" aria-hidden="true" />
                       ))}
                     </button>
+                  )}
+
+                  {mode === 'day' && dayIssues.length === 0 && (
+                    <p className="px-1 py-6 text-center text-sm text-text-subtle">
+                      На этот день задач со сроком нет.
+                    </p>
                   )}
 
                   <ul className={clsx('space-y-1', mode === 'month' && 'hidden sm:block')}>

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useCanCreateIssue } from '~/features/projects/hooks';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { useUiStore } from '~/app/uiStore';
@@ -26,6 +27,7 @@ export function AppShell() {
   // `/projects/new` is a route, not a project id.
   const routeProjectId = /^\/projects\/([^/]+)/.exec(location.pathname)?.[1];
   const currentProjectId = routeProjectId && routeProjectId !== 'new' ? routeProjectId : undefined;
+  const canCreateIssue = useCanCreateIssue(currentProjectId);
 
   const mobileNavOpen = useUiStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen);
@@ -38,7 +40,9 @@ export function AppShell() {
   useHotkeys({
     [SHORTCUTS.commandPalette]: () => setCommandPaletteOpen(true),
     [SHORTCUTS.showShortcuts]: () => setShortcutsOpen(true),
-    [SHORTCUTS.createIssue]: () => openCreateIssue(currentProjectId ? { projectId: currentProjectId } : undefined),
+    [SHORTCUTS.createIssue]: () => {
+      if (canCreateIssue) openCreateIssue(currentProjectId ? { projectId: currentProjectId } : undefined);
+    },
     [SHORTCUTS.goHome]: () => navigate('/'),
     [SHORTCUTS.goMyWork]: () => navigate('/my-work'),
     [SHORTCUTS.goInbox]: () => navigate('/inbox'),

@@ -101,7 +101,7 @@ export function CreateIssueDialog() {
     setPriority('MEDIUM');
     setAssigneeId(null);
     setLabelIds([]);
-    setDueDate(null);
+    setDueDate(seed?.dueDate ?? null);
   }, [open]);
 
 
@@ -132,7 +132,8 @@ export function CreateIssueDialog() {
     !isDocEmpty(description) ||
     Boolean(assigneeId) ||
     labelIds.length > 0 ||
-    Boolean(dueDate);
+    // A date that came with the form (a calendar day's «+») is not the person's input.
+    (dueDate ?? null) !== (defaults?.dueDate ?? null);
 
   const canSubmit = title.trim().length > 0 && Boolean(workspace) && !createIssue.isPending;
 

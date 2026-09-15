@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { can, type Permission } from '@flowdesk/contracts';
 import type {
   AcceptInviteInput,
   JoinWithCodeInput,
@@ -187,4 +188,14 @@ export function useAuthConfig() {
     queryFn: () => api.get<{ registrationOpen: boolean }>('/auth/config'),
     staleTime: 5 * 60_000,
   });
+}
+
+/**
+ * Whether the current user may do this anywhere in the workspace. A project can
+ * grant a guest more inside it — check `project.permissions` there.
+ */
+export function useWorkspaceCan(permission: Permission): boolean {
+  const { user, workspace } = useSession();
+  if (!user || !workspace) return false;
+  return can({ userId: user.id, workspaceId: workspace.id, workspaceRole: workspace.role }, permission);
 }

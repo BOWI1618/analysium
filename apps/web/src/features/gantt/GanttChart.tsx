@@ -385,6 +385,16 @@ function TimelineHeader({ timeline }: { timeline: Timeline }) {
   return (
     <div className="sticky top-0 z-20 bg-surface-sunken" style={{ height: 52 }}>
       <div className="relative border-b-2 border-border-strong" style={{ height: 26 }}>
+        {/* The flag sits in the month row: in the week row it hid a date, on the
+            chart it hid the first task. */}
+        {timeline.todayX !== null && (
+          <span
+            className="fd-num absolute top-1/2 z-10 -translate-y-1/2 bg-danger px-1 py-0.5 text-[9px] font-bold tracking-wider whitespace-nowrap text-accent-fg uppercase"
+            style={{ left: timeline.todayX - 1 }}
+          >
+            сегодня
+          </span>
+        )}
         {timeline.majorTicks.map((tick) => (
           <div
             key={tick.key}
@@ -397,6 +407,9 @@ function TimelineHeader({ timeline }: { timeline: Timeline }) {
       </div>
 
       <div className="relative border-b-2 border-border-strong" style={{ height: 26 }}>
+        {timeline.todayX !== null && (
+          <div className="absolute top-0 bottom-0 z-10 w-[3px] bg-danger" style={{ left: timeline.todayX - 1 }} />
+        )}
         {timeline.minorTicks.map((tick) => (
           <div
             key={tick.key}
@@ -437,16 +450,13 @@ function Background({ timeline, rowCount }: { timeline: Timeline; rowCount: numb
       ))}
 
       {/* Today is the one rule on the chart that has to be read from across the
-          room, so it is drawn thick and in the alarm colour, flagged at the top. */}
+          room, so it is drawn thick and in the alarm colour. Its flag lives in
+          the header: on the chart it covered the first task's bar. */}
       {timeline.todayX !== null && (
         <div
           className="absolute top-0 bottom-0 z-10 w-[3px] bg-danger"
           style={{ left: timeline.todayX - 1 }}
-        >
-          <span className="fd-num absolute -top-0.5 -left-px bg-danger px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent-fg">
-            сегодня
-          </span>
-        </div>
+        />
       )}
     </div>
   );

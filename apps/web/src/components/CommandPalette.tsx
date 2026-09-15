@@ -13,7 +13,8 @@ import {
   Inbox,
   Home,
 } from 'lucide-react';
-import { useSession } from '~/app/session';
+import { useSession, useWorkspaceCan } from '~/app/session';
+import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useSearch } from '~/features/search/hooks';
 import { Avatar } from '~/ui/Avatar';
@@ -59,8 +60,10 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  const canCreateIssue = useWorkspaceCan(Permission.ISSUE_CREATE);
+  const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
   const staticCommands = useMemo<Command[]>(
-    () => [
+    () => ([
       {
         id: 'nav-home',
         label: 'Перейти на главную',
@@ -128,8 +131,12 @@ export function CommandPalette() {
         group: 'Навигация',
         run: () => navigate('/settings/workspace'),
       },
-    ],
-    [navigate, openCreateIssue, setShortcutsOpen],
+    ] as Command[]).filter(
+      (command) =>
+        (command.id !== 'action-create-issue' || canCreateIssue) &&
+        (command.id !== 'action-create-project' || canCreateProject),
+    ),
+    [navigate, openCreateIssue, setShortcutsOpen, canCreateIssue, canCreateProject],
   );
 
   const commands = useMemo<Command[]>(() => {

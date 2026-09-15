@@ -112,7 +112,11 @@ export function buildTimeline(
   const cell = (key: string, label: string, cellStart: Date, cellEnd: Date): TimelineTick => {
     const x = Math.max(0, xFor(cellStart));
     const right = Math.min(totalWidth, (differenceInCalendarDays(startOfDay(cellEnd), start) + 1) * dayWidth);
-    return { key, label, x, width: Math.max(0, right - x), isWeekend: false, isToday: false };
+    const width = Math.max(0, right - x);
+    // A cell clipped to a sliver at the edge keeps its place but not its label,
+    // which would otherwise spill over the next month's name.
+    const fits = width >= label.length * 8 + 16;
+    return { key, label: fits ? label : '', x, width, isWeekend: false, isToday: false };
   };
 
   const majorTicks: TimelineTick[] =

@@ -7,6 +7,7 @@ import { Button, IconButton } from '~/ui/Button';
 import { Shortcut } from '~/ui/Shortcut';
 import { SHORTCUTS, comboText } from '~/lib/shortcuts';
 import { NotificationBell } from './NotificationCenter';
+import { useCanCreateIssue } from '~/features/projects/hooks';
 
 export interface Crumb {
   label: string;
@@ -22,6 +23,7 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
   // `/projects/new` is a route, not a project id.
   const routeProjectId = /^\/projects\/([^/]+)/.exec(location.pathname)?.[1];
   const currentProjectId = routeProjectId && routeProjectId !== 'new' ? routeProjectId : undefined;
+  const canCreateIssue = useCanCreateIssue(currentProjectId);
 
   return (
     <header
@@ -116,6 +118,7 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
 
         <NotificationBell />
 
+        {canCreateIssue && (
         <Button
           size="sm"
           variant="primary"
@@ -127,6 +130,7 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
         >
           <span className="hidden sm:inline">Создать</span>
         </Button>
+        )}
       </div>
     </header>
   );

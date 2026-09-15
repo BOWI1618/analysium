@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { CircleDot, Clock, Plus, Star, TriangleAlert } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
-import { useSession } from '~/app/session';
+import { useSession, useWorkspaceCan } from '~/app/session';
+import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useProjects } from '~/features/projects/hooks';
 import { useIssueList, flattenPages } from '~/features/issues/hooks';
@@ -33,6 +34,8 @@ export function HomePage() {
   const { user, workspace } = useSession();
   const openIssue = useUiStore((s) => s.openIssue);
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
+  const canCreateIssue = useWorkspaceCan(Permission.ISSUE_CREATE);
+  const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
   const workspaceId = workspace?.id ?? '';
 
   const { data: summary } = useQuery({
@@ -143,9 +146,13 @@ export function HomePage() {
                   <EmptyState
                     compact
                     title="Очередь пуста"
-                    description="На вас ничего не назначено. Возьмите задачу или создайте новую."
+                    description={
+                      canCreateIssue
+                        ? 'На вас ничего не назначено. Возьмите задачу или создайте новую.'
+                        : 'На вас ничего не назначено.'
+                    }
                     action={
-                      <Button
+                      canCreateIssue && <Button
                         size="sm"
                         variant="secondary"
                         iconLeft={<Plus className="size-3.5" />}
@@ -206,9 +213,13 @@ export function HomePage() {
                   compact
                   className="border-2 border-dashed border-border-strong"
                   title="Проектов пока нет"
-                  description="В проекте живут задачи, доска и спринты."
+                  description={
+                    canCreateProject
+                      ? 'В проекте живут задачи, доска и спринты.'
+                      : 'Вас пока не добавили ни в один проект — попросите администратора.'
+                  }
                   action={
-                    <Link to="/projects/new">
+                    canCreateProject && <Link to="/projects/new">
                       <Button size="sm" variant="primary" iconLeft={<Plus className="size-3.5" />}>
                         Создать проект
                       </Button>
