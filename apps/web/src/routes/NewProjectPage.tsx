@@ -149,7 +149,7 @@ export function NewProjectPage() {
               }
             >
               <option value="KANBAN">Канбан — непрерывный поток на доске</option>
-              <option value="SCRUM">Скрам — спринты, бэклог и velocity</option>
+              <option value="SCRUM">Скрам — спринты, бэклог и скорость команды</option>
               <option value="SIMPLE">Простой — обычный список работ</option>
             </Select>
 

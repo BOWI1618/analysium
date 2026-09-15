@@ -243,8 +243,8 @@ function BoardColumn({
           <Tooltip
             content={
               overLimit
-                ? `Превышен WIP-лимит: ${column.status.wipLimit}`
-                : `WIP-лимит: ${column.status.wipLimit}`
+                ? `Превышен лимит задач: ${column.status.wipLimit}`
+                : `Лимит задач: ${column.status.wipLimit}`
             }
           >
             <span

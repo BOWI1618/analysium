@@ -387,13 +387,13 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
                 max={99}
                 defaultValue={status.wipLimit ?? ''}
                 disabled={!canManage}
-                placeholder="WIP"
+                placeholder="Лимит"
                 onBlur={(event) => {
                   const raw = event.target.value;
                   const wipLimit = raw === '' ? null : Number(raw);
                   if (wipLimit !== status.wipLimit) updateStatus.mutate({ statusId: status.id, patch: { wipLimit } });
                 }}
-                aria-label={`WIP-лимит статуса «${status.name}»`}
+                aria-label={`Лимит задач в статусе «${status.name}»`}
                 className="fd-num h-7 w-14 border-2 border-border-strong bg-surface px-1.5 text-xs disabled:opacity-60"
               />
 
@@ -568,7 +568,7 @@ function MembersSection({ project, workspaceId }: { project: Project; workspaceI
               <p className="truncate text-sm font-medium">{member.user.name}</p>
               <p className="truncate text-2xs text-text-subtle">{member.user.email}</p>
             </div>
-            <Badge tone={member.role === 'LEAD' ? 'accent' : 'neutral'}>{member.role.toLowerCase()}</Badge>
+            <Badge tone={member.role === 'LEAD' ? 'accent' : 'neutral'}>{PROJECT_ROLE_LABEL[member.role]}</Badge>
             <IconButton
               label={`Убрать ${member.user.name}`}
               size="xs"

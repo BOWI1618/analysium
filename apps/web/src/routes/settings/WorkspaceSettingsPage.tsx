@@ -147,7 +147,7 @@ function GeneralSection() {
           </div>
         </div>
 
-        <Input label="Адрес (slug)" value={workspace.slug} disabled hint="Адрес задаётся при создании и не меняется." />
+        <Input label="Адрес" value={workspace.slug} disabled hint="Адрес задаётся при создании и не меняется." />
 
         <div className="flex items-center gap-3">
           <Button

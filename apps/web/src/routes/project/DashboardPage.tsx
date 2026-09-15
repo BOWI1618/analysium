@@ -194,12 +194,12 @@ export function DashboardPage() {
               </Panel>
 
               {/* Velocity */}
-              <Panel bodyClassName="p-3.5" title="Velocity">
+              <Panel bodyClassName="p-3.5" title="Скорость спринтов">
                 {data.velocity.length === 0 ? (
                   <EmptyState
                     compact
                     title="Завершённых спринтов нет"
-description="Velocity появится после первого завершённого спринта."
+description="Скорость появится после первого завершённого спринта."
                   />
                 ) : (
                   <VelocityChart data={data.velocity} />
@@ -211,7 +211,7 @@ description="Velocity появится после первого завершё�
             {data.sprint && (
               <Panel
                 bodyClassName="p-3.5"
-                title={`Burndown — ${data.sprint.name}`}
+                title={`Сгорание задач — ${data.sprint.name}`}
                 subtitle={
                   data.sprint.startDate && data.sprint.endDate
                     ? `${shortDate(data.sprint.startDate)} → ${shortDate(data.sprint.endDate)}`
@@ -363,7 +363,7 @@ function VelocityChart({
 
 function BurndownChart({ data }: { data: { date: string; remaining: number | null; ideal: number }[] }) {
   if (data.length < 2) {
-    return <EmptyState compact title="Недостаточно данных" description="Укажите даты спринта, чтобы увидеть burndown." />;
+    return <EmptyState compact title="Недостаточно данных" description="Укажите даты спринта, чтобы увидеть сгорание задач." />;
   }
 
   const max = Math.max(1, ...data.map((d) => Math.max(d.ideal, d.remaining ?? 0)));
@@ -387,7 +387,7 @@ function BurndownChart({ data }: { data: { date: string; remaining: number | nul
         viewBox={`0 0 ${width} ${height}`}
         className="h-28 w-full"
         role="img"
-        aria-label="Burndown спринта: остаток работ против идеальной линии"
+        aria-label="Сгорание задач спринта: остаток работ против идеальной линии"
         preserveAspectRatio="none"
       >
         <polyline

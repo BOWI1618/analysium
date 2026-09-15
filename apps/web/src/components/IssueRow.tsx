@@ -26,15 +26,15 @@ export type ListColumn =
   | 'project';
 
 export const ALL_COLUMNS: { key: ListColumn; label: string; width: string }[] = [
-  { key: 'status', label: 'Status', width: 'w-32' },
-  { key: 'priority', label: 'Priority', width: 'w-8' },
-  { key: 'assignee', label: 'Assignee', width: 'w-8' },
-  { key: 'reporter', label: 'Reporter', width: 'w-8' },
-  { key: 'labels', label: 'Labels', width: 'w-40' },
-  { key: 'epic', label: 'Epic', width: 'w-32' },
-  { key: 'project', label: 'Project', width: 'w-24' },
-  { key: 'dueDate', label: 'Due', width: 'w-24' },
-  { key: 'updated', label: 'Updated', width: 'w-20' },
+  { key: 'status', label: 'Статус', width: 'w-32' },
+  { key: 'priority', label: 'Приоритет', width: 'w-8' },
+  { key: 'assignee', label: 'Исполнитель', width: 'w-8' },
+  { key: 'reporter', label: 'Автор', width: 'w-8' },
+  { key: 'labels', label: 'Метки', width: 'w-40' },
+  { key: 'epic', label: 'Эпик', width: 'w-32' },
+  { key: 'project', label: 'Проект', width: 'w-24' },
+  { key: 'dueDate', label: 'Срок', width: 'w-24' },
+  { key: 'updated', label: 'Обновлено', width: 'w-20' },
 ];
 
 export const DEFAULT_COLUMNS: ListColumn[] = ['status', 'priority', 'assignee', 'labels', 'dueDate', 'updated'];

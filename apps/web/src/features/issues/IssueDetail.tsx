@@ -201,14 +201,14 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
         </PriorityPicker>
 
         <div className="ml-auto flex items-center gap-0.5">
-          <Tooltip content="Copy link">
+          <Tooltip content="Скопировать ссылку">
             <IconButton label="Скопировать ссылку" size="sm" onClick={() => void copyLink()}>
               <Link2 className="size-4" />
             </IconButton>
           </Tooltip>
 
           {variant === 'panel' && (
-            <Tooltip content="Open full page">
+            <Tooltip content="Открыть на отдельной странице">
               <Link
                 to={`/issue/${issue.issueKey}`}
                 onClick={close}
@@ -627,7 +627,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                   {sprints.map((sprint) => (
                     <option key={sprint.id} value={sprint.id}>
                       {sprint.name}
-                      {sprint.status === 'ACTIVE' ? ' (active)' : ''}
+                      {sprint.status === 'ACTIVE' ? ' (активный)' : ''}
                     </option>
                   ))}
                 </select>
