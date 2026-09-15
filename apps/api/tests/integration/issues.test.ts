@@ -209,6 +209,17 @@ describe('updating an issue', () => {
   });
 });
 
+describe('subtasks', () => {
+  it('are listed oldest first', async () => {
+    const parent = await createIssue(app, owner, project.id, { title: 'Родитель списка' });
+    const first = await createIssue(app, owner, project.id, { title: 'Первая', type: 'SUBTASK', parentId: parent.id });
+    const second = await createIssue(app, owner, project.id, { title: 'Вторая', type: 'SUBTASK', parentId: parent.id });
+
+    const detail = await app.inject({ method: 'GET', url: `/api/v1/issues/${parent.id}`, headers: { cookie: owner.cookie } });
+    expect(detail.json().subtasks.map((s: { id: string }) => s.id)).toEqual([first.id, second.id]);
+  });
+});
+
 describe('moving an issue', () => {
   it('places a card between its neighbours', async () => {
     const target = statusNamed('К выполнению');

@@ -162,7 +162,9 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
 
   const subtasks = await prisma.issue.findMany({
     where: { parentId: issueId, archivedAt: null },
-    orderBy: [{ rank: 'asc' }],
+    // In the order they were added, oldest first — a checklist, not a board
+    // column where new cards land on top.
+    orderBy: [{ number: 'asc' }],
     select: issueSummarySelect,
   });
 
