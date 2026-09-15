@@ -125,7 +125,7 @@ export async function createProject(
         key,
         description: input.description ?? null,
         icon: input.icon ?? '📦',
-        color: input.color ?? '#6366f1',
+        color: input.color ?? '#005dac',
         projectType: input.projectType as never,
         leadId: input.leadId ?? actor.userId,
       },

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { PROJECT_ROLES, STATUS_CATEGORIES, Permission, type StatusCategory } from '@flowdesk/contracts';
-import { GripVertical, Plus, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useMembers } from '~/features/members/hooks';
 import {
@@ -26,7 +26,7 @@ import { Badge } from '~/ui/Badge';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { ErrorState, Skeleton } from '~/ui/Feedback';
 import { StatusDot } from '~/components/IssueMeta';
-import { PROJECT_ROLE_LABEL, STATUS_CATEGORY_LABEL } from '~/lib/labels';
+import { PROJECT_ROLE_LABEL } from '~/lib/labels';
 import { pluralize } from '~/lib/format';
 import { PROJECT_ICONS, PROJECT_COLORS } from '~/lib/projectMeta';
 
@@ -309,6 +309,19 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
 
 /* -------------------------------------------------------------- workflow */
 
+/**
+ * What a status means to the rest of the product. Worded as a meaning, not as
+ * a status: the old «к выполнению / в работе» read like a second status inside
+ * the first.
+ */
+const STATUS_MEANING: Record<StatusCategory, string> = {
+  BACKLOG: 'Отложено, в бэклоге',
+  UNSTARTED: 'Ещё не начато',
+  STARTED: 'В процессе',
+  COMPLETED: 'Сделано, закрыта',
+  CANCELED: 'Отменено, закрыта',
+};
+
 function WorkflowSection({ project, canManage }: { project: Project; canManage: boolean }) {
   const createStatus = useCreateStatus(project.id);
   const updateStatus = useUpdateStatus(project.id);
@@ -329,25 +342,61 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
     reorder.mutate(next);
   };
 
+  const cell = 'shrink-0 text-2xs font-bold tracking-wide text-text-subtle uppercase';
+
   return (
     <>
       <Card
-        title="Колонки доски"
-        description="Статусы задают колонки доски. Категория определяет, что считается «в работе» и «готово» в отчётах."
+        title="Статусы задач"
+        description="Статус — это колонка на доске. Названия, цвета и порядок любые: слева направо, как задача идёт от начала к концу."
       >
+        <div className="mb-3 space-y-1 border-2 border-border-strong bg-surface-sunken p-2.5 text-xs text-text-muted">
+          <p>
+            <b className="text-text">Что означает</b> — подсказка системе, как считать задачи в этой колонке: ещё не
+            начаты, в работе или закрыты. От этого зависят аналитика, «Просрочено» (закрытые задачи не просрочены) и
+            фильтр «Скрыть завершённые».
+          </p>
+          <p>
+            <b className="text-text">Лимит</b> — сколько задач может одновременно стоять в колонке; пусто — без
+            ограничения. <b className="text-text">Задач</b> — сколько их там сейчас.
+          </p>
+        </div>
+
+        <div className="hidden items-center gap-2 px-2 pb-1.5 sm:flex" aria-hidden="true">
+          {canManage && <span className="w-8 shrink-0" />}
+          <span className="w-3 shrink-0" />
+          <span className={clsx(cell, 'min-w-24 flex-1')}>Колонка</span>
+          <span className={clsx(cell, 'w-44')}>Что означает</span>
+          <span className={clsx(cell, 'w-10')}>Цвет</span>
+          <span className={clsx(cell, 'w-14')}>Лимит</span>
+          <span className={clsx(cell, 'w-8 text-right')}>Задач</span>
+          {canManage && <span className="w-7 shrink-0" />}
+        </div>
+
         <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
           {project.statuses.map((status, index) => (
-            <li key={status.id} className="flex flex-wrap items-center gap-2 p-2">
+            <li key={status.id} className="flex flex-wrap items-center gap-2 p-2 sm:flex-nowrap">
               {canManage && (
-                <span className="flex flex-col">
+                <span className="flex w-8 shrink-0">
                   <button
                     type="button"
                     onClick={() => move(index, -1)}
                     disabled={index === 0}
-                    aria-label={`Поднять «${status.name}»`}
+                    aria-label={`Сдвинуть «${status.name}» левее`}
+                    title="Левее на доске"
                     className="text-text-subtle hover:text-text disabled:opacity-30"
                   >
-                    <GripVertical className="size-3.5 rotate-90" />
+                    <ChevronUp className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(index, 1)}
+                    disabled={index === project.statuses.length - 1}
+                    aria-label={`Сдвинуть «${status.name}» правее`}
+                    title="Правее на доске"
+                    className="text-text-subtle hover:text-text disabled:opacity-30"
+                  >
+                    <ChevronDown className="size-4" />
                   </button>
                 </span>
               )}
@@ -361,7 +410,7 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
                   if (name && name !== status.name) updateStatus.mutate({ statusId: status.id, patch: { name } });
                 }}
                 aria-label={`Название статуса «${status.name}»`}
-                className="h-7 min-w-32 flex-1 border-2 border-transparent bg-transparent px-1.5 text-sm hover:border-border-strong focus:border-accent focus:outline-none disabled:cursor-default"
+                className="h-7 min-w-24 flex-1 border-2 border-transparent bg-transparent px-1.5 text-sm hover:border-border-strong focus:border-accent focus:outline-none disabled:cursor-default"
               />
 
               <select
@@ -370,12 +419,12 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
                 onChange={(event) =>
                   updateStatus.mutate({ statusId: status.id, patch: { category: event.target.value } })
                 }
-                aria-label={`Категория статуса «${status.name}»`}
-                className="h-7 border-2 border-border-strong bg-surface px-1.5 text-xs disabled:opacity-60"
+                aria-label={`Что означает статус «${status.name}»`}
+                className="h-7 w-44 border-2 border-border-strong bg-surface px-1.5 text-xs disabled:opacity-60"
               >
                 {STATUS_CATEGORIES.map((category) => (
                   <option key={category} value={category}>
-                    {STATUS_CATEGORY_LABEL[category]}
+                    {STATUS_MEANING[category]}
                   </option>
                 ))}
               </select>
@@ -395,26 +444,33 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
                 max={99}
                 defaultValue={status.wipLimit ?? ''}
                 disabled={!canManage}
-                placeholder="Лимит"
+                placeholder="—"
                 onBlur={(event) => {
                   const raw = event.target.value;
                   const wipLimit = raw === '' ? null : Number(raw);
                   if (wipLimit !== status.wipLimit) updateStatus.mutate({ statusId: status.id, patch: { wipLimit } });
                 }}
                 aria-label={`Лимит задач в статусе «${status.name}»`}
+                title="Сколько задач может одновременно стоять в колонке. Пусто — без ограничения."
                 className="fd-num h-7 w-14 border-2 border-border-strong bg-surface px-1.5 text-xs disabled:opacity-60"
               />
 
-              <span className="fd-num text-2xs text-text-subtle">{status.issueCount ?? 0}</span>
+              <span className="fd-num w-8 text-right text-2xs text-text-subtle" title="Задач в этом статусе сейчас">
+                {status.issueCount ?? 0}
+              </span>
 
-              {canManage && project.statuses.length > 1 && (
-                <IconButton
-                  label={`Удалить «${status.name}»`}
-                  size="xs"
-                  onClick={() => setDeleting({ id: status.id, name: status.name })}
-                >
-                  <Trash2 className="size-3.5 text-danger" />
-                </IconButton>
+              {canManage && (
+                <span className="w-7 shrink-0">
+                  {project.statuses.length > 1 && (
+                    <IconButton
+                      label={`Удалить «${status.name}»`}
+                      size="xs"
+                      onClick={() => setDeleting({ id: status.id, name: status.name })}
+                    >
+                      <Trash2 className="size-3.5 text-danger" />
+                    </IconButton>
+                  )}
+                </span>
               )}
             </li>
           ))}
@@ -441,14 +497,14 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
               />
             </div>
             <Select
-              label="Категория"
+              label="Что означает"
               value={newCategory}
               onChange={(event) => setNewCategory((event.target as HTMLSelectElement).value as StatusCategory)}
-              className="w-36"
+              className="w-56"
             >
               {STATUS_CATEGORIES.map((category) => (
                 <option key={category} value={category}>
-                  {STATUS_CATEGORY_LABEL[category]}
+                  {STATUS_MEANING[category]}
                 </option>
               ))}
             </Select>
