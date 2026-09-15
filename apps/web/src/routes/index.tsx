@@ -117,7 +117,8 @@ export function AppRoutes() {
           <Route path="projects/new" element={<NewProjectPage />} />
 
           <Route path="projects/:projectId" element={<ProjectLayout />}>
-            <Route index element={<BoardPage />} />
+            {/* Opens on the board with its tab lit, rather than an unnamed address. */}
+            <Route index element={<Navigate to="board" replace />} />
             <Route path="board" element={<BoardPage />} />
             <Route path="list" element={<ListPage />} />
             <Route path="backlog" element={<BacklogPage />} />

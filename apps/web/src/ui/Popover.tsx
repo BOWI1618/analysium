@@ -8,12 +8,14 @@ export interface PopoverProps {
   children: (props: { close: () => void }) => ReactNode;
   align?: 'start' | 'end';
   className?: string;
+  /** For the wrapper around the trigger, e.g. to let a field fill its row. */
+  triggerClassName?: string;
   width?: number;
   label?: string;
 }
 
 /** Free-form floating panel (filters, date picker, label editor). */
-export function Popover({ trigger, children, align = 'start', className, width = 256, label }: PopoverProps) {
+export function Popover({ trigger, children, align = 'start', className, triggerClassName, width = 256, label }: PopoverProps) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -55,7 +57,7 @@ export function Popover({ trigger, children, align = 'start', className, width =
 
   return (
     <>
-      <div ref={triggerRef} className="inline-flex">
+      <div ref={triggerRef} className={clsx('inline-flex', triggerClassName)}>
         {trigger({ open, toggle: () => setOpen((v) => !v), ref: undefined as never })}
       </div>
       {open &&
@@ -64,6 +66,7 @@ export function Popover({ trigger, children, align = 'start', className, width =
             ref={contentRef}
             role="dialog"
             aria-label={label}
+            data-popover
             className={clsx(
               'fixed z-[var(--z-menu)] rounded-md border-2 border-border-strong bg-surface p-2 shadow-lg animate-scale-in',
               className,

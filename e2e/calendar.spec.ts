@@ -67,7 +67,7 @@ test.describe('календарь', () => {
     await grid.click({ position: { x: 200, y: 9 * 56 + 10 } });
 
     const dialog = page.getByRole('dialog', { name: 'Новая задача' });
-    await expect(dialog.getByLabel('Срок: время')).toHaveValue('10:00');
+    await expect(dialog.getByRole('button', { name: 'Срок', exact: true })).toContainText('10:00');
     await dialog.getByLabel('Название задачи').fill('Планёрка');
     await dialog.getByRole('button', { name: 'Создать', exact: true }).click();
 

@@ -1,6 +1,18 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { format } from 'date-fns';
+import {
+  addDays,
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameMonth,
+  isSameYear,
+  startOfMonth,
+  startOfWeek,
+} from 'date-fns';
+import { ru } from 'date-fns/locale';
 import {
   ISSUE_PRIORITIES,
   ISSUE_TYPES,
@@ -10,7 +22,8 @@ import {
   type StatusDto,
   type UserSummaryDto,
 } from '@flowdesk/contracts';
-import { Plus, Search, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { Popover } from '~/ui/Popover';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Avatar } from '~/ui/Avatar';
 import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
@@ -372,7 +385,8 @@ export function MultiSelect({
 /* ---------------------------------------------------------- date picker */
 
 /**
- * A date with an optional time of day. Without a time the value is the whole
+ * A date with an optional time of day, picked in one window: the month to
+ * click a day in and the time under it. Without a time the value is the whole
  * day, stored at noon UTC so it reads as the same date in any Russian zone;
  * with one it is the exact local moment.
  */
@@ -402,32 +416,47 @@ export function DateField({
     onChange(new Date(`${day}T12:00:00.000Z`).toISOString(), false);
   };
 
-  const inputClass = clsx(
-    'h-7 rounded-md border-2 border-border-strong bg-surface px-1.5 text-sm',
-    'hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none',
-    'disabled:cursor-not-allowed disabled:opacity-60',
-  );
+  const shown = date
+    ? format(date, isSameYear(date, new Date()) ? 'd MMM' : 'd MMM yyyy', { locale: ru }) + (timeValue ? `, ${timeValue}` : '')
+    : '';
 
   return (
-    <div className={clsx('flex items-center gap-1', className)}>
-      <input
-        type="date"
-        value={dateValue}
-        disabled={disabled}
-        onChange={(event) => emit(event.target.value, timeValue)}
-        aria-label={label}
-        className={clsx(inputClass, 'min-w-0 flex-1', !dateValue && 'text-text-subtle')}
-      />
-      <input
-        type="time"
-        value={timeValue}
-        // A time needs a day to belong to.
-        disabled={disabled || !dateValue}
-        onChange={(event) => emit(dateValue, event.target.value)}
-        aria-label={`${label}: время`}
-        title="Время — необязательно. Без него срок на весь день."
-        className={clsx(inputClass, 'w-[5.5rem] shrink-0', !timeValue && 'text-text-subtle')}
-      />
+    <div className={clsx('flex min-w-0 items-center gap-1', className)}>
+      <Popover
+        width={288}
+        label={`${label}: дата и время`}
+        triggerClassName="min-w-0 flex-1"
+        trigger={({ toggle, open }) => (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={toggle}
+            aria-label={label}
+            aria-expanded={open}
+            className={clsx(
+              'flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-1.5 text-left text-sm',
+              'hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+              open && 'border-accent',
+            )}
+          >
+            <CalendarDays className="size-3.5 shrink-0 text-text-subtle" />
+            <span className={clsx('fd-num min-w-0 flex-1 truncate', !shown && 'text-text-subtle')}>
+              {shown || 'Не задан'}
+            </span>
+          </button>
+        )}
+      >
+        {({ close }) => (
+          <DateTimePanel
+            label={label}
+            dateValue={dateValue}
+            timeValue={timeValue}
+            onChange={emit}
+            onClose={close}
+          />
+        )}
+      </Popover>
       {value && !disabled && (
         <button
           type="button"
@@ -438,6 +467,173 @@ export function DateField({
           <X className="size-3" />
         </button>
       )}
+    </div>
+  );
+}
+
+const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const TIME_PRESETS = ['09:00', '12:00', '15:00', '18:00'];
+
+/** The month and the time, side by side in one panel. */
+function DateTimePanel({
+  label,
+  dateValue,
+  timeValue,
+  onChange,
+  onClose,
+}: {
+  label: string;
+  dateValue: string;
+  timeValue: string;
+  onChange: (day: string, time: string) => void;
+  onClose: () => void;
+}) {
+  const [month, setMonth] = useState(() => startOfMonth(dateValue ? new Date(`${dateValue}T00:00:00`) : new Date()));
+  const days = eachDayOfInterval({
+    start: startOfWeek(month, { weekStartsOn: 1 }),
+    end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
+  });
+  const ymd = (day: Date) => format(day, 'yyyy-MM-dd');
+  const todayYmd = ymd(new Date());
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setMonth(addMonths(month, -1))}
+          aria-label="Предыдущий месяц"
+          className="rounded-sm p-1 text-text-subtle hover:bg-surface-hover hover:text-text"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <span className="text-sm font-bold first-letter:uppercase">{format(month, 'LLLL yyyy', { locale: ru })}</span>
+        <button
+          type="button"
+          onClick={() => setMonth(addMonths(month, 1))}
+          aria-label="Следующий месяц"
+          className="rounded-sm p-1 text-text-subtle hover:bg-surface-hover hover:text-text"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-0.5 text-center" role="grid" aria-label={`${label}: день`}>
+        {WEEKDAYS.map((weekday, index) => (
+          <span key={weekday} className={clsx('text-2xs font-bold text-text-subtle', index > 4 && 'text-danger/70')}>
+            {weekday}
+          </span>
+        ))}
+        {days.map((day) => {
+          const key = ymd(day);
+          const selected = key === dateValue;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onChange(key, timeValue)}
+              aria-label={format(day, 'd MMMM yyyy', { locale: ru })}
+              aria-pressed={selected}
+              className={clsx(
+                'fd-num h-8 text-xs',
+                selected
+                  ? 'border-2 border-border-strong bg-accent font-bold text-accent-fg'
+                  : key === todayYmd
+                    ? 'border-2 border-accent font-bold hover:bg-accent-subtle'
+                    : 'hover:bg-surface-hover',
+                !selected && !isSameMonth(day, month) && 'text-text-subtle/60',
+              )}
+            >
+              {format(day, 'd')}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex gap-1">
+        {[
+          ['Сегодня', 0],
+          ['Завтра', 1],
+          ['Через неделю', 7],
+        ].map(([title, offset]) => (
+          <button
+            key={title}
+            type="button"
+            onClick={() => {
+              const day = addDays(new Date(), offset as number);
+              setMonth(startOfMonth(day));
+              onChange(ymd(day), timeValue);
+            }}
+            className="flex-1 border-2 border-border-strong px-1 py-0.5 text-2xs font-bold whitespace-nowrap hover:bg-surface-hover"
+          >
+            {title}
+          </button>
+        ))}
+      </div>
+
+      <div className="border-t-2 border-border-strong pt-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-2xs font-bold tracking-wide text-text-subtle uppercase">Время</span>
+          <input
+            type="time"
+            value={timeValue}
+            disabled={!dateValue}
+            onChange={(event) => onChange(dateValue, event.target.value)}
+            aria-label={`${label}: время`}
+            className="fd-num h-7 flex-1 rounded-md border-2 border-border-strong bg-surface px-1.5 text-sm focus:border-accent focus:outline-none disabled:opacity-50"
+          />
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {TIME_PRESETS.map((time) => (
+            <button
+              key={time}
+              type="button"
+              disabled={!dateValue}
+              onClick={() => onChange(dateValue, time)}
+              aria-pressed={timeValue === time}
+              className={clsx(
+                'fd-num border-2 border-border-strong px-1.5 py-0.5 text-2xs disabled:opacity-40',
+                timeValue === time ? 'bg-ink text-text-inverted' : 'hover:bg-surface-hover',
+              )}
+            >
+              {time}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={!dateValue}
+            onClick={() => onChange(dateValue, '')}
+            aria-pressed={Boolean(dateValue) && !timeValue}
+            className={clsx(
+              'border-2 border-border-strong px-1.5 py-0.5 text-2xs disabled:opacity-40',
+              dateValue && !timeValue ? 'bg-ink text-text-inverted' : 'hover:bg-surface-hover',
+            )}
+          >
+            Весь день
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t-2 border-border-strong pt-2">
+        <button
+          type="button"
+          disabled={!dateValue}
+          onClick={() => {
+            onChange('', '');
+            onClose();
+          }}
+          className="text-xs text-danger hover:underline disabled:opacity-40"
+        >
+          Убрать
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="border-2 border-border-strong bg-accent px-2.5 py-0.5 text-xs font-bold text-accent-fg hover:bg-accent-active"
+        >
+          Готово
+        </button>
+      </div>
     </div>
   );
 }

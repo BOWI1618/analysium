@@ -175,7 +175,7 @@ export function Dialog({
       if (event.key === 'Escape') {
         // A list opened from inside the dialog closes first; the dialog, with
         // everything typed into it, stays.
-        if (document.querySelector('[role="menu"]')) return;
+        if (document.querySelector('[role="menu"], [data-popover]')) return;
         // So does a dialog opened on top of this one, such as the question
         // about unsaved changes.
         const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');

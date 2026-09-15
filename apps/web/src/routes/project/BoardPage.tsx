@@ -8,6 +8,10 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  pointerWithin,
+  useDroppable,
+  type CollisionDetection,
+  type DragOverEvent,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -21,7 +25,7 @@ import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
 import { Permission, StatusCategory } from '@flowdesk/contracts';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, ArrowDownToLine } from 'lucide-react';
 import type { StatusDto } from '@flowdesk/contracts';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
@@ -75,6 +79,8 @@ export function BoardPage() {
     fields: { ...DEFAULT_BOARD_SETTINGS.fields, ...storedSettings?.fields },
   };
   const [draggingIssue, setDraggingIssue] = useState<IssueSummaryDto | null>(null);
+  // The column a dragged card would land in, lit up so the move is obvious.
+  const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
   const epics = useMemo(
     () => (epicPages?.pages.flatMap((p) => p.items) ?? []).map((e) => ({ id: e.id, title: e.title })),
@@ -113,8 +119,27 @@ export function BoardPage() {
     setDraggingIssue(found?.issue ?? null);
   };
 
+  const columnIdOf = (overId: string | null): string | null => {
+    if (!overId) return null;
+    if (columns.some((c) => c.status.id === overId)) return overId;
+    return findIssue(overId)?.column.status.id ?? null;
+  };
+
+  const handleDragOver = (event: DragOverEvent) =>
+    setOverColumnId(columnIdOf(event.over ? String(event.over.id) : null));
+
+  // The pointer decides first: anywhere over a column — its header, its empty
+  // foot — drops into it. Over a card inside, the card wins, for the position.
+  const collisionDetection: CollisionDetection = (args) => {
+    const hits = pointerWithin(args);
+    if (hits.length === 0) return closestCorners(args);
+    const cards = hits.filter((hit) => !columns.some((c) => c.status.id === hit.id));
+    return cards.length > 0 ? cards : hits;
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     setDraggingIssue(null);
+    setOverColumnId(null);
     const { active, over } = event;
     if (!over) return;
 
@@ -170,10 +195,14 @@ export function BoardPage() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
-        onDragCancel={() => setDraggingIssue(null)}
+        onDragCancel={() => {
+          setDraggingIssue(null);
+          setOverColumnId(null);
+        }}
       >
         {/* On a phone one column fits the screen, so a swipe settles on the next
             column instead of stopping halfway between two. */}
@@ -200,6 +229,11 @@ export function BoardPage() {
                     onOpenIssue={openIssue}
                     onToggleDone={canEdit ? toggleDone : undefined}
                     onCreate={() => openCreateIssue({ projectId, statusId: column.status.id })}
+                    dropTarget={
+                      Boolean(draggingIssue) &&
+                      overColumnId === column.status.id &&
+                      draggingIssue?.statusId !== column.status.id
+                    }
                   />
                 ))}
             {!isLoading && canManageColumns && <AddColumn projectId={projectId} statuses={statuses} />}
@@ -232,6 +266,7 @@ function BoardColumn({
   onOpenIssue,
   onToggleDone,
   onCreate,
+  dropTarget,
 }: {
   projectId: string;
   column: BoardColumnDto;
@@ -243,13 +278,12 @@ function BoardColumn({
   onOpenIssue: (id: string) => void;
   onToggleDone?: (issue: IssueSummaryDto) => void;
   onCreate: () => void;
+  /** A card from another column is over this one. */
+  dropTarget: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
-  const { setNodeRef, isOver } = useSortable({
-    id: column.status.id,
-    data: { type: 'column' },
-    disabled: true,
-  });
+  // The whole column takes the drop, header included, not only its card list.
+  const { setNodeRef } = useDroppable({ id: column.status.id, data: { type: 'column' } });
 
   const overLimit =
     column.status.wipLimit !== null &&
@@ -263,9 +297,12 @@ function BoardColumn({
 
   return (
     <section
+      ref={setNodeRef}
       className={clsx(
-        'flex w-[min(18rem,calc(100vw-3rem))] shrink-0 snap-start flex-col border-2 border-border-strong sm:w-72',
+        'relative flex w-[min(18rem,calc(100vw-3rem))] shrink-0 snap-start flex-col border-2 sm:w-72',
+        'transition-[box-shadow,outline-color] duration-100',
         isActive ? 'bg-surface shadow-xl lg:-translate-y-2' : 'bg-bg-subtle shadow-md',
+        dropTarget ? 'border-accent outline-4 outline-offset-2 outline-accent' : 'border-border-strong outline-transparent',
       )}
       aria-label={`Колонка «${column.status.name}»`}
     >
@@ -345,12 +382,17 @@ function BoardColumn({
       </header>
 
       <div
-        ref={setNodeRef}
         className={clsx(
           'min-h-0 flex-1 overflow-y-auto px-2 pb-2 scrollbar-thin',
-          isOver && 'bg-accent-subtle/40',
+          dropTarget && 'bg-accent-subtle',
         )}
       >
+        {dropTarget && (
+          <div className="mt-2 flex items-center justify-center gap-1.5 border-2 border-dashed border-accent bg-surface py-3 text-xs font-bold text-accent">
+            <ArrowDownToLine className="size-3.5" />
+            Перенести в «{column.status.name}»
+          </div>
+        )}
         {/* New cards land at the top of a column, so the field that adds one is there too. */}
         {canCreate && (
           <QuickAddIssue

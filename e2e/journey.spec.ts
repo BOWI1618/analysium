@@ -508,13 +508,17 @@ test.describe('несохранённые данные', () => {
       await page.getByRole('button', { name: 'Создать задачу' }).first().click();
       const dialog = page.getByRole('dialog', { name: 'Новая задача' });
       await dialog.getByLabel('Название задачи').fill('Отправить отчёт к вечеру');
-      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      const ymd = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
-      await dialog.getByLabel('Срок', { exact: true }).fill(ymd);
-      await dialog.getByLabel('Срок: время').fill('18:30');
+      // Day and time are picked in one window.
+      await dialog.getByRole('button', { name: 'Срок', exact: true }).click();
+      const picker = page.getByRole('dialog', { name: 'Срок: дата и время' });
+      await picker.getByRole('button', { name: 'Завтра' }).click();
+      await picker.getByLabel('Срок: время').fill('18:30');
+      await picker.getByRole('button', { name: 'Готово' }).click();
+      await expect(picker).toBeHidden();
+      await expect(dialog).toBeVisible();
       await dialog.getByRole('button', { name: 'Создать и открыть' }).click();
       const panel = page.getByRole('dialog', { name: 'Детали задачи' });
-      await expect(panel.getByLabel('Срок: время')).toHaveValue('18:30', { timeout: 15_000 });
+      await expect(panel.getByRole('button', { name: 'Срок', exact: true })).toContainText('18:30', { timeout: 15_000 });
       await page.keyboard.press('Escape');
     });
 
