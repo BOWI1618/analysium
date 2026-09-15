@@ -114,6 +114,7 @@ export function useCreateIssue() {
     onSuccess: (issue) => {
       queryClient.setQueryData(qk.issue(issue.id), issue);
       invalidateIssueViews(queryClient, issue.projectId);
+      if (issue.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(issue.parent.id), exact: true });
       // The first task without a project creates that list on the server; the
       // sidebar learns about it (and its count moves) through the project list.
       void queryClient.invalidateQueries({
@@ -184,6 +185,8 @@ export function useUpdateIssue(issueId: string) {
       queryClient.setQueryData(qk.issue(issue.id), issue);
       invalidateIssueViews(queryClient, issue.projectId);
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issue.id) });
+      // The parent's detail lists this subtask — in its panel and unfolded in lists.
+      if (issue.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(issue.parent.id), exact: true });
     },
   });
 }
@@ -285,6 +288,8 @@ export function usePatchIssue() {
       queryClient.setQueryData(qk.issue(issue.id), issue);
       invalidateIssueViews(queryClient, issue.projectId);
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issue.id) });
+      // The parent's detail lists this subtask — in its panel and unfolded in lists.
+      if (issue.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(issue.parent.id), exact: true });
     },
     onError: (error) => toast.error(error, 'Не удалось сохранить изменение'),
   });

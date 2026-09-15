@@ -16,6 +16,12 @@ interface UiState {
   shortcutsOpen: boolean;
   /** Issue currently shown in the side panel (null = closed). */
   openIssueId: string | null;
+  /**
+   * Issues whose subtasks are unfolded in lists. Kept here rather than in the
+   * row: long lists are virtualised, and a row scrolled away and back would
+   * otherwise fold up again.
+   */
+  expandedIssueIds: Record<string, true>;
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -26,6 +32,7 @@ interface UiState {
   setShortcutsOpen: (open: boolean) => void;
   openIssue: (issueId: string) => void;
   closeIssue: () => void;
+  toggleIssueExpanded: (issueId: string, expanded?: boolean) => void;
 }
 
 const SIDEBAR_KEY = 'flowdesk.sidebar-collapsed';
@@ -54,6 +61,7 @@ export const useUiStore = create<UiState>((set) => ({
   createIssueDefaults: null,
   shortcutsOpen: false,
   openIssueId: null,
+  expandedIssueIds: {},
 
   toggleSidebar: () =>
     set((state) => {
@@ -72,4 +80,11 @@ export const useUiStore = create<UiState>((set) => ({
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
   openIssue: (issueId) => set({ openIssueId: issueId }),
   closeIssue: () => set({ openIssueId: null }),
+  toggleIssueExpanded: (issueId, expanded) =>
+    set((state) => {
+      const next = { ...state.expandedIssueIds };
+      if (expanded ?? !next[issueId]) next[issueId] = true;
+      else delete next[issueId];
+      return { expandedIssueIds: next };
+    }),
 }));

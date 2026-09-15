@@ -61,6 +61,7 @@ export const issueSummarySelect = {
   epic: { select: { id: true, issueKey: true, title: true, project: { select: { color: true } } } },
   _count: { select: { comments: true, attachments: true } },
   subtasks: { select: { id: true, status: { select: { category: true } } } },
+  parent: { select: { id: true, issueKey: true, title: true } },
 } satisfies Prisma.IssueSelect;
 
 type IssueRow = Prisma.IssueGetPayload<{ select: typeof issueSummarySelect }>;
@@ -124,6 +125,7 @@ export function toIssueSummary(issue: IssueRow): IssueSummaryDto {
     attachmentCount: issue._count.attachments,
     subtaskCount: subtasks.length,
     subtaskDoneCount: subtasks.filter((s) => s.status.category === 'COMPLETED').length,
+    parent: issue.parent ?? null,
     createdAt: issue.createdAt.toISOString(),
     updatedAt: issue.updatedAt.toISOString(),
     completedAt: iso(issue.completedAt),

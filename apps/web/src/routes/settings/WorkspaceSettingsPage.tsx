@@ -29,7 +29,7 @@ import { ConfirmDialog } from '~/ui/Dialog';
 import { EmptyState, Skeleton } from '~/ui/Feedback';
 import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
-import { PROJECT_TYPE_LABEL, ROLE_LABEL } from '~/lib/labels';
+import { ROLE_LABEL } from '~/lib/labels';
 
 const SECTIONS = ['general', 'members', 'roles', 'projects', 'audit'] as const;
 type Section = (typeof SECTIONS)[number];
@@ -531,7 +531,7 @@ function ProjectsSection() {
               <ProjectIcon icon={project.icon} color={project.color} size="sm" />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{project.name}</span>
               <span className="fd-key">{project.key}</span>
-              <Badge>{PROJECT_TYPE_LABEL[project.projectType]}</Badge>
+              {project.projectType === 'SCRUM' && <Badge>спринты</Badge>}
               {project.isArchived && <Badge tone="warning">в архиве</Badge>}
               <span className="fd-num text-2xs text-text-subtle">
                 {pluralize(project.totalIssueCount ?? 0, ['задача', 'задачи', 'задач'])}

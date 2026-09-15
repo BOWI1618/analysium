@@ -1,7 +1,11 @@
 import { memo } from 'react';
 import clsx from 'clsx';
+import { ChevronRight, CornerDownRight } from 'lucide-react';
 import type { IssueSummaryDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
+import { useUiStore } from '~/app/uiStore';
+import { useIssue, usePatchIssue } from '~/features/issues/hooks';
 import { Avatar } from '~/ui/Avatar';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { relativeTime } from '~/lib/format';
 import {
   DueDateChip,
@@ -58,6 +62,11 @@ export interface IssueRowProps {
   editable?: boolean;
   statuses?: StatusDto[];
   members?: UserSummaryDto[];
+  /**
+   * 1 for a subtask unfolded under its parent: indented, and without a
+   * checkbox of its own (selection belongs to the list's top-level rows).
+   */
+  depth?: 0 | 1;
   onPatch?: (patch: Record<string, unknown>) => void;
 }
 
@@ -77,10 +86,15 @@ export const IssueRow = memo(function IssueRow({
   members = [],
   onPatch,
   selectable = true,
+  depth = 0,
 }: IssueRowProps) {
   const show = (column: ListColumn) => columns.includes(column);
+  const expandable = depth === 0 && issue.subtaskCount > 0;
+  const expanded = useUiStore((s) => expandable && Boolean(s.expandedIssueIds[issue.id]));
+  const toggleExpanded = useUiStore((s) => s.toggleIssueExpanded);
 
   return (
+    <>
     <div
       role="row"
       tabIndex={0}
@@ -96,6 +110,9 @@ export const IssueRow = memo(function IssueRow({
         } else if (event.key === ' ' && selectable) {
           event.preventDefault();
           onToggleSelect({ shiftKey: event.shiftKey });
+        } else if (expandable && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+          event.preventDefault();
+          toggleExpanded(issue.id, event.key === 'ArrowRight');
         } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault();
           // Rows across every group on the page, in reading order — grouped
@@ -107,7 +124,8 @@ export const IssueRow = memo(function IssueRow({
         }
       }}
       className={clsx(
-        'group flex cursor-pointer items-center gap-2 border-b-2 border-border-strong px-3 py-2 transition-colors',
+        'group flex cursor-pointer items-center gap-2 border-b-2 border-border-strong py-2 pr-3 transition-colors',
+        depth === 1 ? 'bg-surface-sunken pl-9' : 'pl-3',
         selected ? 'bg-marker-subtle' : 'hover:bg-surface-hover',
         focused && 'ring-1 ring-accent ring-inset',
       )}
@@ -131,6 +149,26 @@ export const IssueRow = memo(function IssueRow({
         />
       )}
 
+      {/* Fold toggle for subtasks; the same slot holds the connector of an unfolded subtask. */}
+      <span className="flex w-4 shrink-0 justify-center">
+        {expandable ? (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={expanded ? `Свернуть подзадачи ${issue.issueKey}` : `Показать подзадачи ${issue.issueKey}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleExpanded(issue.id);
+            }}
+            className="inline-flex size-4 items-center justify-center text-text-subtle hover:bg-surface-active hover:text-text"
+          >
+            <ChevronRight className={clsx('size-3.5 transition-transform', expanded && 'rotate-90')} />
+          </button>
+        ) : depth === 1 ? (
+          <CornerDownRight className="size-3.5 text-text-subtle" aria-hidden="true" />
+        ) : null}
+      </span>
+
       <IssueTypeIcon type={issue.type} className="size-3.5 shrink-0" />
 
       <span className="fd-key shrink-0 truncate" style={{ width: 'var(--key-rail)' }}>
@@ -139,6 +177,12 @@ export const IssueRow = memo(function IssueRow({
 
       {/* Two lines on a phone rather than a few truncated words; one line from sm up. */}
       <span className="line-clamp-2 min-w-0 flex-1 text-sm font-bold break-words text-text group-hover:text-accent sm:line-clamp-none sm:min-w-40 sm:truncate">
+        {/* A subtask listed on its own (in «Мои задачи») says whose part it is. */}
+        {depth === 0 && issue.parent && (
+          <span className="fd-key mr-1.5 font-normal text-text-subtle" title={issue.parent.title}>
+            {issue.parent.issueKey} ›
+          </span>
+        )}
         {issue.title}
         {issue.subtaskCount > 0 && (
           <span className="fd-num ml-2 text-2xs font-normal text-text-subtle">
@@ -165,8 +209,8 @@ export const IssueRow = memo(function IssueRow({
       )}
 
       {show('project') && (
-        <span className="hidden w-24 shrink-0 truncate text-2xs text-text-subtle xl:block">
-          <span aria-hidden="true">{issue.project.icon}</span>{' '}
+        <span className="hidden w-24 shrink-0 items-center gap-1 truncate text-2xs text-text-subtle xl:flex" title={issue.project.name}>
+          <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
           <span className="fd-key">{issue.project.key}</span>
         </span>
       )}
@@ -235,8 +279,72 @@ export const IssueRow = memo(function IssueRow({
         </span>
       )}
     </div>
+    {expanded && (
+      <SubtaskRows
+        parentId={issue.id}
+        columns={columns}
+        editable={editable}
+        statuses={statuses}
+        members={members}
+        alignWithCheckbox={selectable}
+      />
+    )}
+    </>
   );
 });
+
+/**
+ * The subtasks of an unfolded row, read from the parent's detail — the same
+ * cache the issue panel uses, so both stay in step.
+ */
+function SubtaskRows({
+  parentId,
+  columns,
+  editable,
+  statuses,
+  members,
+  alignWithCheckbox,
+}: {
+  parentId: string;
+  columns: ListColumn[];
+  editable?: boolean;
+  statuses: StatusDto[];
+  members: UserSummaryDto[];
+  alignWithCheckbox: boolean;
+}) {
+  const { data: parent, isLoading } = useIssue(parentId);
+  const openIssue = useUiStore((s) => s.openIssue);
+  const patchIssue = usePatchIssue();
+
+  if (isLoading || !parent) {
+    return (
+      <div className="border-b-2 border-border-strong bg-surface-sunken py-2 pl-9 text-2xs text-text-subtle">
+        Загружаем подзадачи…
+      </div>
+    );
+  }
+
+  return (
+    <div role="rowgroup" aria-label={`Подзадачи ${parent.issueKey}`} className={clsx(alignWithCheckbox && '[&>[role=row]]:pl-14')}>
+      {parent.subtasks.map((subtask) => (
+        <IssueRow
+          key={subtask.id}
+          issue={subtask}
+          columns={columns}
+          depth={1}
+          selected={false}
+          selectable={false}
+          onToggleSelect={() => undefined}
+          onOpen={() => openIssue(subtask.id)}
+          editable={editable}
+          statuses={statuses}
+          members={members}
+          onPatch={(patch) => patchIssue.mutate({ issueId: subtask.id, patch })}
+        />
+      ))}
+    </div>
+  );
+}
 
 /** Sticky header describing the visible columns. */
 export function IssueRowHeader({ columns, selectable = true }: { columns: ListColumn[]; selectable?: boolean }) {
@@ -247,8 +355,9 @@ export function IssueRowHeader({ columns, selectable = true }: { columns: ListCo
       role="row"
       className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-border-strong bg-surface-sunken px-3 py-1.5 text-2xs font-bold tracking-wide text-text-subtle uppercase"
     >
-      {/* Spacers mirror the row: the checkbox (only where rows are selectable) and the type icon. */}
+      {/* Spacers mirror the row: the checkbox (only where rows are selectable), the fold toggle and the type icon. */}
       {selectable && <span className="size-3.5 shrink-0" />}
+      <span className="w-4 shrink-0" />
       <span className="size-3.5 shrink-0" />
       <span className="shrink-0" style={{ width: 'var(--key-rail)' }}>
         Ключ

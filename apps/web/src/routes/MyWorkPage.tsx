@@ -28,19 +28,26 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'recent', label: 'Недавно обновлённые' },
 ];
 
-/** Filter preset per tab — the tab *is* a filter, so the URL stays honest. */
+/**
+ * Filter preset per tab — the tab *is* a filter, so the URL stays honest.
+ *
+ * Personal tabs include subtasks: a subtask assigned to someone is their work
+ * even when the parent task belongs to someone else, and top-level lists
+ * would hide it from them entirely.
+ */
 function presetFor(tab: Tab): IssueFilters {
   switch (tab) {
     case 'assigned':
-      return { assigneeId: ['@me'], includeDone: false, sort: 'priority', order: 'asc' };
+      return { assigneeId: ['@me'], includeDone: false, includeSubtasks: true, sort: 'priority', order: 'asc' };
     case 'created':
       return { reporterId: ['@me'], sort: 'created', order: 'desc' };
     case 'overdue':
-      return { assigneeId: ['@me'], isOverdue: true, sort: 'dueDate', order: 'asc' };
+      return { assigneeId: ['@me'], isOverdue: true, includeSubtasks: true, sort: 'dueDate', order: 'asc' };
     case 'upcoming':
       return {
         assigneeId: ['@me'],
         includeDone: false,
+        includeSubtasks: true,
         dueAfter: new Date().toISOString(),
         sort: 'dueDate',
         order: 'asc',

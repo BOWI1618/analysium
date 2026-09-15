@@ -25,7 +25,6 @@ export function NewProjectPage() {
     description: '',
     icon: PROJECT_ICONS[0]!.name,
     color: PROJECT_COLORS[0]!.value,
-    projectType: 'KANBAN',
     leadId: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -41,7 +40,8 @@ export function NewProjectPage() {
         description: form.description.trim() || undefined,
         icon: form.icon,
         color: form.color,
-        projectType: form.projectType,
+        // Sprints are switched on later in the project settings, when wanted.
+        projectType: 'KANBAN',
         leadId: form.leadId || null,
       });
       leaveGuard.allowLeave();
@@ -140,18 +140,6 @@ export function NewProjectPage() {
                 })}
               </div>
             </fieldset>
-
-            <Select
-              label="Методология"
-              value={form.projectType}
-              onChange={(event) =>
-                setForm((f) => ({ ...f, projectType: (event.target as HTMLSelectElement).value }))
-              }
-            >
-              <option value="KANBAN">Канбан — непрерывный поток на доске</option>
-              <option value="SCRUM">Скрам — спринты, бэклог и скорость команды</option>
-              <option value="SIMPLE">Простой — обычный список работ</option>
-            </Select>
 
             <Select
               label="Ведущий проекта"

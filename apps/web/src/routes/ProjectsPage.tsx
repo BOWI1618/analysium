@@ -13,7 +13,6 @@ import { EmptyState, ErrorState, ProgressBar, Skeleton } from '~/ui/Feedback';
 import { Checkbox } from '~/ui/Input';
 import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
-import { PROJECT_TYPE_LABEL } from '~/lib/labels';
 
 export function ProjectsPage() {
   const { workspace } = useSession();
@@ -128,7 +127,7 @@ export function ProjectsPage() {
                           </Link>
                           <p className="mt-0.5 flex items-center gap-1.5">
                             <span className="fd-key">{project.key}</span>
-                            <Badge>{PROJECT_TYPE_LABEL[project.projectType] ?? project.projectType}</Badge>
+                            {project.projectType === 'SCRUM' && <Badge>спринты</Badge>}
                             {project.isArchived && (
                               <Badge tone="warning">
                                 <Archive className="size-2.5" />

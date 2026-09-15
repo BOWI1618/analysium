@@ -161,6 +161,8 @@ export interface IssueSummaryDto {
   attachmentCount: number;
   subtaskCount: number;
   subtaskDoneCount: number;
+  /** Set for a subtask, so a list that shows it on its own can say whose part it is. */
+  parent: { id: string; issueKey: string; title: string } | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;

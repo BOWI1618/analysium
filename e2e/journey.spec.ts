@@ -367,6 +367,57 @@ test.describe('перенос задачи', () => {
   });
 });
 
+test.describe('подзадачи и спринты', () => {
+  test('подзадачи раскрываются в списке, из подзадачи есть путь назад, спринты включаются переключателем', async ({ page }) => {
+    await register(page, 'Главный По Подзадачам');
+    await createProject(page, 'Разбор задач');
+    const projectId = new URL(page.url()).pathname.split('/')[2]!;
+    const me = (await (await page.request.get('/api/v1/auth/session')).json()).user.id;
+
+    const parent = await (
+      await page.request.post('/api/v1/issues', { data: { projectId, title: 'Большая задача' } })
+    ).json();
+    await page.request.post('/api/v1/issues', {
+      data: { projectId, title: 'Кусочек работы', type: 'SUBTASK', parentId: parent.id, assigneeId: me },
+    });
+
+    await test.step('в списке подзадача разворачивается под задачей', async () => {
+      await page.goto(`/projects/${projectId}/list`);
+      await expect(page.getByText('Большая задача')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Кусочек работы')).toHaveCount(0);
+      await page.getByRole('button', { name: `Показать подзадачи ${parent.issueKey}` }).click();
+      const group = page.getByRole('rowgroup', { name: `Подзадачи ${parent.issueKey}` });
+      await expect(group.getByText('Кусочек работы')).toBeVisible();
+      await page.getByRole('button', { name: `Свернуть подзадачи ${parent.issueKey}` }).click();
+      await expect(page.getByText('Кусочек работы')).toHaveCount(0);
+    });
+
+    await test.step('из подзадачи можно вернуться к задаче', async () => {
+      await page.getByRole('button', { name: `Показать подзадачи ${parent.issueKey}` }).click();
+      await page.getByText('Кусочек работы').click();
+      const panel = page.getByRole('dialog', { name: 'Детали задачи' });
+      await panel.getByRole('button', { name: /Подзадача задачи/ }).click();
+      await expect(panel.getByRole('heading', { name: 'Большая задача' }).or(panel.getByText('Большая задача').first())).toBeVisible();
+      await expect(panel.getByRole('button', { name: /Подзадача задачи/ })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+    });
+
+    await test.step('подзадача, назначенная мне, видна в «Моих задачах» с ключом задачи', async () => {
+      await page.goto('/my-work');
+      await expect(page.getByText('Кусочек работы')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(`${parent.issueKey} ›`)).toBeVisible();
+    });
+
+    await test.step('спринты включаются в настройках проекта', async () => {
+      await page.goto(`/projects/${projectId}/settings`);
+      await expect(page.getByRole('link', { name: 'Бэклог' })).toHaveCount(0);
+      await page.getByLabel('Работать спринтами').check();
+      await page.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(page.getByRole('link', { name: 'Бэклог' })).toBeVisible({ timeout: 15_000 });
+    });
+  });
+});
+
 test.describe('несохранённые данные', () => {
   test('закрытие формы с введёнными данными спрашивает, пустая закрывается сразу', async ({ page }) => {
     await register(page, 'Осторожный Пользователь');

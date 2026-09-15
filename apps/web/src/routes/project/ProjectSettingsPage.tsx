@@ -261,17 +261,25 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
           placeholder="Для чего этот проект?"
         />
 
-        <Select
-          label="Методология"
-          value={form.projectType}
-          onChange={(event) =>
-            setForm((f) => ({ ...f, projectType: (event.target as HTMLSelectElement).value as Project['projectType'] }))
-          }
-        >
-          <option value="KANBAN">Канбан — непрерывный поток</option>
-          <option value="SCRUM">Скрам — спринты и бэклог</option>
-          <option value="SIMPLE">Простой — просто список работ</option>
-        </Select>
+        {/* Sprints are the one thing a "methodology" changes: the backlog tab,
+            the sprint field on tasks and the sprint charts. Everything else is
+            the same for every project, so this is a switch, not a choice of three. */}
+        <div>
+          <Checkbox
+            checked={form.projectType === 'SCRUM'}
+            onChange={(event) =>
+              setForm((f) => ({
+                ...f,
+                projectType: event.target.checked ? 'SCRUM' : project.projectType === 'SCRUM' ? 'KANBAN' : project.projectType,
+              }))
+            }
+            label="Работать спринтами"
+          />
+          <p className="mt-1 pl-6 text-xs text-text-subtle">
+            Добавляет вкладку «Бэклог», выбор спринта в задачах и графики спринтов в аналитике. Задачи при
+            выключении никуда не пропадают.
+          </p>
+        </div>
 
         <div className="flex items-center gap-2">
           <Button

@@ -5,7 +5,7 @@
  * only their presentation is localised. Keeping the maps here means a label is
  * written once and every screen — pickers, settings, toasts — agrees.
  */
-import type { ProjectRole, ProjectType, StatusCategory, WorkspaceRole } from '@flowdesk/contracts';
+import type { ProjectRole, StatusCategory, WorkspaceRole } from '@flowdesk/contracts';
 
 export const ROLE_LABEL: Record<WorkspaceRole, string> = {
   OWNER: 'владелец',
@@ -18,12 +18,6 @@ export const PROJECT_ROLE_LABEL: Record<ProjectRole, string> = {
   LEAD: 'ведущий',
   CONTRIBUTOR: 'участник',
   VIEWER: 'наблюдатель',
-};
-
-export const PROJECT_TYPE_LABEL: Record<ProjectType, string> = {
-  KANBAN: 'Канбан',
-  SCRUM: 'Скрам',
-  SIMPLE: 'Простой',
 };
 
 export const STATUS_CATEGORY_LABEL: Record<StatusCategory, string> = {

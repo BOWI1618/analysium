@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import type { IssueDetailDto, ProjectDto, UserSummaryDto } from '@flowdesk/contracts';
 import { Permission } from '@flowdesk/contracts';
 import {
+  ArrowLeft,
   ChevronDown,
   Copy,
   FileText,
@@ -233,7 +234,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
             </MenuTrigger>
             <MenuContent align="end" width={200} label="Действия с задачей">
               <MenuItem icon={<Copy className="size-3.5" />} onSelect={() => void copyLink()}>
-                Copy link
+                Скопировать ссылку
               </MenuItem>
               {canEdit && issue.type !== 'SUBTASK' && (
                 <MenuItem
@@ -272,15 +273,21 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
         )}
       >
         <div className={clsx(variant === 'page' ? 'min-w-0 flex-1' : 'px-4 py-4')}>
-          {/* Parent breadcrumb */}
+          {/* Way back to the parent task. A subtask cannot have subtasks of
+              its own, so one level is the whole chain. */}
           {issue.parent && (
             <button
               type="button"
-              onClick={() => openIssue(issue.parent!.id)}
-              className="mb-2 inline-flex items-center gap-1 text-xs text-text-subtle hover:text-accent"
+              onClick={() => {
+                if (variant === 'page') navigate(`/issue/${issue.parent!.issueKey}`);
+                else openIssue(issue.parent!.id);
+              }}
+              className="mb-3 inline-flex max-w-full items-center gap-1.5 border-2 border-border-strong bg-surface px-2 py-1 text-xs shadow-xs hover:bg-surface-hover hover:text-accent"
             >
-              <span className="fd-key">{issue.parent.issueKey}</span>
-              <span className="max-w-64 truncate">{issue.parent.title}</span>
+              <ArrowLeft className="size-3.5 shrink-0" />
+              <span className="shrink-0 text-text-subtle">Подзадача задачи</span>
+              <span className="fd-key shrink-0">{issue.parent.issueKey}</span>
+              <span className="min-w-0 truncate font-bold">{issue.parent.title}</span>
             </button>
           )}
 
