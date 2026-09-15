@@ -81,7 +81,14 @@ export function MyWorkPage() {
   // The "upcoming" preset filters on dueAfter = now — refetch on a timer so
   // the window does not freeze at the moment the tab was opened.
   const query = useIssueList({ workspaceId }, filters, { limit: 100, refetchInterval: 60_000 });
-  const issues = useMemo(() => flattenPages(query.data), [query.data]);
+  // A subtask shows up on its own only when its parent is not listed: with the
+  // parent here it is one click away under the parent's fold arrow, and a
+  // second copy of it is just noise.
+  const issues = useMemo(() => {
+    const all = flattenPages(query.data);
+    const listed = new Set(all.map((issue) => issue.id));
+    return all.filter((issue) => !issue.parent || !listed.has(issue.parent.id));
+  }, [query.data]);
 
   const groups = useMemo(() => groupIssues(issues, groupBy), [issues, groupBy]);
 

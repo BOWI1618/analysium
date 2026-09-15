@@ -408,6 +408,15 @@ test.describe('подзадачи и спринты', () => {
       await expect(page.getByText(`${parent.issueKey} ›`)).toBeVisible();
     });
 
+    await test.step('если задача тоже в списке, подзадача не повторяется отдельной строкой', async () => {
+      await page.request.patch(`/api/v1/issues/${parent.id}`, { data: { assigneeId: me } });
+      await page.reload();
+      await expect(page.getByText('Большая задача')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Кусочек работы')).toHaveCount(0);
+      await page.getByRole('button', { name: `Показать подзадачи ${parent.issueKey}` }).click();
+      await expect(page.getByText('Кусочек работы')).toHaveCount(1);
+    });
+
     await test.step('спринты включаются в настройках проекта', async () => {
       await page.goto(`/projects/${projectId}/settings`);
       await expect(page.getByRole('link', { name: 'Бэклог' })).toHaveCount(0);
