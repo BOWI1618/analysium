@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Permission } from '@flowdesk/contracts';
-import { Columns3, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useProject } from '~/features/projects/hooks';
@@ -11,9 +11,8 @@ import { useBulkUpdate, useIssueList, usePatchIssue, flattenPages } from '~/feat
 import { useFilterState } from '~/features/issues/useFilterState';
 import { useSavedViews, useCreateSavedView } from '~/features/views/hooks';
 import { FilterBar } from '~/components/FilterBar';
-import { IssueRow, IssueRowHeader, ALL_COLUMNS, DEFAULT_COLUMNS, type ListColumn } from '~/components/IssueRow';
+import { ColumnsMenu, IssueRow, IssueRowHeader, DEFAULT_COLUMNS, listMinWidth, type ListColumn } from '~/components/IssueRow';
 import { BulkActionBar } from '~/components/BulkActionBar';
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
 import { Button } from '~/ui/Button';
 import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
@@ -105,41 +104,15 @@ export function ListPage() {
             isShared: true,
           });
         }}
-        trailing={
-          // Hidden on phones: there every optional column is already folded
-          // away by width, so the menu toggled things nobody could see.
-          <div className="hidden sm:block">
-          <Menu>
-            <MenuTrigger>
-              <Button size="xs" variant="ghost" iconLeft={<Columns3 className="size-3" />}>
-                Колонки
-              </Button>
-            </MenuTrigger>
-            <MenuContent align="end" width={190} label="Видимые колонки">
-              <MenuLabel>Показывать колонки</MenuLabel>
-              {ALL_COLUMNS.map((column) => (
-                <MenuItem
-                  key={column.key}
-                  keepOpen
-                  selected={columns.includes(column.key)}
-                  onSelect={() =>
-                    setColumns((prev) =>
-                      prev.includes(column.key)
-                        ? prev.filter((c) => c !== column.key)
-                        : [...prev, column.key],
-                    )
-                  }
-                >
-                  {column.label}
-                </MenuItem>
-              ))}
-            </MenuContent>
-          </Menu>
-          </div>
+        trailing={<ColumnsMenu columns={columns} onChange={setColumns} />
         }
       />
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
+        <div
+          className="sm:min-w-[var(--list-min)]"
+          style={{ '--list-min': `${listMinWidth(columns)}px` } as React.CSSProperties}
+        >
         <IssueRowHeader columns={columns} />
 
         {query.isLoading ? (
@@ -206,6 +179,7 @@ description="Ослабьте фильтры или создайте перву�
             </Button>
           </div>
         )}
+        </div>
       </div>
 
       <BulkActionBar

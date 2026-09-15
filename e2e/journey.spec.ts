@@ -466,6 +466,36 @@ test.describe('связи в карточке задачи', () => {
   });
 });
 
+test.describe('списки задач', () => {
+  test('колонки выбираются, в фильтре исполнителя нет повтора себя', async ({ page }) => {
+    await register(page, 'Колонка Столбцова');
+    await createProject(page, 'Столбцы');
+    const projectId = new URL(page.url()).pathname.split('/')[2]!;
+    await page.request.post('/api/v1/issues', { data: { projectId, title: 'Задача для столбцов' } });
+
+    await page.goto(`/projects/${projectId}/list`);
+    await expect(page.getByText('Задача для столбцов')).toBeVisible({ timeout: 15_000 });
+    const header = page.getByRole('row').first();
+    await expect(header.getByText('Автор')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Колонки' }).click();
+    await page.getByRole('menuitem', { name: 'Тип', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Создано', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(header.getByText('Тип', { exact: true })).toBeVisible();
+    await expect(header.getByText('Создано', { exact: true })).toBeVisible();
+    await expect(page.getByRole('row').nth(1).getByText('Задача', { exact: true })).toBeVisible();
+
+    // The choice is remembered.
+    await page.reload();
+    await expect(page.getByRole('row').first().getByText('Создано', { exact: true })).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Исполнитель' }).first().click();
+    await expect(page.getByRole('menuitem', { name: /Я$/ })).toBeVisible();
+    // The «Я» item carries the user's avatar, so match visible text, not the accessible name.
+    await expect(page.getByRole('menuitem').filter({ hasText: 'Колонка Столбцова' })).toHaveCount(0);
+  });
+});
+
 test.describe('несохранённые данные', () => {
   test('закрытие формы с введёнными данными спрашивает, пустая закрывается сразу', async ({ page }) => {
     await register(page, 'Осторожный Пользователь');

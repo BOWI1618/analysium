@@ -336,11 +336,12 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
       {/* User menu — the colophon at the foot of the rail */}
       <div className="border-t-2 border-border-strong p-2.5">
         <Menu>
-          <MenuTrigger>
+          {/* Stretched: a long address must truncate, not push the gear out of the rail. */}
+          <MenuTrigger className="flex w-full min-w-0">
             <button
               type="button"
               className={clsx(
-                'flex w-full items-center gap-2.5 border-2 border-transparent px-1 py-0.5 text-left hover:border-border-strong hover:bg-surface-hover',
+                'flex w-full min-w-0 items-center gap-2.5 border-2 border-transparent px-1 py-0.5 text-left hover:border-border-strong hover:bg-surface-hover',
                 collapsed && 'justify-center px-0',
               )}
             >

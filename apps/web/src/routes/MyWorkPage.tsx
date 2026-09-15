@@ -10,7 +10,8 @@ import { useFilterState } from '~/features/issues/useFilterState';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
-import { IssueRow, IssueRowHeader, DEFAULT_COLUMNS } from '~/components/IssueRow';
+import { ColumnsMenu, IssueRow, IssueRowHeader, DEFAULT_COLUMNS, listMinWidth, type ListColumn } from '~/components/IssueRow';
+import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import { Button } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
 import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
@@ -72,6 +73,7 @@ export function MyWorkPage() {
   const [extraFilters, setExtraFilters] = useFilterState();
 
   const { data: members } = useMembers(workspaceId);
+  const [columns, setColumns] = useLocalStorage<ListColumn[]>('flowdesk.my-work-columns', [...DEFAULT_COLUMNS, 'project']);
 
   const filters = useMemo<IssueFilters>(
     () => ({ ...presetFor(tab), ...extraFilters }),
@@ -122,6 +124,8 @@ export function MyWorkPage() {
         members={members?.map((m) => m.user)}
         currentUserId={user?.id ?? ''}
         trailing={
+          <div className="flex items-center gap-2">
+          <ColumnsMenu columns={columns} onChange={setColumns} />
           <SegmentedControl
             label="Группировка"
             value={groupBy}
@@ -133,10 +137,15 @@ export function MyWorkPage() {
               { value: 'dueDate', label: 'Срок' },
             ]}
           />
+          </div>
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-surface scrollbar-thin">
+      <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
+        <div
+          className="sm:min-w-[var(--list-min)]"
+          style={{ '--list-min': `${listMinWidth(columns, false)}px` } as React.CSSProperties}
+        >
         {query.error ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : query.isLoading ? (
@@ -153,12 +162,12 @@ export function MyWorkPage() {
           />
         ) : groupBy === 'none' ? (
           <>
-            <IssueRowHeader columns={[...DEFAULT_COLUMNS, 'project']} selectable={false} />
+            <IssueRowHeader columns={columns} selectable={false} />
             {issues.map((issue) => (
               <IssueRow
                 key={issue.id}
                 issue={issue}
-                columns={[...DEFAULT_COLUMNS, 'project']}
+                columns={columns}
                 selected={false}
                 onToggleSelect={() => undefined}
                 selectable={false}
@@ -180,7 +189,7 @@ export function MyWorkPage() {
                 <IssueRow
                   key={issue.id}
                   issue={issue}
-                  columns={[...DEFAULT_COLUMNS, 'project']}
+                  columns={columns}
                   selected={false}
                   onToggleSelect={() => undefined}
                 selectable={false}
@@ -203,6 +212,7 @@ export function MyWorkPage() {
             </Button>
           </div>
         )}
+        </div>
       </div>
     </>
   );

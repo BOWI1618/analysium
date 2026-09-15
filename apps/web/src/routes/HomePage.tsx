@@ -246,7 +246,7 @@ export function HomePage() {
                             label={`${done} из ${total} задач готово`}
                           />
                           <p className="fd-num mt-2 text-2xs text-text-subtle">
-                            {open} в работе · {done} готово
+                            {open} открыто · {done} готово
                           </p>
                         </Link>
                       </li>

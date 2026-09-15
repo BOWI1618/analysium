@@ -29,7 +29,7 @@ import { ConfirmDialog } from '~/ui/Dialog';
 import { EmptyState, Skeleton } from '~/ui/Feedback';
 import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
-import { ROLE_LABEL } from '~/lib/labels';
+import { AUDIT_ACTION_LABEL, ROLE_LABEL, describeAuditDetails } from '~/lib/labels';
 
 const SECTIONS = ['general', 'members', 'roles', 'projects', 'audit'] as const;
 type Section = (typeof SECTIONS)[number];
@@ -489,7 +489,7 @@ function RolesSection() {
   return (
     <Card
       title="Роли"
-      description="Роли проверяются на сервере при каждом запросе. Скрытая кнопка — это удобство, а не защита."
+      description="Что может каждая роль. Роль участника меняется в разделе «Участники»."
     >
       <ul className="space-y-2.5">
         {ROLE_MATRIX.map((entry) => (
@@ -578,12 +578,13 @@ function AuditSection() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs">
                   <span className="font-medium">{entry.actor?.name ?? 'Система'}</span>{' '}
-                  <span className="text-text-muted">{entry.action.replace(/_/g, ' ').toLowerCase()}</span>
+                  <span className="text-text-muted">
+                    {AUDIT_ACTION_LABEL[entry.action] ?? entry.action.replace(/_/g, ' ').toLowerCase()}
+                  </span>
                 </p>
-                <p className="truncate text-2xs text-text-subtle">
-                  {entry.entityType}
-                  {entry.metadata ? ` · ${JSON.stringify(entry.metadata)}` : ''}
-                </p>
+                {describeAuditDetails(entry.action, entry.metadata) && (
+                  <p className="truncate text-2xs text-text-subtle">{describeAuditDetails(entry.action, entry.metadata)}</p>
+                )}
               </div>
               <span className="fd-num shrink-0 text-2xs text-text-subtle" title={fullDate(entry.createdAt)}>
                 {relativeTime(entry.createdAt)}

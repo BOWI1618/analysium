@@ -80,7 +80,10 @@ export function FilterBar({
     () => [
       { value: '@me', label: 'Я', icon: <Avatar user={members.find((m) => m.id === currentUserId)} size="sm" /> },
       { value: 'none', label: 'Без исполнителя', icon: <Avatar user={null} size="sm" /> },
-      ...members.map((m) => ({ value: m.id, label: m.name, icon: <Avatar user={m} size="sm" /> })),
+      // «Я» above already stands for the current user.
+      ...members
+        .filter((m) => m.id !== currentUserId)
+        .map((m) => ({ value: m.id, label: m.name, icon: <Avatar user={m} size="sm" /> })),
     ],
     [members, currentUserId],
   );

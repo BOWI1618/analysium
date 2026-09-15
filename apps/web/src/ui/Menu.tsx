@@ -59,13 +59,13 @@ export function Menu({ children, open: controlledOpen, onOpenChange }: MenuProps
  * would measure as zero. Callers that need the child to fill the row stretch
  * it from the container instead.
  */
-export function MenuTrigger({ children }: { children: ReactNode }) {
+export function MenuTrigger({ children, className }: { children: ReactNode; className?: string }) {
   const { open, setOpen, triggerRef, menuId } = useMenu();
 
   return (
     <span
       ref={triggerRef as React.RefObject<HTMLSpanElement>}
-      className="inline-flex"
+      className={className ?? 'inline-flex'}
       onClick={(event) => {
         event.stopPropagation();
         setOpen(!open);

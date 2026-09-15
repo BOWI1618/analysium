@@ -166,7 +166,7 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
   const isPresetIcon = PROJECT_ICONS.some((i) => i.name === form.icon);
 
   return (
-    <Card title="Основное" description="Название, внешний вид и методология.">
+    <Card title="Основное" description="Название, внешний вид и спринты.">
       <div className="space-y-3">
         <div className="space-y-1">
           <label className="text-xs font-bold text-text">Иконка</label>

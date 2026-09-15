@@ -156,7 +156,9 @@ export function CreateIssueDialog() {
 
     try {
       const issue = await createIssue.mutateAsync(input);
-      toast.toast({
+      // «Создать и открыть» opens the task itself; a toast offering to open it
+      // would only cover the panel.
+      if (!openAfter) toast.toast({
         tone: 'success',
         title: `${issue.issueKey} создана`,
         description: issue.title,
