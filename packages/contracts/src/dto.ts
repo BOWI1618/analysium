@@ -237,6 +237,22 @@ export interface DependencyDto {
   lagDays: number;
 }
 
+/** One link as seen from an issue: the dependency and the issue at its other end. */
+export interface IssueLinkDto {
+  dependencyId: string;
+  type: DependencyType;
+  lagDays: number;
+  issue: { id: string; issueKey: string; title: string; status: StatusDto };
+}
+
+/** The links of one issue, split by direction. */
+export interface IssueLinksDto {
+  /** Issues this one waits for — its predecessors. */
+  dependsOn: IssueLinkDto[];
+  /** Issues waiting for this one — its successors. */
+  blocks: IssueLinkDto[];
+}
+
 /** One row of the work-breakdown tree on the left of the chart. */
 export interface GanttRowDto {
   id: string;

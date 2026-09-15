@@ -6,9 +6,13 @@
  */
 import {
   addDays,
+  addMonths,
+  addQuarters,
+  addWeeks,
   differenceInCalendarDays,
   eachDayOfInterval,
   eachMonthOfInterval,
+  eachQuarterOfInterval,
   eachWeekOfInterval,
   endOfMonth,
   endOfQuarter,
@@ -17,6 +21,7 @@ import {
   isWeekend,
   startOfDay,
   startOfMonth,
+  startOfQuarter,
   startOfWeek,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -54,61 +59,70 @@ export interface Timeline {
   todayX: number | null;
 }
 
+/** How far past the planned work (or today) the chart reaches at each zoom. */
+const FUTURE_ROOM: Record<GanttScale, (date: Date) => Date> = {
+  DAY: (d) => addDays(d, 14),
+  WEEK: (d) => addWeeks(d, 8),
+  MONTH: (d) => addMonths(d, 6),
+  QUARTER: (d) => addQuarters(d, 2),
+};
+
+/** Snaps a date to the start / end of the unit the header is drawn in. */
+const alignStart = (scale: GanttScale, d: Date) =>
+  scale === 'QUARTER' ? startOfQuarter(d) : scale === 'MONTH' ? startOfMonth(d) : startOfWeek(d, { weekStartsOn: 1 });
+const alignEnd = (scale: GanttScale, d: Date) =>
+  scale === 'QUARTER' ? endOfQuarter(d) : scale === 'MONTH' ? endOfMonth(d) : endOfWeek(d, { weekStartsOn: 1 });
+const nextUnit = (scale: GanttScale, d: Date) =>
+  scale === 'QUARTER' ? addQuarters(d, 1) : scale === 'MONTH' ? addMonths(d, 1) : addWeeks(d, 1);
+
 /**
- * Pads the data range so bars never touch the edge and there is room to drag
- * work later than anything currently planned.
+ * The visible span: the planned work and today, padded so bars never touch the
+ * edge, with room ahead to drag work later, and never narrower than the
+ * viewport — a chart that stops short leaves an unexplained blank area.
+ * Edges snap to whole weeks, months or quarters, so every header cell is
+ * complete and labelled (a quarter view starting in August used to have no
+ * label for the current quarter at all).
  */
 export function buildTimeline(
   rangeStart: Date,
   rangeEnd: Date,
   scale: GanttScale,
+  minWidthPx = 0,
 ): Timeline {
   const dayWidth = DAY_WIDTH[scale];
+  const today = startOfDay(new Date());
 
-  const padDays = scale === 'DAY' ? 3 : scale === 'WEEK' ? 7 : 21;
-  const start = startOfDay(
-    scale === 'MONTH' || scale === 'QUARTER'
-      ? startOfMonth(addDays(rangeStart, -padDays))
-      : startOfWeek(addDays(rangeStart, -padDays), { weekStartsOn: 1 }),
-  );
-  const end = startOfDay(
-    scale === 'MONTH' || scale === 'QUARTER'
-      ? endOfMonth(addDays(rangeEnd, padDays))
-      : endOfWeek(addDays(rangeEnd, padDays), { weekStartsOn: 1 }),
-  );
+  const from = rangeStart < today ? rangeStart : today;
+  const to = rangeEnd > today ? rangeEnd : today;
+
+  const padBefore = scale === 'DAY' ? 3 : scale === 'WEEK' ? 7 : 14;
+  const start = startOfDay(alignStart(scale, addDays(from, -padBefore)));
+  let end = startOfDay(alignEnd(scale, FUTURE_ROOM[scale](to)));
+  while ((differenceInCalendarDays(end, start) + 1) * dayWidth < minWidthPx) {
+    end = startOfDay(alignEnd(scale, nextUnit(scale, end)));
+  }
 
   const totalDays = Math.max(1, differenceInCalendarDays(end, start) + 1);
+  const totalWidth = totalDays * dayWidth;
   const xFor = (date: Date) => differenceInCalendarDays(startOfDay(date), start) * dayWidth;
 
-  const today = startOfDay(new Date());
   const todayX = today >= start && today <= end ? xFor(today) : null;
+
+  /** A header cell from `cellStart` to `cellEnd`, clipped to the timeline. */
+  const cell = (key: string, label: string, cellStart: Date, cellEnd: Date): TimelineTick => {
+    const x = Math.max(0, xFor(cellStart));
+    const right = Math.min(totalWidth, (differenceInCalendarDays(startOfDay(cellEnd), start) + 1) * dayWidth);
+    return { key, label, x, width: Math.max(0, right - x), isWeekend: false, isToday: false };
+  };
 
   const majorTicks: TimelineTick[] =
     scale === 'QUARTER'
-      ? eachMonthOfInterval({ start, end })
-          .filter((d) => d.getMonth() % 3 === 0)
-          .map((d) => {
-            const qEnd = endOfQuarter(d);
-            return {
-              key: `q-${d.toISOString()}`,
-              label: `${Math.floor(d.getMonth() / 3) + 1} кв. ${format(d, 'yyyy')}`,
-              x: xFor(d),
-              width: (differenceInCalendarDays(qEnd, d) + 1) * dayWidth,
-              isWeekend: false,
-              isToday: false,
-            };
-          })
-      : eachMonthOfInterval({ start, end }).map((d) => {
-          const mEnd = endOfMonth(d);
-          return {
-            key: `m-${d.toISOString()}`,
-            label: format(d, 'LLLL yyyy', { locale: ru }),
-            x: xFor(d),
-            width: (differenceInCalendarDays(mEnd, d) + 1) * dayWidth,
-            isWeekend: false,
-            isToday: false,
-          };
-        });
+      ? eachQuarterOfInterval({ start, end }).map((d) =>
+          cell(`q-${d.toISOString()}`, `${Math.floor(d.getMonth() / 3) + 1} кв. ${format(d, 'yyyy')}`, d, endOfQuarter(d)),
+        )
+      : eachMonthOfInterval({ start, end }).map((d) =>
+          cell(`m-${d.toISOString()}`, format(d, 'LLLL yyyy', { locale: ru }), d, endOfMonth(d)),
+        );
 
   const minorTicks: TimelineTick[] =
     scale === 'DAY'
@@ -129,20 +143,15 @@ export function buildTimeline(
             isWeekend: false,
             isToday: false,
           }))
-        : eachMonthOfInterval({ start, end }).map((d) => ({
-            key: d.toISOString(),
-            label: format(d, 'LLL', { locale: ru }),
-            x: xFor(d),
-            width: (differenceInCalendarDays(endOfMonth(d), d) + 1) * dayWidth,
-            isWeekend: false,
-            isToday: false,
-          }));
+        : eachMonthOfInterval({ start, end }).map((d) =>
+            cell(d.toISOString(), format(d, 'LLL', { locale: ru }), d, endOfMonth(d)),
+          );
 
   return {
     start,
     end,
     dayWidth,
-    totalWidth: totalDays * dayWidth,
+    totalWidth,
     majorTicks,
     minorTicks,
     todayX,

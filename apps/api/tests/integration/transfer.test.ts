@@ -136,3 +136,34 @@ describe('перенос задачи в другой проект', () => {
     expect(moved.assignee).toBeNull();
   });
 });
+
+describe('связи задачи в карточке', () => {
+  it('показывает, от чего задача зависит и что она блокирует; гостю без доступа не видно', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Связи в карточке' });
+    const project = await createProject(app, owner, { name: 'Связи' });
+    const first = await createIssue(app, owner, project.id, { title: 'Сначала это' });
+    const then = await createIssue(app, owner, project.id, { title: 'Потом это' });
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/projects/${project.id}/dependencies`,
+      headers: { cookie: owner.cookie },
+      payload: { predecessorId: first.id, successorId: then.id },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const links = (id: string, cookie = owner.cookie) =>
+      app.inject({ method: 'GET', url: `/api/v1/issues/${id}/links`, headers: { cookie } });
+
+    const ofThen = (await links(then.id)).json();
+    expect(ofThen.dependsOn.map((l: { issue: { id: string } }) => l.issue.id)).toEqual([first.id]);
+    expect(ofThen.blocks).toEqual([]);
+    expect(ofThen.dependsOn[0].dependencyId).toBe(created.json().id);
+
+    const ofFirst = (await links(first.id)).json();
+    expect(ofFirst.blocks[0].issue.issueKey).toBe(then.issueKey);
+
+    const guest = await registerUser(app, { email: 'guest@links.test' });
+    await addMember(app, owner, guest.email, 'GUEST');
+    expect((await links(then.id, await login(app, guest.email))).statusCode).toBe(404);
+  });
+});

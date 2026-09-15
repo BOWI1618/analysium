@@ -181,12 +181,15 @@ export function useUpdateIssue(issueId: string) {
       if (context?.previous) queryClient.setQueryData(qk.issue(issueId), context.previous);
       toast.error(error, 'Не удалось сохранить изменение');
     },
-    onSuccess: (issue) => {
+    onSuccess: (issue, _patch, context) => {
       queryClient.setQueryData(qk.issue(issue.id), issue);
       invalidateIssueViews(queryClient, issue.projectId);
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issue.id) });
-      // The parent's detail lists this subtask — in its panel and unfolded in lists.
-      if (issue.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(issue.parent.id), exact: true });
+      // The parent's detail lists this subtask — in its panel and unfolded in
+      // lists. Both parents when it was moved or detached.
+      for (const parent of [issue.parent, context?.previous?.parent]) {
+        if (parent) void queryClient.invalidateQueries({ queryKey: qk.issue(parent.id), exact: true });
+      }
     },
   });
 }

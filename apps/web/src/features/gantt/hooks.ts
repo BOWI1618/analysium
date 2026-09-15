@@ -3,6 +3,7 @@ import type {
   CreateDependencyInput,
   DependencyDto,
   GanttDto,
+  IssueLinksDto,
   RescheduleResultDto,
 } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
@@ -34,6 +35,19 @@ function invalidateSchedule(queryClient: ReturnType<typeof useQueryClient>, proj
   void queryClient.invalidateQueries({ queryKey: qk.ganttRoot(projectId) });
   void queryClient.invalidateQueries({ queryKey: ['issues'] });
   void queryClient.invalidateQueries({ queryKey: qk.project(projectId) });
+  // The links listed in issue cards.
+  void queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey[0] === 'issue' && query.queryKey[2] === 'links',
+  });
+}
+
+/** Dependencies of one issue, both directions, for its card. */
+export function useIssueLinks(issueId: string) {
+  return useQuery({
+    queryKey: qk.issueLinks(issueId),
+    queryFn: () => api.get<IssueLinksDto>(`/issues/${issueId}/links`),
+    staleTime: 10_000,
+  });
 }
 
 export function useRescheduleIssue(projectId: string) {

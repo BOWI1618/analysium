@@ -74,6 +74,20 @@ test.describe('диаграмма Ганта', () => {
       await expect(page.locator(`[data-bar-id="${second.id}"]`)).toBeVisible();
     });
 
+    await test.step('в квартальном виде есть текущий квартал и запас вперёд', async () => {
+      // The work is planned for June; the chart still reaches today and beyond,
+      // and the current quarter is labelled even when it starts mid-view.
+      await page.getByRole('radio', { name: 'Квартал' }).click();
+      const now = new Date();
+      const quarter = Math.floor(now.getMonth() / 3);
+      const next = new Date(now.getFullYear(), (quarter + 2) * 3, 1);
+      await expect(page.getByText(`${quarter + 1} кв. ${now.getFullYear()}`, { exact: true })).toBeAttached();
+      await expect(
+        page.getByText(`${Math.floor(next.getMonth() / 3) + 1} кв. ${next.getFullYear()}`, { exact: true }),
+      ).toBeAttached();
+      await page.getByRole('radio', { name: 'Неделя' }).click();
+    });
+
     await test.step('связь создаётся через API и рисуется на диаграмме', async () => {
       const response = await page.request.post(
         `/api/v1/projects/${projectId}/dependencies`,

@@ -427,6 +427,45 @@ test.describe('подзадачи и спринты', () => {
   });
 });
 
+test.describe('связи в карточке задачи', () => {
+  test('связь добавляется и удаляется из карточки, подзадача отвязывается', async ({ page }) => {
+    await register(page, 'Связист Задач');
+    await createProject(page, 'Связанные');
+    const projectId = new URL(page.url()).pathname.split('/')[2]!;
+    const post = async (data: Record<string, unknown>) =>
+      (await page.request.post('/api/v1/issues', { data: { projectId, ...data } })).json();
+    const design = await post({ title: 'Согласовать макет' });
+    const build = await post({ title: 'Сверстать страницу' });
+    const part = await post({ title: 'Шапка страницы', type: 'SUBTASK', parentId: build.id });
+
+    await page.goto(`/projects/${projectId}/list`);
+    await page.getByText('Сверстать страницу').click();
+    const panel = page.getByRole('dialog', { name: 'Детали задачи' });
+    const links = panel.getByRole('region', { name: 'Связи' });
+
+    await links.getByRole('button', { name: 'Добавить' }).click();
+    await links.getByLabel('Найти задачу для связи').fill('макет');
+    await links.getByRole('button', { name: /Согласовать макет/ }).click();
+    await expect(links.getByText('Зависит от')).toBeVisible({ timeout: 15_000 });
+    await expect(links.getByText(design.issueKey)).toBeVisible();
+
+    // The other side sees it as blocking.
+    await links.getByRole('button', { name: /Согласовать макет/ }).click();
+    const other = panel.getByRole('region', { name: 'Связи' });
+    await expect(other.getByText('Блокирует')).toBeVisible({ timeout: 15_000 });
+    await other.getByRole('button', { name: `Удалить связь с ${build.issueKey}` }).click();
+    await expect(other.getByText('Блокирует')).toHaveCount(0, { timeout: 15_000 });
+
+    // A subtask is detached from its task and gets a task number of its own.
+    await page.keyboard.press('Escape');
+    await page.goto(`/issue/${part.issueKey}`);
+    await page.getByRole('region', { name: 'Связи' }).getByRole('button', { name: 'Отвязать' }).click();
+    await page.getByRole('dialog', { name: /Отвязать/ }).getByRole('button', { name: 'Отвязать' }).click();
+    await expect(page.getByText(new RegExp(`${part.issueKey} → [A-Z0-9]+-3$`)).or(page.getByText('Подзадача задачи')).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('region', { name: 'Связи' }).getByText('Подзадача задачи')).toHaveCount(0, { timeout: 15_000 });
+  });
+});
+
 test.describe('несохранённые данные', () => {
   test('закрытие формы с введёнными данными спрашивает, пустая закрывается сразу', async ({ page }) => {
     await register(page, 'Осторожный Пользователь');

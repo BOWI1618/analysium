@@ -35,6 +35,11 @@ export async function ganttRoutes(app: FastifyInstance): Promise<void> {
     return { issue: toIssueSummary(issue), ...result };
   });
 
+  app.get<{ Params: { issueId: string } }>('/issues/:issueId/links', async (req) => {
+    await issueContext(currentUser(req).id, req.params.issueId);
+    return service.getIssueLinks(req.params.issueId);
+  });
+
   app.post<{ Params: { projectId: string } }>(
     '/projects/:projectId/dependencies',
     async (req, reply) => {

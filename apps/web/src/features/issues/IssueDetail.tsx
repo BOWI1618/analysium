@@ -35,6 +35,7 @@ import {
 } from './hooks';
 import { ActivityTimeline } from './ActivityTimeline';
 import { CommentThread } from './CommentThread';
+import { IssueLinks } from './IssueLinks';
 import { RichTextEditor } from '~/components/RichText';
 import {
   DateField,
@@ -477,6 +478,12 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
               )}
             </section>
           )}
+
+          <IssueLinks
+            issue={issue}
+            canEdit={canEdit}
+            onDetach={() => patch({ parentId: null, type: 'TASK' })}
+          />
 
           {/* Discussion */}
           <section className="mt-6" aria-label="Обсуждение">

@@ -7,6 +7,7 @@
  * uses, so history and realtime behave identically to any other edit.
  */
 import type {
+  IssueLinksDto,
   ActorContext,
   DependencyDto,
   GanttDto,
@@ -20,7 +21,7 @@ import { prisma } from '../../lib/prisma';
 import { assertCan } from '../../lib/context';
 import { badRequest, notFound } from '../../lib/errors';
 import { emit } from '../../realtime/eventBus';
-import { toStatus, toUserSummary } from '../../lib/serialize';
+import { statusSelect, toStatus, toUserSummary } from '../../lib/serialize';
 import {
   criticalPath,
   findCycle,
@@ -446,6 +447,33 @@ async function loadSchedule(projectId: string) {
 }
 
 /* ----------------------------------------------------------- dependencies */
+
+/** Links of one issue for its card, with the issue at the other end of each. */
+export async function getIssueLinks(issueId: string): Promise<IssueLinksDto> {
+  const other = { select: { id: true, issueKey: true, title: true, status: { select: statusSelect } } };
+  const [dependsOn, blocks] = await Promise.all([
+    prisma.issueDependency.findMany({
+      where: { successorId: issueId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, type: true, lagDays: true, predecessor: other },
+    }),
+    prisma.issueDependency.findMany({
+      where: { predecessorId: issueId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, type: true, lagDays: true, successor: other },
+    }),
+  ]);
+  const toLink = (row: { id: string; type: string; lagDays: number }, issue: (typeof dependsOn)[number]['predecessor']) => ({
+    dependencyId: row.id,
+    type: row.type as never,
+    lagDays: row.lagDays,
+    issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, status: toStatus(issue.status) },
+  });
+  return {
+    dependsOn: dependsOn.map((row) => toLink(row, row.predecessor)),
+    blocks: blocks.map((row) => toLink(row, row.successor)),
+  };
+}
 
 export async function createDependency(
   actor: ActorContext,

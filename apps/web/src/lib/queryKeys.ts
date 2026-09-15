@@ -38,6 +38,7 @@ export const qk = {
   issuesByKey: ['issue-by-key'] as const,
   issueComments: (issueId: string) => ['issue', issueId, 'comments'] as const,
   issueActivity: (issueId: string) => ['issue', issueId, 'activity'] as const,
+  issueLinks: (issueId: string) => ['issue', issueId, 'links'] as const,
 
   notifications: (workspaceId: string, unreadOnly: boolean) =>
     ['workspace', workspaceId, 'notifications', unreadOnly] as const,

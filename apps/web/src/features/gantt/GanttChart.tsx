@@ -70,10 +70,30 @@ export function GanttChart({
   onCreateDependency,
   onDeleteDependency,
 }: GanttChartProps) {
+  // The chart is never narrower than the space it sits in.
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return undefined;
+    const observer = new ResizeObserver(([entry]) => setViewportWidth(Math.round(entry!.contentRect.width)));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const timeline = useMemo(
-    () => buildTimeline(new Date(range.start), new Date(range.end), scale),
-    [range.start, range.end, scale],
+    () => buildTimeline(new Date(range.start), new Date(range.end), scale, viewportWidth),
+    [range.start, range.end, scale, viewportWidth],
   );
+
+  // Open on today rather than on the far past, once per zoom level.
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el || viewportWidth === 0 || timeline.todayX === null || scrolledFor.current === scale) return;
+    scrolledFor.current = scale;
+    el.scrollLeft = Math.max(0, timeline.todayX - Math.min(240, viewportWidth / 3));
+  }, [scale, timeline.todayX, viewportWidth]);
 
   // A row is hidden when any ancestor is collapsed.
   const visibleRows = useMemo(() => {
@@ -106,7 +126,6 @@ export function GanttChart({
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const [link, setLink] = useState<LinkState | null>(null);
-  const timelineRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
 
   const openIfNotDragging = useCallback(
