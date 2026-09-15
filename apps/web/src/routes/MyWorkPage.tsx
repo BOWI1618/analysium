@@ -123,6 +123,9 @@ export function MyWorkPage() {
         onChange={setExtraFilters}
         members={members?.map((m) => m.user)}
         currentUserId={user?.id ?? ''}
+        // «Назначено мне» and «Ближайшие» hide finished work until asked; an
+        // overdue task is open by definition.
+        doneByDefault={tab === 'overdue' ? null : presetFor(tab).includeDone !== false}
         trailing={
           <div className="flex items-center gap-2">
           <ColumnsMenu columns={columns} onChange={setColumns} />

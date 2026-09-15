@@ -107,4 +107,21 @@ test.describe('работа с задачами', () => {
     await expect(page.getByRole('heading', { name: 'Отчёт, копия' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Цифры')).toBeVisible();
   });
+
+  test('мои задачи: закрытые задачи показываются по фильтру «Показывать завершённые»', async ({ page }) => {
+    const projectId = await setup(page);
+    const me = (await (await page.request.get('/api/v1/auth/session')).json()).user.id;
+    const project = await (await page.request.get(`/api/v1/projects/${projectId}`)).json();
+    const done = project.statuses.find((s: { category: string }) => s.category === 'COMPLETED');
+    await page.request.post('/api/v1/issues', { data: { projectId, title: 'Уже сделано', assigneeId: me, statusId: done.id } });
+    await page.request.post('/api/v1/issues', { data: { projectId, title: 'Ещё в работе', assigneeId: me } });
+
+    await page.goto('/my-work');
+    await expect(page.getByText('Ещё в работе')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Уже сделано')).toBeHidden();
+
+    await page.getByRole('button', { name: 'Ещё' }).click();
+    await page.getByRole('menuitem', { name: 'Показывать завершённые' }).click();
+    await expect(page.getByText('Уже сделано')).toBeVisible();
+  });
 });

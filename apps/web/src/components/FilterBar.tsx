@@ -35,6 +35,12 @@ export interface FilterBarProps {
   savedViews?: { id: string; name: string; filters: Record<string, unknown> }[];
   onApplyView?: (filters: Record<string, unknown>) => void;
   sortOptions?: boolean;
+  /**
+   * Whether this view shows finished tasks when nothing is chosen. A view that
+   * hides them («Назначено мне») offers «Показывать завершённые» instead of
+   * «Скрыть завершённые»; `null` leaves the option out where it means nothing.
+   */
+  doneByDefault?: boolean | null;
 }
 
 const SORT_LABELS: Record<string, string> = {
@@ -66,6 +72,7 @@ export function FilterBar({
   savedViews = [],
   onApplyView,
   sortOptions = true,
+  doneByDefault = true,
 }: FilterBarProps) {
   const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
   const [facetsOpen, setFacetsOpen] = useState(false);
@@ -239,13 +246,24 @@ export function FilterBar({
             >
               Только просроченные
             </MenuItem>
-            <MenuItem
-              keepOpen
-              selected={filters.includeDone === false}
-              onSelect={() => patch({ includeDone: filters.includeDone === false ? undefined : false })}
-            >
-              Скрыть завершённые
-            </MenuItem>
+            {doneByDefault === true && (
+              <MenuItem
+                keepOpen
+                selected={filters.includeDone === false}
+                onSelect={() => patch({ includeDone: filters.includeDone === false ? undefined : false })}
+              >
+                Скрыть завершённые
+              </MenuItem>
+            )}
+            {doneByDefault === false && (
+              <MenuItem
+                keepOpen
+                selected={filters.includeDone === true}
+                onSelect={() => patch({ includeDone: filters.includeDone === true ? undefined : true })}
+              >
+                Показывать завершённые
+              </MenuItem>
+            )}
             <MenuItem
               keepOpen
               selected={filters.includeSubtasks === true}
