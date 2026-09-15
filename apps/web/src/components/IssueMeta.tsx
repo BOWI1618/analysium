@@ -12,7 +12,7 @@ import {
   Zap,
   GitBranch,
 } from 'lucide-react';
-import { dueDateLabel, hexWithAlpha } from '~/lib/format';
+import { dueDateLabel, hexWithAlpha, pluralize } from '~/lib/format';
 import { Tooltip } from '~/ui/Tooltip';
 
 /* ------------------------------------------------------------ issue type */
@@ -203,14 +203,19 @@ export function LabelChip({
 export function DueDateChip({
   value,
   hasTime = false,
+  carriedDays = 0,
   className,
 }: {
   value: string | null;
   hasTime?: boolean;
+  /** Days the task was carried over to the next day unfinished. */
+  carriedDays?: number;
   className?: string;
 }) {
   const due = dueDateLabel(value, hasTime);
   if (!due) return null;
+  const carried =
+    carriedDays > 0 ? ` · переносилась на следующий день ${pluralize(carriedDays, ['раз', 'раза', 'раз'])}` : '';
 
   // Only a date that demands action is printed as a plate. A date that is
   // merely in the future is set as plain text, so a column of cards shows
@@ -231,7 +236,13 @@ export function DueDateChip({
         tones[due.tone],
         className,
       )}
-      title={due.tone === 'overdue' ? `Просрочено — срок был ${due.label}` : `Срок: ${due.label}`}
+      title={
+        due.tone === 'overdue'
+          ? due.overdueDays > 0
+            ? `Просрочено на ${pluralize(due.overdueDays, ['день', 'дня', 'дней'])} — срок был ${due.label}`
+            : `Просрочено — срок был ${due.label}`
+          : `Срок: ${due.label}${carried}`
+      }
     >
       {!isPlate && (
         <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
@@ -240,6 +251,10 @@ export function DueDateChip({
         </svg>
       )}
       {due.label}
+      {/* How long it has been overdue, counted in days, as Weeek does; «Вчера» already says one. */}
+      {due.overdueDays > 1 && <span className="font-normal opacity-80">· {due.overdueDays} дн</span>}
+      {/* Carried over unfinished: the delay stays visible although the date is today again. */}
+      {carriedDays > 0 && due.tone !== 'overdue' && <span className="font-normal opacity-80">· +{carriedDays} дн</span>}
     </span>
   );
 }

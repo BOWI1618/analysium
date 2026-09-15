@@ -152,6 +152,7 @@ export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export const updateWorkspaceSchema = z.object({
   name: z.string().trim().min(2).max(60).optional(),
   logo: z.string().max(500).nullable().optional(),
+  carryOverTasks: z.boolean().optional(),
 });
 
 export const inviteMemberSchema = z.object({
@@ -312,6 +313,17 @@ export const transferIssueSchema = z.object({
 });
 export type TransferIssueInput = z.infer<typeof transferIssueSchema>;
 
+/** «Дублировать задачу»: a copy next to the original, with the parts chosen. */
+export const duplicateIssueSchema = z.object({
+  title: z.string().trim().min(1, 'Укажите название').max(300),
+  description: z.boolean().default(true),
+  subtasks: z.boolean().default(true),
+  assignee: z.boolean().default(true),
+  labels: z.boolean().default(true),
+  dates: z.boolean().default(true),
+});
+export type DuplicateIssueInput = z.infer<typeof duplicateIssueSchema>;
+
 export const bulkUpdateSchema = z.object({
   issueIds: z.array(cuidLike).min(1).max(200),
   patch: z.object({
@@ -400,13 +412,24 @@ export const updateCommentSchema = createCommentSchema;
 
 /* ----------------------------------------------------------------- gantt */
 
-export const ganttQuerySchema = z.object({
-  /** Optional window: scheduled issues are clipped to those overlapping [from, to]; unscheduled ones are always returned for planning. */
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
-  includeDone: queryBoolean.default(true),
-  assigneeId: z.union([z.string(), z.array(z.string())]).optional(),
-});
+export const ganttQuerySchema = issueFilterSchema
+  .pick({
+    statusId: true,
+    assigneeId: true,
+    priority: true,
+    type: true,
+    labelId: true,
+    sprintId: true,
+    epicId: true,
+    search: true,
+    isOverdue: true,
+  })
+  .extend({
+    /** Optional window: scheduled issues are clipped to those overlapping [from, to]; unscheduled ones are always returned for planning. */
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
+    includeDone: queryBoolean.default(true),
+  });
 export type GanttQueryInput = z.infer<typeof ganttQuerySchema>;
 
 export const createDependencySchema = z.object({

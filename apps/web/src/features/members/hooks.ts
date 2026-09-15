@@ -93,7 +93,7 @@ export function useUpdateWorkspace(workspaceId: string) {
   const toast = useToast();
 
   return useMutation({
-    mutationFn: (patch: { name?: string; logo?: string | null }) =>
+    mutationFn: (patch: { name?: string; logo?: string | null; carryOverTasks?: boolean }) =>
       api.patch<WorkspaceDto>(`/workspaces/${workspaceId}`, patch),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.session });

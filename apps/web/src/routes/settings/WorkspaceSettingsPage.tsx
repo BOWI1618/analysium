@@ -24,7 +24,7 @@ import { Topbar } from '~/components/Topbar';
 import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
 import { Button, IconButton } from '~/ui/Button';
-import { Input, Select } from '~/ui/Input';
+import { Checkbox, Input, Select } from '~/ui/Input';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { EmptyState, Skeleton } from '~/ui/Feedback';
 import { ProjectIcon } from '~/ui/ProjectIcon';
@@ -120,15 +120,19 @@ function Card({ title, description, children }: { title: string; description?: s
 /* --------------------------------------------------------------- general */
 
 function GeneralSection() {
-  const { workspace } = useSession();
+  const { workspace, user } = useSession();
   const update = useUpdateWorkspace(workspace?.id ?? '');
   const [name, setName] = useState(workspace?.name ?? '');
   const [logo, setLogo] = useState(workspace?.logo ?? '');
 
   if (!workspace) return null;
   const dirty = name !== workspace.name || logo !== (workspace.logo ?? '');
+  const canUpdate = user
+    ? can({ userId: user.id, workspaceId: workspace.id, workspaceRole: workspace.role }, Permission.WORKSPACE_UPDATE)
+    : false;
 
   return (
+    <>
     <Card title="Пространство" description="Как пространство видят все его участники.">
       <div className="space-y-3">
         <div className="flex gap-3">
@@ -166,6 +170,23 @@ function GeneralSection() {
         </div>
       </div>
     </Card>
+
+    <Card
+      title="Сроки задач"
+      description="Для всех проектов пространства. Менять могут владелец и администраторы."
+    >
+      <Checkbox
+        checked={workspace.carryOverTasks}
+        disabled={!canUpdate || update.isPending}
+        onChange={(event) => update.mutate({ carryOverTasks: event.target.checked })}
+        label={<span className="text-sm font-bold">Переносить невыполненные задачи на следующий день</span>}
+      />
+      <p className="mt-1.5 pl-6 text-xs text-text-muted">
+        Задача, день которой прошёл, а она не закрыта, сама встаёт на сегодня. На карточке остаётся счётчик —
+        сколько дней задача переносилась. Он сбрасывается, когда срок меняют вручную.
+      </p>
+    </Card>
+    </>
   );
 }
 

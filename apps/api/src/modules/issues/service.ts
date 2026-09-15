@@ -583,6 +583,8 @@ export async function updateIssue(
     data.dueDate = patch.dueDate ? new Date(patch.dueDate) : null;
     after.dueDate = data.dueDate;
     data.dueHasTime = Boolean(patch.dueDate && patch.dueHasTime);
+    // A deadline set by hand starts the carry-over count again.
+    data.carriedOverDays = 0;
   } else if (patch.dueHasTime !== undefined) {
     data.dueHasTime = patch.dueHasTime;
   }

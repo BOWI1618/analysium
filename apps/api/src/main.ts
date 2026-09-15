@@ -2,15 +2,18 @@ import { buildApp } from './app';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { startDueDateScanner } from './jobs/dueDateScanner';
+import { startCarryOver } from './jobs/carryOver';
 
 async function main(): Promise<void> {
   const app = await buildApp();
 
   const stopScanner = startDueDateScanner();
+  const stopCarryOver = startCarryOver();
 
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, 'shutting down');
     stopScanner();
+    stopCarryOver();
     await app.close();
     await prisma.$disconnect();
     process.exit(0);

@@ -7,6 +7,9 @@ import {
   ArrowLeft,
   ChevronDown,
   Copy,
+  CopyPlus,
+  CornerDownRight,
+  CornerUpLeft,
   FileText,
   ExternalLink,
   Link2,
@@ -36,6 +39,8 @@ import {
 import { ActivityTimeline } from './ActivityTimeline';
 import { CommentThread } from './CommentThread';
 import { IssueLinks } from './IssueLinks';
+import { AttachToParentDialog, DuplicateIssueDialog } from './IssueActionDialogs';
+import { DoneToggle, doneStatusId, isClosedStatus, reopenStatusId } from '~/components/DoneToggle';
 import { RichTextEditor } from '~/components/RichText';
 import {
   DateField,
@@ -126,6 +131,8 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   const { data: workspaceProjects } = useProjects(workspace?.id ?? '', false, { includeSystem: true });
   const transferIssue = useTransferIssue(issue.id);
   const [transferTo, setTransferTo] = useState<ProjectDto | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
+  const [attaching, setAttaching] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Description value at the moment the editor took focus — compared on blur
   // to detect that a teammate saved while we were typing.
@@ -169,6 +176,19 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
     <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-surface">
       {/* ------------------------------------------------------------ header */}
       <header className="flex shrink-0 items-center gap-2 border-b-2 border-border-strong bg-surface px-3 py-2 shadow-sm">
+        {canEdit && project && (
+          <DoneToggle
+            done={isClosedStatus(issue.status)}
+            issueKey={issue.issueKey}
+            className="size-4"
+            onToggle={() => {
+              const statusId = isClosedStatus(issue.status)
+                ? reopenStatusId(project.statuses)
+                : doneStatusId(project.statuses);
+              if (statusId) patch({ statusId });
+            }}
+          />
+        )}
         <IssueTypeIcon type={issue.type} className="size-4" />
         <Link
           to={`/issue/${issue.issueKey}`}
@@ -233,7 +253,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                 <MoreHorizontal className="size-4" />
               </IconButton>
             </MenuTrigger>
-            <MenuContent align="end" width={200} label="Действия с задачей">
+            <MenuContent align="end" width={230} label="Действия с задачей">
               <MenuItem icon={<Copy className="size-3.5" />} onSelect={() => void copyLink()}>
                 Скопировать ссылку
               </MenuItem>
@@ -243,6 +263,21 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                   onSelect={() => openCreateIssue({ projectId: issue.projectId, parentId: issue.id })}
                 >
                   Добавить подзадачу
+                </MenuItem>
+              )}
+              {can(Permission.ISSUE_CREATE) && (
+                <MenuItem icon={<CopyPlus className="size-3.5" />} onSelect={() => setDuplicating(true)}>
+                  Дублировать задачу
+                </MenuItem>
+              )}
+              {canEdit && !issue.parent && issue.subtasks.length === 0 && issue.type !== 'EPIC' && (
+                <MenuItem icon={<CornerDownRight className="size-3.5" />} onSelect={() => setAttaching(true)}>
+                  Сделать подзадачей…
+                </MenuItem>
+              )}
+              {canEdit && issue.parent && (
+                <MenuItem icon={<CornerUpLeft className="size-3.5" />} onSelect={() => patch({ parentId: null, type: 'TASK' })}>
+                  Отвязать от {issue.parent.issueKey}
                 </MenuItem>
               )}
               {can(Permission.ISSUE_DELETE) && (
@@ -757,6 +792,29 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
         confirmLabel="Удалить"
         danger
       />
+
+      {duplicating && (
+        <DuplicateIssueDialog
+          issue={issue}
+          onClose={() => setDuplicating(false)}
+          onDuplicated={(copy) => {
+            setDuplicating(false);
+            if (variant === 'page') navigate(`/issue/${copy.issueKey}`);
+            else openIssue(copy.id);
+          }}
+        />
+      )}
+
+      {attaching && (
+        <AttachToParentDialog
+          issue={issue}
+          onClose={() => setAttaching(false)}
+          onPick={(parentId) => {
+            setAttaching(false);
+            patch({ parentId, type: 'SUBTASK' });
+          }}
+        />
+      )}
 
       {/* Referenced so the workspace id stays in scope for future deep links. */}
       <span hidden>{workspace?.id}</span>

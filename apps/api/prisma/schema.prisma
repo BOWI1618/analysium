@@ -136,6 +136,8 @@ model Workspace {
   name      String
   slug      String   @unique
   logo      String?
+  /// Open tasks whose day has passed move to today, as Weeek's «Переносить задачи на следующий день».
+  carryOverTasks Boolean @default(false)
   ownerId   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -402,6 +404,8 @@ model Issue {
   /// and is overdue only once that day is over; with one it is an instant.
   startHasTime      Boolean       @default(false)
   dueHasTime        Boolean       @default(false)
+  /// Days a task was carried over to the next day; cleared when its due date is set by hand.
+  carriedOverDays   Int           @default(0)
   /// A milestone has no duration and renders as a diamond on the timeline.
   isMilestone       Boolean       @default(false)
   /// Snapshot of the original plan, kept so the chart can show plan vs actual.

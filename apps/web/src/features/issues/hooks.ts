@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 import type {
   CreateIssueRequest,
+  DuplicateIssueInput,
   IssueDetailDto,
   IssueSummaryDto,
   MoveIssueInput,
@@ -145,6 +146,23 @@ export function useTransferIssue(issueId: string) {
       toast.success(`Задача перенесена в «${issue.project.name}»`, `Новый номер: ${issue.issueKey}`);
     },
     onError: (error) => toast.error(error, 'Не удалось перенести задачу'),
+  });
+}
+
+/** «Дублировать задачу»: a copy in the same project; opens once it exists. */
+export function useDuplicateIssue(issueId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (input: DuplicateIssueInput) => api.post<IssueDetailDto>(`/issues/${issueId}/duplicate`, input),
+    onSuccess: (copy) => {
+      queryClient.setQueryData(qk.issue(copy.id), copy);
+      invalidateIssueViews(queryClient, copy.projectId);
+      if (copy.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(copy.parent.id), exact: true });
+      toast.success('Задача продублирована', `Копия: ${copy.issueKey}`);
+    },
+    onError: (error) => toast.error(error, 'Не удалось продублировать задачу'),
   });
 }
 

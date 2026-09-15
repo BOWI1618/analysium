@@ -9,21 +9,16 @@ import type {
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useToast } from '~/app/toast';
+import { filtersToQuery, type IssueFilters } from '~/features/issues/types';
 
-export interface GanttFilters {
-  includeDone?: boolean;
-  assigneeId?: string[];
-}
-
-export function useGantt(projectId: string, filters: GanttFilters = {}) {
+export function useGantt(projectId: string, filters: IssueFilters = {}) {
+  // Sorting means nothing on a timeline; the rest are the board's filters.
+  const { sort: _sort, order: _order, ...query } = filters;
   return useQuery({
-    queryKey: qk.gantt(projectId, filters),
+    queryKey: qk.gantt(projectId, query),
     queryFn: () =>
       api.get<GanttDto>(`/projects/${projectId}/gantt`, {
-        query: {
-          includeDone: filters.includeDone ?? true,
-          ...(filters.assigneeId?.length ? { assigneeId: filters.assigneeId.join(',') } : {}),
-        },
+        query: { ...filtersToQuery(query), includeDone: query.includeDone ?? true },
       }),
     enabled: Boolean(projectId),
     staleTime: 10_000,
@@ -59,16 +54,22 @@ export function useRescheduleIssue(projectId: string) {
       issueId,
       startDate,
       dueDate,
+      startHasTime,
+      dueHasTime,
       cascade,
     }: {
       issueId: string;
       startDate: string | null;
       dueDate: string | null;
+      startHasTime?: boolean;
+      dueHasTime?: boolean;
       cascade?: boolean;
     }) =>
       api.post<RescheduleResultDto>(`/issues/${issueId}/reschedule`, {
         startDate,
         dueDate,
+        startHasTime,
+        dueHasTime,
         cascade: cascade ?? false,
       }),
     onSuccess: (result) => {

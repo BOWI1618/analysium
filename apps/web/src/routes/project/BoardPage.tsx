@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   DndContext,
@@ -22,22 +22,35 @@ import clsx from 'clsx';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
 import { Permission, StatusCategory } from '@flowdesk/contracts';
 import { Plus, AlertTriangle } from 'lucide-react';
+import type { StatusDto } from '@flowdesk/contracts';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useProject } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
-import { useBoard, useIssueList, useMoveIssue } from '~/features/issues/hooks';
+import { useBoard, useIssueList, useMoveIssue, usePatchIssue } from '~/features/issues/hooks';
+import { useUpdateStatus } from '~/features/projects/hooks';
+import {
+  AddColumn,
+  BoardSettingsMenu,
+  ColumnMenu,
+  DEFAULT_BOARD_SETTINGS,
+  QuickAddIssue,
+  type BoardSettings,
+} from '~/features/board/BoardParts';
+import { doneStatusId, isClosedStatus, reopenStatusId } from '~/components/DoneToggle';
+import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import { useFilterState } from '~/features/issues/useFilterState';
 import type { BoardColumnDto } from '~/features/issues/types';
 import { FilterBar } from '~/components/FilterBar';
-import { IssueCard } from '~/components/IssueCard';
+import { IssueCard, type IssueCardFields } from '~/components/IssueCard';
 import { StatusDot } from '~/components/IssueMeta';
 import { EmptyState, ErrorState, SkeletonCard } from '~/ui/Feedback';
-import { Button } from '~/ui/Button';
 import { Tooltip } from '~/ui/Tooltip';
 
 /**
- * Kanban board.
+ * Kanban board, worked the way Weeek works one: a task is added by typing its
+ * title at the top of a column, closed with the checkbox on its card, and a
+ * column is renamed, coloured, limited or moved from its own menu.
  *
  * Each column is fetched with its own limit so a project with thousands of
  * completed issues still renders instantly, and a drag writes a single
@@ -56,6 +69,11 @@ export function BoardPage() {
   const { data: epicPages } = useIssueList({ projectId }, { type: ['EPIC'], includeDone: true });
 
   const moveIssue = useMoveIssue(projectId, filters);
+  const patchIssue = usePatchIssue();
+  const [storedSettings, setSettings] = useLocalStorage<BoardSettings>('flowdesk.board-settings', DEFAULT_BOARD_SETTINGS);
+  const settings: BoardSettings = {
+    fields: { ...DEFAULT_BOARD_SETTINGS.fields, ...storedSettings?.fields },
+  };
   const [draggingIssue, setDraggingIssue] = useState<IssueSummaryDto | null>(null);
 
   const epics = useMemo(
@@ -65,6 +83,14 @@ export function BoardPage() {
 
   const canMove = project?.permissions.includes(Permission.ISSUE_MOVE) ?? false;
   const canCreate = project?.permissions.includes(Permission.ISSUE_CREATE) ?? false;
+  const canEdit = project?.permissions.includes(Permission.ISSUE_UPDATE) ?? false;
+  const canManageColumns = project?.permissions.includes(Permission.PROJECT_MANAGE_WORKFLOW) ?? false;
+  const statuses = project?.statuses ?? [];
+
+  const toggleDone = (issue: IssueSummaryDto) => {
+    const statusId = isClosedStatus(issue.status) ? reopenStatusId(statuses) : doneStatusId(statuses);
+    if (statusId) patchIssue.mutate({ issueId: issue.id, patch: { statusId } });
+  };
 
   const sensors = useSensors(
     // A small activation distance keeps a click from being read as a drag.
@@ -135,7 +161,10 @@ export function BoardPage() {
         currentUserId={user?.id ?? ''}
         sortOptions={false}
         trailing={
-          isFetching ? <span className="text-2xs text-text-subtle">Синхронизация…</span> : undefined
+          <>
+            {isFetching && <span className="text-2xs text-text-subtle">Синхронизация…</span>}
+            <BoardSettingsMenu settings={settings} onChange={setSettings} />
+          </>
         }
       />
 
@@ -161,13 +190,19 @@ export function BoardPage() {
               : columns.map((column) => (
                   <BoardColumn
                     key={column.status.id}
+                    projectId={projectId}
                     column={column}
+                    statuses={statuses}
+                    fields={settings.fields}
                     canMove={canMove}
                     canCreate={canCreate}
+                    canManage={canManageColumns}
                     onOpenIssue={openIssue}
+                    onToggleDone={canEdit ? toggleDone : undefined}
                     onCreate={() => openCreateIssue({ projectId, statusId: column.status.id })}
                   />
                 ))}
+            {!isLoading && canManageColumns && <AddColumn projectId={projectId} statuses={statuses} />}
           </div>
         </div>
 
@@ -175,7 +210,7 @@ export function BoardPage() {
         <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }}>
           {draggingIssue && (
             <div className="w-72 rotate-1" style={{ boxShadow: 'var(--shadow-drag)' }}>
-              <IssueCard issue={draggingIssue} />
+              <IssueCard issue={draggingIssue} fields={settings.fields} />
             </div>
           )}
         </DragOverlay>
@@ -187,18 +222,29 @@ export function BoardPage() {
 /* ---------------------------------------------------------------- column */
 
 function BoardColumn({
+  projectId,
   column,
+  statuses,
+  fields,
   canMove,
   canCreate,
+  canManage,
   onOpenIssue,
+  onToggleDone,
   onCreate,
 }: {
+  projectId: string;
   column: BoardColumnDto;
+  statuses: StatusDto[];
+  fields: IssueCardFields;
   canMove: boolean;
   canCreate: boolean;
+  canManage: boolean;
   onOpenIssue: (id: string) => void;
+  onToggleDone?: (issue: IssueSummaryDto) => void;
   onCreate: () => void;
 }) {
+  const [renaming, setRenaming] = useState(false);
   const { setNodeRef, isOver } = useSortable({
     id: column.status.id,
     data: { type: 'column' },
@@ -234,9 +280,17 @@ function BoardColumn({
         ) : (
           <StatusDot status={column.status} className="size-2.5" />
         )}
-        <h2 className="truncate font-mono text-2xs font-bold uppercase tracking-widest">
-          {column.status.name}
-        </h2>
+        {renaming ? (
+          <RenameColumn projectId={projectId} status={column.status} onDone={() => setRenaming(false)} />
+        ) : (
+          <h2
+            className={clsx('truncate font-mono text-2xs font-bold uppercase tracking-widest', canManage && 'cursor-text')}
+            onDoubleClick={canManage ? () => setRenaming(true) : undefined}
+            title={canManage ? 'Дважды щёлкните, чтобы переименовать' : undefined}
+          >
+            {column.status.name}
+          </h2>
+        )}
         <span className={clsx('fd-num text-2xs', !isActive && 'text-text-subtle')}>{column.total}</span>
 
         {column.status.wipLimit ? (
@@ -263,19 +317,31 @@ function BoardColumn({
           </Tooltip>
         ) : null}
 
+        <span className="ml-auto flex items-center gap-0.5">
         {canCreate && (
           <button
             type="button"
             onClick={onCreate}
             aria-label={`Добавить задачу в «${column.status.name}»`}
+            title="Новая задача со всеми полями"
             className={clsx(
-              'ml-auto p-0.5',
+              'p-0.5',
               isActive ? 'text-accent-fg hover:bg-accent-active' : 'text-text-subtle hover:bg-surface-active hover:text-text',
             )}
           >
             <Plus className="size-3.5" />
           </button>
         )}
+        {canManage && (
+          <ColumnMenu
+            projectId={projectId}
+            status={column.status}
+            statuses={statuses}
+            onRename={() => setRenaming(true)}
+            onActiveHeader={isActive}
+          />
+        )}
+        </span>
       </header>
 
       <div
@@ -285,14 +351,26 @@ function BoardColumn({
           isOver && 'bg-accent-subtle/40',
         )}
       >
+        {/* New cards land at the top of a column, so the field that adds one is there too. */}
+        {canCreate && (
+          <QuickAddIssue
+            projectId={projectId}
+            statusId={column.status.id}
+            statusName={column.status.name}
+            className="mt-2"
+          />
+        )}
+
         <SortableContext items={column.issues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           <div className="flex flex-col gap-2 pt-2">
             {column.issues.map((issue) => (
               <SortableIssueCard
                 key={issue.id}
                 issue={issue}
+                fields={fields}
                 disabled={!canMove}
                 onClick={() => onOpenIssue(issue.id)}
+                onToggleDone={onToggleDone ? () => onToggleDone(issue) : undefined}
               />
             ))}
           </div>
@@ -304,13 +382,6 @@ function BoardColumn({
             className="border-2 border-dashed border-border-strong py-6"
             title="Пусто"
             description={canCreate ? 'Перетащите задачу сюда или создайте новую.' : undefined}
-            action={
-              canCreate ? (
-                <Button size="xs" variant="ghost" iconLeft={<Plus className="size-3" />} onClick={onCreate}>
-                  Новая задача
-                </Button>
-              ) : undefined
-            }
           />
         )}
 
@@ -319,6 +390,7 @@ function BoardColumn({
             ещё {column.total - column.issues.length}
           </p>
         )}
+
       </div>
     </section>
   );
@@ -326,12 +398,16 @@ function BoardColumn({
 
 function SortableIssueCard({
   issue,
+  fields,
   disabled,
   onClick,
+  onToggleDone,
 }: {
   issue: IssueSummaryDto;
+  fields: IssueCardFields;
   disabled: boolean;
   onClick: () => void;
+  onToggleDone?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: issue.id,
@@ -345,7 +421,44 @@ function SortableIssueCard({
       {...attributes}
       {...listeners}
     >
-      <IssueCard issue={issue} isDragging={isDragging} onClick={onClick} />
+      <IssueCard issue={issue} fields={fields} isDragging={isDragging} onClick={onClick} onToggleDone={onToggleDone} />
     </div>
+  );
+}
+
+/** The column title turned into a field; Enter or leaving it saves, Escape cancels. */
+function RenameColumn({ projectId, status, onDone }: { projectId: string; status: StatusDto; onDone: () => void }) {
+  const updateStatus = useUpdateStatus(projectId);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelled = useRef(false);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      defaultValue={status.name}
+      maxLength={40}
+      aria-label={`Новое название колонки «${status.name}»`}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          cancelled.current = true;
+          event.currentTarget.blur();
+        }
+      }}
+      onBlur={(event) => {
+        const name = event.target.value.trim();
+        if (!cancelled.current && name && name !== status.name) {
+          updateStatus.mutate({ statusId: status.id, patch: { name } });
+        }
+        onDone();
+      }}
+      className="h-6 min-w-0 flex-1 border-2 border-accent bg-surface px-1 font-mono text-2xs font-bold tracking-widest text-text uppercase outline-none"
+    />
   );
 }

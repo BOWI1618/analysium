@@ -275,7 +275,7 @@ export const IssueRow = memo(function IssueRow({
 
       {show('dueDate') && (
         <span className="hidden w-28 shrink-0 justify-end sm:flex">
-          <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} />
+          <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} />
         </span>
       )}
 

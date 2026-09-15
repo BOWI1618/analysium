@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Check } from 'lucide-react';
+import { DoneToggle } from '~/components/DoneToggle';
 import { IssueTypeIcon, LabelChip, PriorityIcon } from '~/components/IssueMeta';
 import { Avatar } from '~/ui/Avatar';
 import { timeLabel, type CalendarItem } from './items';
@@ -81,21 +81,7 @@ export function CalendarCard({
       style={{ borderLeftColor: issue.status.color, borderLeftWidth: 4, ...style }}
     >
       {canEdit ? (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleDone();
-          }}
-          aria-label={item.done ? `Вернуть в работу ${issue.issueKey}` : `Отметить выполненной ${issue.issueKey}`}
-          aria-pressed={item.done}
-          className={clsx(
-            'mt-px flex size-3.5 shrink-0 items-center justify-center border-2 border-border-strong',
-            item.done ? 'bg-success text-accent-fg' : 'bg-surface hover:bg-success-subtle',
-          )}
-        >
-          {item.done && <Check className="size-2.5" strokeWidth={3} />}
-        </button>
+        <DoneToggle done={item.done} issueKey={issue.issueKey} onToggle={onToggleDone} className="mt-px" />
       ) : (
         <IssueTypeIcon type={issue.type} withTooltip={false} className="mt-px size-3.5 shrink-0" />
       )}

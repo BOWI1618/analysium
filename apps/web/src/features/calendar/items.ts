@@ -9,7 +9,7 @@
  *     otherwise the half hour leading up to the deadline.
  */
 import { format } from 'date-fns';
-import type { IssueSummaryDto, StatusDto, UpdateIssueInput } from '@flowdesk/contracts';
+import type { IssueSummaryDto, UpdateIssueInput } from '@flowdesk/contracts';
 
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
@@ -110,15 +110,7 @@ export function makeWholeDay(day: Date): UpdateIssueInput {
 }
 
 /** The status a checkbox moves a task to, and back. */
-export function doneStatusId(statuses: StatusDto[]): string | undefined {
-  return statuses.find((s) => s.category === 'COMPLETED')?.id;
-}
-export function reopenStatusId(statuses: StatusDto[]): string | undefined {
-  return (
-    statuses.find((s) => s.category === 'UNSTARTED')?.id ??
-    statuses.find((s) => s.category !== 'COMPLETED' && s.category !== 'CANCELED')?.id
-  );
-}
+export { doneStatusId, reopenStatusId } from '~/components/DoneToggle';
 
 /** Side-by-side lanes for timed items that overlap within one day. */
 export function layoutTimed(items: CalendarItem[]): { item: CalendarItem; lane: number; lanes: number }[] {

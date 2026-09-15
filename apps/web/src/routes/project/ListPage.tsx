@@ -1,24 +1,48 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Permission } from '@flowdesk/contracts';
-import { Plus } from 'lucide-react';
+import { ISSUE_PRIORITIES, Permission, type IssuePriority, type IssueSummaryDto, type StatusDto } from '@flowdesk/contracts';
+import clsx from 'clsx';
+import { ChevronRight, Layers, Plus } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useProject } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
-import { useBulkUpdate, useIssueList, usePatchIssue, flattenPages } from '~/features/issues/hooks';
+import { useBulkUpdate, useCreateIssue, useIssueList, usePatchIssue, flattenPages } from '~/features/issues/hooks';
 import { useFilterState } from '~/features/issues/useFilterState';
 import { useSavedViews, useCreateSavedView } from '~/features/views/hooks';
 import { FilterBar } from '~/components/FilterBar';
 import { ColumnsMenu, IssueRow, IssueRowHeader, DEFAULT_COLUMNS, listMinWidth, type ListColumn } from '~/components/IssueRow';
 import { BulkActionBar } from '~/components/BulkActionBar';
 import { Button } from '~/ui/Button';
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
+import { PRIORITY_META } from '~/components/IssueMeta';
 import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 
+type ListGroupBy = 'none' | 'status' | 'assignee' | 'priority';
+
+const GROUP_LABELS: Record<ListGroupBy, string> = {
+  none: 'Без групп',
+  status: 'Статус',
+  assignee: 'Исполнитель',
+  priority: 'Приоритет',
+};
+
+interface ListGroup {
+  key: string;
+  label: string;
+  accent?: string;
+  issues: IssueSummaryDto[];
+}
+
+/** A virtual row: a group's heading or a task. */
+type ListItem = { kind: 'group'; group: ListGroup } | { kind: 'issue'; issue: IssueSummaryDto };
+
 /**
- * Table view with configurable columns, inline editing and bulk actions.
+ * Table view with configurable columns, inline editing and bulk actions. As in
+ * Weeek, a task is added by typing its title in the row on top, and the list
+ * can be grouped by status, assignee or priority.
  * Rows are virtualised, so a 5 000-issue project scrolls at the same speed as
  * a 20-issue one.
  */
@@ -30,6 +54,8 @@ export function ListPage() {
 
   const [filters, setFilters] = useFilterState({ sort: 'updated', order: 'desc' });
   const [columns, setColumns] = useLocalStorage<ListColumn[]>('flowdesk.list-columns', DEFAULT_COLUMNS);
+  const [groupBy, setGroupBy] = useLocalStorage<ListGroupBy>('flowdesk.list-group', 'none');
+  const [folded, setFolded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string[]>([]);
   const lastClickedRef = useRef<string | null>(null);
 
@@ -49,25 +75,45 @@ export function ListPage() {
     [epicPages],
   );
 
+  const rows = useMemo<ListItem[]>(() => {
+    if (groupBy === 'none') return issues.map((issue) => ({ kind: 'issue', issue }));
+    return groupIssues(issues, groupBy, project?.statuses ?? []).flatMap((group) => [
+      { kind: 'group', group } as ListItem,
+      ...(folded.has(group.key) ? [] : group.issues.map((issue) => ({ kind: 'issue', issue }) as ListItem)),
+    ]);
+  }, [issues, groupBy, folded, project?.statuses]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
-    count: issues.length,
+    count: rows.length,
+    // Sizes are remembered per row, not per position: grouping moves rows around.
+    getItemKey: (index) => {
+      const row = rows[index];
+      return !row ? index : row.kind === 'group' ? `group-${row.group.key}` : row.issue.id;
+    },
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 37,
     overscan: 12,
   });
 
   const canEdit = project?.permissions.includes(Permission.ISSUE_UPDATE) ?? false;
+  const canCreate = project?.permissions.includes(Permission.ISSUE_CREATE) ?? false;
+
+  // Shift-click ranges follow the rows as they stand on screen, groups included.
+  const visibleIssues = useMemo(
+    () => rows.flatMap((row) => (row.kind === 'issue' ? [row.issue] : [])),
+    [rows],
+  );
 
   const toggleSelect = useCallback(
     (issueId: string, event: { shiftKey: boolean }) => {
       // Shift-click selects the range since the previous click, like a file manager.
       if (event.shiftKey && lastClickedRef.current) {
-        const from = issues.findIndex((i) => i.id === lastClickedRef.current);
-        const to = issues.findIndex((i) => i.id === issueId);
+        const from = visibleIssues.findIndex((i) => i.id === lastClickedRef.current);
+        const to = visibleIssues.findIndex((i) => i.id === issueId);
         if (from >= 0 && to >= 0) {
           const [start, end] = from < to ? [from, to] : [to, from];
-          const range = issues.slice(start, end + 1).map((i) => i.id);
+          const range = visibleIssues.slice(start, end + 1).map((i) => i.id);
           setSelected((prev) => [...new Set([...prev, ...range])]);
           return;
         }
@@ -75,7 +121,7 @@ export function ListPage() {
       lastClickedRef.current = issueId;
       setSelected((prev) => (prev.includes(issueId) ? prev.filter((id) => id !== issueId) : [...prev, issueId]));
     },
-    [issues],
+    [visibleIssues],
   );
 
   if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
@@ -104,7 +150,32 @@ export function ListPage() {
             isShared: true,
           });
         }}
-        trailing={<ColumnsMenu columns={columns} onChange={setColumns} />
+        trailing={
+          <>
+            <Menu>
+              <MenuTrigger>
+                <Button size="xs" variant="ghost" iconLeft={<Layers className="size-3" />}>
+                  {groupBy === 'none' ? 'Группировка' : `Группы: ${GROUP_LABELS[groupBy].toLowerCase()}`}
+                </Button>
+              </MenuTrigger>
+              <MenuContent align="end" width={200} label="Группировать задачи">
+                <MenuLabel>Группировать по</MenuLabel>
+                {(Object.keys(GROUP_LABELS) as ListGroupBy[]).map((value) => (
+                  <MenuItem
+                    key={value}
+                    selected={groupBy === value}
+                    onSelect={() => {
+                      setGroupBy(value);
+                      setFolded(new Set());
+                    }}
+                  >
+                    {GROUP_LABELS[value]}
+                  </MenuItem>
+                ))}
+              </MenuContent>
+            </Menu>
+            <ColumnsMenu columns={columns} onChange={setColumns} />
+          </>
         }
       />
 
@@ -114,6 +185,7 @@ export function ListPage() {
           style={{ '--list-min': `${listMinWidth(columns)}px` } as React.CSSProperties}
         >
         <IssueRowHeader columns={columns} />
+        {canCreate && <QuickAddRow projectId={projectId} />}
 
         {query.isLoading ? (
           <SkeletonRows rows={12} />
@@ -135,8 +207,42 @@ description="Ослабьте фильтры или создайте перву�
         ) : (
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
-              const issue = issues[virtualRow.index];
-              if (!issue) return null;
+              const row = rows[virtualRow.index];
+              if (!row) return null;
+              if (row.kind === 'group') {
+                const { group } = row;
+                const isFolded = folded.has(group.key);
+                return (
+                  <div
+                    key={`group-${group.key}`}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={!isFolded}
+                      onClick={() =>
+                        setFolded((current) => {
+                          const next = new Set(current);
+                          if (next.has(group.key)) next.delete(group.key);
+                          else next.add(group.key);
+                          return next;
+                        })
+                      }
+                      className="flex w-full items-center gap-2 border-b-2 border-border-strong bg-surface-sunken px-3 py-1.5 text-left hover:bg-surface-active"
+                    >
+                      <ChevronRight className={clsx('size-3.5 text-text-subtle transition-transform', !isFolded && 'rotate-90')} />
+                      {group.accent && (
+                        <span className="size-2.5 border border-border-strong" style={{ backgroundColor: group.accent }} aria-hidden="true" />
+                      )}
+                      <h2 className="fd-eyebrow">{group.label}</h2>
+                      <span className="fd-num text-2xs text-text-subtle">{group.issues.length}</span>
+                    </button>
+                  </div>
+                );
+              }
+              const { issue } = row;
               return (
                 <div
                   key={issue.id}
@@ -197,3 +303,65 @@ description="Ослабьте фильтры или создайте перву�
 }
 
 
+
+/** The loaded tasks sorted into groups, in the order the groups mean something. */
+function groupIssues(issues: IssueSummaryDto[], groupBy: Exclude<ListGroupBy, 'none'>, statuses: StatusDto[]): ListGroup[] {
+  const map = new Map<string, ListGroup>();
+  for (const issue of issues) {
+    const [key, label, accent] =
+      groupBy === 'status'
+        ? [issue.statusId, issue.status.name, issue.status.color]
+        : groupBy === 'assignee'
+          ? [issue.assignee?.id ?? 'none', issue.assignee?.name ?? 'Без исполнителя', undefined]
+          : [issue.priority, PRIORITY_META[issue.priority as IssuePriority].label, undefined];
+    const group = map.get(key) ?? { key, label, accent, issues: [] };
+    group.issues.push(issue);
+    map.set(key, group);
+  }
+
+  const rank = (group: ListGroup) => {
+    if (groupBy === 'status') return statuses.findIndex((s) => s.id === group.key);
+    if (groupBy === 'priority') return ISSUE_PRIORITIES.indexOf(group.key as IssuePriority);
+    return group.key === 'none' ? Number.MAX_SAFE_INTEGER : 0;
+  };
+  return [...map.values()].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label, 'ru'));
+}
+
+/** «Новая задача» on top of the list: type a title, press Enter, type the next one. */
+function QuickAddRow({ projectId }: { projectId: string }) {
+  const [title, setTitle] = useState('');
+  const createIssue = useCreateIssue();
+
+  return (
+    <form
+      className="flex items-center gap-2 border-b-2 border-border-strong bg-surface py-1 pr-3 pl-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const value = title.trim();
+        if (!value) return;
+        setTitle('');
+        createIssue.mutate(
+          { projectId, title: value, type: 'TASK', priority: 'MEDIUM' },
+          { onError: () => setTitle((current) => current || value) },
+        );
+      }}
+    >
+      <span className="size-3.5 shrink-0" />
+      <Plus className="size-4 shrink-0 text-text-subtle" />
+      <input
+        value={title}
+        maxLength={300}
+        onChange={(event) => setTitle(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setTitle('');
+            event.currentTarget.blur();
+          }
+        }}
+        placeholder="Новая задача — введите название и нажмите Enter"
+        aria-label="Новая задача"
+        className="h-7 min-w-0 flex-1 border-2 border-transparent bg-transparent px-1.5 text-sm outline-none placeholder:text-text-subtle hover:border-border-strong focus:border-accent"
+      />
+    </form>
+  );
+}

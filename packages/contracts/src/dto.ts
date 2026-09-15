@@ -40,6 +40,8 @@ export interface WorkspaceDto {
   memberCount: number;
   projectCount: number;
   createdAt: string;
+  /** Unfinished tasks move to the next day on their own. */
+  carryOverTasks: boolean;
 }
 
 export interface MemberDto {
@@ -158,6 +160,8 @@ export interface IssueSummaryDto {
   /** Whether a time of day was set; without one the date is the whole day. */
   startHasTime: boolean;
   dueHasTime: boolean;
+  /** Days the task was carried over to the next day unfinished. */
+  carriedOverDays: number;
   isMilestone: boolean;
   rank: string;
   commentCount: number;

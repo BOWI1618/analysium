@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { GANTT_SCALES, Permission, type GanttScale } from '@flowdesk/contracts';
-import { CalendarClock, GitBranch, Plus } from 'lucide-react';
+import { CalendarClock, GitBranch, Layers, Plus, Settings2 } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import {
@@ -12,16 +12,31 @@ import {
 } from '~/features/gantt/hooks';
 import { GanttChart } from '~/features/gantt/GanttChart';
 import { SCALE_LABEL } from '~/features/gantt/scale';
-import { Button } from '~/ui/Button';
-import { Checkbox } from '~/ui/Input';
+import { GANTT_GROUP_LABELS, type GanttGroupBy } from '~/features/gantt/groups';
+import { useProject } from '~/features/projects/hooks';
+import { useFilterState } from '~/features/issues/useFilterState';
+import { FilterBar } from '~/components/FilterBar';
+import { Button, IconButton } from '~/ui/Button';
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
 import { SegmentedControl } from '~/ui/Tabs';
 import { Dialog } from '~/ui/Dialog';
 import { EmptyState, ErrorState, Skeleton } from '~/ui/Feedback';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import type { ScheduleShiftDto } from '@flowdesk/contracts';
 
+interface GanttSettings {
+  baseline: boolean;
+  overdue: boolean;
+  assignee: boolean;
+}
+
+const DEFAULT_GANTT_SETTINGS: GanttSettings = { baseline: false, overdue: true, assignee: true };
+
 /**
- * Gantt view: the project's work broken down, scheduled and linked.
+ * Gantt view: the project's work broken down, scheduled and linked. As in
+ * Weeek it takes the same filters as the board, groups tasks by status,
+ * assignee or priority, and a task without dates is put on the chart by
+ * clicking a day on its row.
  *
  * Dates are written through a dedicated endpoint that also reports which
  * dependent work the move would break — the user decides whether to cascade,
@@ -34,9 +49,12 @@ export function GanttPage() {
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
 
   const [scale, setScale] = useLocalStorage<GanttScale>('flowdesk.gantt-scale', 'WEEK');
-  const [showBaseline, setShowBaseline] = useLocalStorage('flowdesk.gantt-baseline', false);
-  const [onlyMine, setOnlyMine] = useState(false);
-  const [includeDone, setIncludeDone] = useState(true);
+  const [storedSettings, setSettings] = useLocalStorage<GanttSettings>('flowdesk.gantt-settings', DEFAULT_GANTT_SETTINGS);
+  const settings: GanttSettings = { ...DEFAULT_GANTT_SETTINGS, ...storedSettings };
+  const update = (next: Partial<GanttSettings>) => setSettings({ ...settings, ...next });
+  const [groupBy, setGroupBy] = useLocalStorage<GanttGroupBy>('flowdesk.gantt-group', 'none');
+  const [filters, setFilters] = useFilterState();
+  const { data: project } = useProject(projectId);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [pendingShifts, setPendingShifts] = useState<{
     issueId: string;
@@ -44,11 +62,6 @@ export function GanttPage() {
     end: string;
     shifts: ScheduleShiftDto[];
   } | null>(null);
-
-  const filters = useMemo(
-    () => ({ includeDone, ...(onlyMine && user ? { assigneeId: ['@me'] } : {}) }),
-    [includeDone, onlyMine, user],
-  );
 
   const { data, isLoading, error, refetch, isFetching } = useGantt(projectId, filters);
 
@@ -82,10 +95,36 @@ export function GanttPage() {
     );
   };
 
+  // Tasks without any dates still get a timeline to be placed on.
+  const range = useMemo(() => {
+    if (data?.range || !data?.rows.length) return data?.range ?? null;
+    const start = new Date();
+    start.setDate(start.getDate() - 7);
+    const end = new Date();
+    end.setDate(end.getDate() + 60);
+    return { start: start.toISOString(), end: end.toISOString() };
+  }, [data]);
+
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
+
+  const option = (label: string, checked: boolean, onChange: () => void) => (
+    <MenuItem key={label} keepOpen selected={checked} onSelect={onChange}>
+      {label}
+    </MenuItem>
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <FilterBar
+        filters={filters}
+        onChange={setFilters}
+        statuses={project?.statuses}
+        labels={project?.labels}
+        members={project?.assignees}
+        currentUserId={user?.id ?? ''}
+        sortOptions={false}
+      />
+
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-3 py-2">
         <SegmentedControl
@@ -96,23 +135,21 @@ export function GanttPage() {
         />
 
 
-        <div className="hidden flex-wrap items-center gap-2 md:flex">
-          <Checkbox
-            checked={showBaseline}
-            onChange={(event) => setShowBaseline(event.target.checked)}
-            label={<span className="text-xs text-text-muted">Базовый план</span>}
-          />
-          <Checkbox
-            checked={onlyMine}
-            onChange={(event) => setOnlyMine(event.target.checked)}
-            label={<span className="text-xs text-text-muted">Только мои</span>}
-          />
-          <Checkbox
-            checked={includeDone}
-            onChange={(event) => setIncludeDone(event.target.checked)}
-            label={<span className="text-xs text-text-muted">С завершёнными</span>}
-          />
-        </div>
+        <Menu>
+          <MenuTrigger>
+            <Button size="xs" variant="ghost" iconLeft={<Layers className="size-3" />}>
+              {groupBy === 'none' ? 'Группировка' : `Группы: ${GANTT_GROUP_LABELS[groupBy].toLowerCase()}`}
+            </Button>
+          </MenuTrigger>
+          <MenuContent width={200} label="Группировать задачи">
+            <MenuLabel>Группировать по</MenuLabel>
+            {(Object.keys(GANTT_GROUP_LABELS) as GanttGroupBy[]).map((value) => (
+              <MenuItem key={value} selected={groupBy === value} onSelect={() => setGroupBy(value)}>
+                {GANTT_GROUP_LABELS[value]}
+              </MenuItem>
+            ))}
+          </MenuContent>
+        </Menu>
 
         <div className="ml-auto flex items-center gap-2">
           {isFetching && <span className="text-2xs text-text-subtle">Обновляем…</span>}
@@ -132,6 +169,19 @@ export function GanttPage() {
               Задача
             </Button>
           )}
+          <Menu>
+            <MenuTrigger>
+              <IconButton label="Настройки диаграммы" size="sm">
+                <Settings2 className="size-4" />
+              </IconButton>
+            </MenuTrigger>
+            <MenuContent align="end" width={240} label="Настройки диаграммы">
+              <MenuLabel>Показывать</MenuLabel>
+              {option('Просроченные красным', settings.overdue, () => update({ overdue: !settings.overdue }))}
+              {option('Исполнителя', settings.assignee, () => update({ assignee: !settings.assignee }))}
+              {option('Базовый план', settings.baseline, () => update({ baseline: !settings.baseline }))}
+            </MenuContent>
+          </Menu>
         </div>
       </div>
 
@@ -144,7 +194,7 @@ export function GanttPage() {
           </div>
           <Skeleton className="flex-1" />
         </div>
-      ) : !data.range ? (
+      ) : !range ? (
         <EmptyState
           icon={<GitBranch className="size-6" />}
           title="Нечего показать на диаграмме"
@@ -170,10 +220,17 @@ export function GanttPage() {
         <GanttChart
           rows={data.rows}
           dependencies={data.dependencies}
-          range={data.range}
+          range={range}
           scale={scale}
           editable={editable}
-          showBaseline={showBaseline}
+          showBaseline={settings.baseline}
+          showOverdue={settings.overdue}
+          showAssignee={settings.assignee}
+          groupBy={groupBy}
+          onSchedule={(issueId, day) => {
+            const iso = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 12)).toISOString();
+            reschedule.mutate({ issueId, startDate: iso, dueDate: iso, startHasTime: false, dueHasTime: false, cascade: false });
+          }}
           collapsed={collapsed}
           onToggleCollapse={toggleCollapse}
           onOpenIssue={openIssue}
@@ -191,16 +248,18 @@ export function GanttPage() {
       )}
 
       {/* Legend */}
-      {data?.range && (
+      {range && (
         <div className="fd-eyebrow flex items-center gap-4 overflow-x-auto border-t-2 border-border-strong bg-surface px-3 py-2 whitespace-nowrap no-scrollbar">
           <span className="flex items-center gap-1.5">
             <span className="size-2.5 border-2 border-border-strong bg-accent" />
             Критический путь
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="size-2.5 border-2 border-border-strong bg-danger" />
-            Просрочено
-          </span>
+          {settings.overdue && (
+            <span className="flex items-center gap-1.5">
+              <span className="size-2.5 border-2 border-border-strong bg-danger" />
+              Просрочено
+            </span>
+          )}
           <span className="flex items-center gap-1.5">
             <span className="size-2.5 border-2 border-border-strong bg-surface" />
             План
@@ -217,7 +276,7 @@ export function GanttPage() {
             <span className="h-0 w-4 border-t-2 border-dashed border-text-subtle/60" />
             Запас
           </span>
-          {showBaseline && (
+          {settings.baseline && (
             <span className="flex items-center gap-1.5">
               <span className="h-0 w-4 border-t-2 border-dashed border-border-strong" />
               Базовый план
@@ -225,7 +284,7 @@ export function GanttPage() {
           )}
           {editable && (
             <span className="ml-auto hidden normal-case tracking-normal lg:inline">
-              Перетащите полосу, чтобы сдвинуть · потяните за край, чтобы изменить длительность
+              Перетащите полосу, чтобы сдвинуть · потяните за край, чтобы изменить длительность · у задачи без дат щёлкните день на её строке
             </span>
           )}
         </div>

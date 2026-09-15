@@ -19,6 +19,7 @@ export async function listWorkspaces(userId: string): Promise<WorkspaceDto[]> {
           name: true,
           slug: true,
           logo: true,
+          carryOverTasks: true,
           ownerId: true,
           createdAt: true,
           _count: { select: { members: true, projects: { where: { isSystem: false } } } },
@@ -32,6 +33,7 @@ export async function listWorkspaces(userId: string): Promise<WorkspaceDto[]> {
     name: m.workspace.name,
     slug: m.workspace.slug,
     logo: m.workspace.logo,
+    carryOverTasks: m.workspace.carryOverTasks,
     ownerId: m.workspace.ownerId,
     role: m.role,
     memberCount: m.workspace._count.members,
@@ -75,6 +77,7 @@ export async function createWorkspace(
     name: workspace.name,
     slug: workspace.slug,
     logo: workspace.logo,
+    carryOverTasks: workspace.carryOverTasks,
     ownerId: workspace.ownerId,
     role: WorkspaceRole.OWNER,
     memberCount: 1,
@@ -91,6 +94,7 @@ export async function getWorkspace(actor: ActorContext): Promise<WorkspaceDto> {
       name: true,
       slug: true,
       logo: true,
+      carryOverTasks: true,
       ownerId: true,
       createdAt: true,
       _count: { select: { members: true, projects: { where: { isSystem: false } } } },
@@ -102,6 +106,7 @@ export async function getWorkspace(actor: ActorContext): Promise<WorkspaceDto> {
     name: ws.name,
     slug: ws.slug,
     logo: ws.logo,
+    carryOverTasks: ws.carryOverTasks,
     ownerId: ws.ownerId,
     role: actor.workspaceRole,
     memberCount: ws._count.members,
@@ -112,7 +117,7 @@ export async function getWorkspace(actor: ActorContext): Promise<WorkspaceDto> {
 
 export async function updateWorkspace(
   actor: ActorContext,
-  patch: { name?: string; logo?: string | null },
+  patch: { name?: string; logo?: string | null; carryOverTasks?: boolean },
   ip?: string,
 ): Promise<WorkspaceDto> {
   assertCan(actor, Permission.WORKSPACE_UPDATE);

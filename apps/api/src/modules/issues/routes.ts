@@ -3,6 +3,7 @@ import {
   Permission,
   bulkUpdateSchema,
   createIssueRequestSchema,
+  duplicateIssueSchema,
   issueFilterSchema,
   moveIssueSchema,
   transferIssueSchema,
@@ -14,6 +15,7 @@ import { ensureSystemProject } from '../projects/service';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import * as service from './service';
 import { transferIssue } from './transfer';
+import { duplicateIssue } from './duplicate';
 
 type IssueParams = { issueId: string };
 
@@ -94,6 +96,13 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: IssueParams }>('/issues/:issueId/transfer', async (req) => {
     const { projectId } = parse(transferIssueSchema, req.body);
     return transferIssue(currentUser(req).id, req.params.issueId, projectId);
+  });
+
+  /** A copy in the same project, with the parts chosen in the dialog. */
+  app.post<{ Params: IssueParams }>('/issues/:issueId/duplicate', async (req, reply) => {
+    const input = parse(duplicateIssueSchema, req.body);
+    const issue = await duplicateIssue(currentUser(req).id, req.params.issueId, input);
+    return reply.status(201).send(issue);
   });
 
   app.post<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/issues/bulk', async (req) => {

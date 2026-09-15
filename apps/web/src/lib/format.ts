@@ -61,6 +61,8 @@ export function dueDateLabel(
 ): {
   label: string;
   tone: 'overdue' | 'today' | 'soon' | 'normal';
+  /** Whole days past the deadline; 0 when it is not overdue or passed today. */
+  overdueDays: number;
 } | null {
   const date = toDate(value);
   if (!date) return null;
@@ -70,12 +72,12 @@ export function dueDateLabel(
   const overdue = hasTime ? date.getTime() < Date.now() : days < 0;
   if (overdue) {
     const day = isToday(date) ? 'Сегодня' : isYesterday(date) ? 'Вчера' : format(date, 'd MMM', { locale });
-    return { label: day + time, tone: 'overdue' };
+    return { label: day + time, tone: 'overdue', overdueDays: Math.max(0, -days) };
   }
-  if (isToday(date)) return { label: 'Сегодня' + time, tone: 'today' };
-  if (isTomorrow(date)) return { label: 'Завтра' + time, tone: 'soon' };
-  if (days <= 7) return { label: format(date, 'EEEEEE, d MMM', { locale }) + time, tone: 'soon' };
-  return { label: format(date, isThisYear(date) ? 'd MMM' : 'd MMM yy', { locale }) + time, tone: 'normal' };
+  if (isToday(date)) return { label: 'Сегодня' + time, tone: 'today', overdueDays: 0 };
+  if (isTomorrow(date)) return { label: 'Завтра' + time, tone: 'soon', overdueDays: 0 };
+  if (days <= 7) return { label: format(date, 'EEEEEE, d MMM', { locale }) + time, tone: 'soon', overdueDays: 0 };
+  return { label: format(date, isThisYear(date) ? 'd MMM' : 'd MMM yy', { locale }) + time, tone: 'normal', overdueDays: 0 };
 }
 
 /** "12 мар" or "12 мар, 14:30" — for dates that are not deadlines. */

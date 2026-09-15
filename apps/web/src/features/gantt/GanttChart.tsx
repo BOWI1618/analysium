@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { ChevronDown, ChevronRight, Link2, Unlink } from 'lucide-react';
+import { ChevronDown, ChevronRight, Link2, Plus, Unlink } from 'lucide-react';
 import type { DependencyDto, GanttRowDto, GanttScale } from '@flowdesk/contracts';
 import { Avatar } from '~/ui/Avatar';
 import { Tooltip } from '~/ui/Tooltip';
@@ -16,6 +16,7 @@ import {
   weekendBands,
   type Timeline,
 } from './scale';
+import { ganttLines, groupCollapseKey, type GanttGroupBy } from './groups';
 
 export interface GanttChartProps {
   rows: GanttRowDto[];
@@ -30,6 +31,14 @@ export interface GanttChartProps {
   onReschedule: (issueId: string, start: string, end: string) => void;
   onCreateDependency: (predecessorId: string, successorId: string) => void;
   onDeleteDependency: (dependencyId: string) => void;
+  /** Grouping of the top-level tasks, as in the list. */
+  groupBy?: GanttGroupBy;
+  /** Paints overdue bars red. */
+  showOverdue?: boolean;
+  /** The assignee's avatar in the tree and on the bar. */
+  showAssignee?: boolean;
+  /** Gives a task without dates its first day, picked on its row. */
+  onSchedule?: (issueId: string, day: Date) => void;
 }
 
 type DragMode = 'move' | 'resize-start' | 'resize-end';
@@ -70,6 +79,10 @@ export function GanttChart({
   onReschedule,
   onCreateDependency,
   onDeleteDependency,
+  groupBy = 'none',
+  showOverdue = true,
+  showAssignee = true,
+  onSchedule,
 }: GanttChartProps) {
   // The chart is never narrower than the space it sits in.
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -100,25 +113,16 @@ export function GanttChart({
   const stepPx = timeline.dayWidth;
   const stepMs = 24 * 60 * 60 * 1000;
 
-  // A row is hidden when any ancestor is collapsed.
-  const visibleRows = useMemo(() => {
-    const byId = new Map(rows.map((r) => [r.id, r]));
-    const isHidden = (row: GanttRowDto): boolean => {
-      let parentId = row.parentId;
-      const seen = new Set<string>();
-      while (parentId && !seen.has(parentId)) {
-        if (collapsed.has(parentId)) return true;
-        seen.add(parentId);
-        parentId = byId.get(parentId)?.parentId ?? null;
-      }
-      return false;
-    };
-    return rows.filter((row) => !isHidden(row));
-  }, [rows, collapsed]);
+  // Lines on screen: group headings and the tasks not folded away.
+  const lines = useMemo(() => ganttLines(rows, groupBy, collapsed), [rows, groupBy, collapsed]);
+  const visibleRows = useMemo(
+    () => lines.flatMap((line) => (line.kind === 'issue' ? [line.row] : [])),
+    [lines],
+  );
 
   const rowIndex = useMemo(
-    () => new Map(visibleRows.map((row, index) => [row.id, index])),
-    [visibleRows],
+    () => new Map(lines.flatMap((line, index) => (line.kind === 'issue' ? [[line.row.id, index] as const] : []))),
+    [lines],
   );
 
   // Float is only meaningful for work that something else depends on; an
@@ -238,7 +242,7 @@ export function GanttChart({
     };
   }, [link, onCreateDependency]);
 
-  const chartHeight = visibleRows.length * ROW_HEIGHT;
+  const chartHeight = lines.length * ROW_HEIGHT;
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -253,15 +257,38 @@ export function GanttChart({
 
         <div className="min-h-0 flex-1 overflow-hidden" id="gantt-tree">
           <div style={{ height: chartHeight }}>
-            {visibleRows.map((row) => (
-              <TreeRow
-                key={row.id}
-                row={row}
-                collapsed={collapsed.has(row.id)}
-                onToggle={() => onToggleCollapse(row.id)}
-                onOpen={() => onOpenIssue(row.id)}
-              />
-            ))}
+            {lines.map((line) =>
+              line.kind === 'group' ? (
+                <button
+                  key={`group-${line.key}`}
+                  type="button"
+                  onClick={() => onToggleCollapse(groupCollapseKey(line.key))}
+                  aria-expanded={!line.collapsed}
+                  className="flex w-full items-center gap-1.5 border-b-2 border-border-strong bg-surface-sunken px-2 text-left hover:bg-surface-active"
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  {line.collapsed ? (
+                    <ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+                  ) : (
+                    <ChevronDown className="size-3.5 shrink-0 text-text-subtle" />
+                  )}
+                  {line.accent && (
+                    <span className="size-2.5 shrink-0 border border-border-strong" style={{ backgroundColor: line.accent }} aria-hidden="true" />
+                  )}
+                  <span className="fd-eyebrow truncate">{line.label}</span>
+                  <span className="fd-num text-2xs text-text-subtle">{line.count}</span>
+                </button>
+              ) : (
+                <TreeRow
+                  key={line.row.id}
+                  row={line.row}
+                  showAssignee={showAssignee}
+                  collapsed={collapsed.has(line.row.id)}
+                  onToggle={() => onToggleCollapse(line.row.id)}
+                  onOpen={() => onOpenIssue(line.row.id)}
+                />
+              ),
+            )}
           </div>
         </div>
       </div>
@@ -279,7 +306,18 @@ export function GanttChart({
           <TimelineHeader timeline={timeline} />
 
           <div className="relative" style={{ height: chartHeight }}>
-            <Background timeline={timeline} rowCount={visibleRows.length} />
+            <Background timeline={timeline} rowCount={lines.length} />
+
+            {lines.map((line, index) =>
+              line.kind === 'group' ? (
+                <div
+                  key={`band-${line.key}`}
+                  className="pointer-events-none absolute inset-x-0 border-b-2 border-border-strong bg-surface-sunken/70"
+                  style={{ top: index * ROW_HEIGHT, height: ROW_HEIGHT }}
+                  aria-hidden="true"
+                />
+              ) : null,
+            )}
 
             <DependencyArrows
               dependencies={dependencies}
@@ -290,11 +328,17 @@ export function GanttChart({
               onDelete={onDeleteDependency}
             />
 
-            {visibleRows.map((row, index) => (
+            {lines.map((line, index) => {
+              if (line.kind === 'group') return null;
+              const { row } = line;
+              return (
               <Bar
                 key={row.id}
                 row={row}
                 index={index}
+                showOverdue={showOverdue}
+                showAssignee={showAssignee}
+                onSchedule={onSchedule ? (day) => onSchedule(row.id, day) : undefined}
                 linked={linkedIds.has(row.id)}
                 timeline={timeline}
                 editable={editable}
@@ -307,7 +351,8 @@ export function GanttChart({
                 onStartLink={(x, y) => setLink({ fromId: row.id, x, y })}
                 onOpen={() => openIfNotDragging(row.id)}
               />
-            ))}
+              );
+            })}
 
             {link && <LinkPreview link={link} rows={visibleRows} rowIndex={rowIndex} timeline={timeline} />}
           </div>
@@ -321,11 +366,13 @@ export function GanttChart({
 
 function TreeRow({
   row,
+  showAssignee,
   collapsed,
   onToggle,
   onOpen,
 }: {
   row: GanttRowDto;
+  showAssignee: boolean;
   collapsed: boolean;
   onToggle: () => void;
   onOpen: () => void;
@@ -372,9 +419,11 @@ function TreeRow({
         </span>
       </button>
 
-      <span className="hidden shrink-0 sm:inline-flex">
-        <Avatar user={row.assignee} size="sm" showEmpty={false} />
-      </span>
+      {showAssignee && (
+        <span className="hidden shrink-0 sm:inline-flex">
+          <Avatar user={row.assignee} size="sm" showEmpty={false} />
+        </span>
+      )}
     </div>
   );
 }
@@ -456,6 +505,9 @@ function Background({ timeline, rowCount }: { timeline: Timeline; rowCount: numb
 function Bar({
   row,
   index,
+  showOverdue,
+  showAssignee,
+  onSchedule,
   linked,
   timeline,
   editable,
@@ -469,6 +521,9 @@ function Bar({
   stepPx: number;
   row: GanttRowDto;
   index: number;
+  showOverdue: boolean;
+  showAssignee: boolean;
+  onSchedule?: (day: Date) => void;
   linked: boolean;
   timeline: Timeline;
   editable: boolean;
@@ -485,7 +540,11 @@ function Bar({
   const top = index * ROW_HEIGHT;
   const shift = (drag?.steps ?? 0) * stepPx;
 
-  if (!geometry) return null;
+  if (!geometry) {
+    return onSchedule && editable && !row.start && !row.end ? (
+      <UnscheduledSlot row={row} top={top} timeline={timeline} onSchedule={onSchedule} />
+    ) : null;
+  }
 
   const adjusted = {
     x: geometry.x + (drag?.mode === 'resize-end' ? 0 : shift),
@@ -576,7 +635,7 @@ function Bar({
               ? 'bg-ink'
               : row.isCritical
                 ? 'bg-accent text-accent-fg'
-                : row.isOverdue
+                : row.isOverdue && showOverdue
                   ? 'bg-danger text-accent-fg'
                   : 'bg-surface',
             draggable && 'cursor-grab active:cursor-grabbing',
@@ -608,7 +667,7 @@ function Bar({
             </span>
           )}
 
-          {row.assignee && adjusted.width > 90 && (
+          {showAssignee && row.assignee && adjusted.width > 90 && (
             <span className="relative z-10 ml-auto pr-1">
               <Avatar user={row.assignee} size="xs" />
             </span>
@@ -695,6 +754,55 @@ function Bar({
           style={{ left: adjusted.x, top: -4 }}
         >
           {drag.steps > 0 ? `+${drag.steps}` : drag.steps} дн
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A task without dates on its row: pointing at the timeline shows a «+» on
+ * the day under the pointer, and a click puts the task on that day.
+ */
+function UnscheduledSlot({
+  row,
+  top,
+  timeline,
+  onSchedule,
+}: {
+  row: GanttRowDto;
+  top: number;
+  timeline: Timeline;
+  onSchedule: (day: Date) => void;
+}) {
+  const [hoverX, setHoverX] = useState<number | null>(null);
+  const dayAt = (x: number) => Math.max(0, Math.floor(x / timeline.dayWidth));
+
+  return (
+    <div
+      className="absolute inset-x-0 cursor-copy"
+      style={{ top, height: ROW_HEIGHT }}
+      onPointerMove={(event) => setHoverX(event.clientX - event.currentTarget.getBoundingClientRect().left)}
+      onPointerLeave={() => setHoverX(null)}
+      onClick={(event) => {
+        const x = event.clientX - event.currentTarget.getBoundingClientRect().left;
+        const day = new Date(timeline.start);
+        day.setDate(day.getDate() + dayAt(x));
+        onSchedule(day);
+      }}
+      title={`Поставить ${row.issueKey} на этот день`}
+    >
+      {hoverX !== null && (
+        <span
+          className="pointer-events-none absolute flex items-center justify-center border-2 border-dashed border-accent bg-accent-subtle text-accent"
+          style={{
+            left: dayAt(hoverX) * timeline.dayWidth,
+            width: Math.max(timeline.dayWidth, 18),
+            top: 6,
+            height: ROW_HEIGHT - 14,
+          }}
+        >
+          <Plus className="size-3" />
         </span>
       )}
     </div>

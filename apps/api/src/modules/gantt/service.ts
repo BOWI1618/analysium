@@ -15,10 +15,17 @@ import type {
   GanttRowDto,
   ScheduleShiftDto,
 } from '@flowdesk/contracts';
-import { ActivityType, Permission, RealtimeEventType, permissionsFor } from '@flowdesk/contracts';
+import {
+  ActivityType,
+  ISSUE_PRIORITIES,
+  ISSUE_TYPES,
+  Permission,
+  RealtimeEventType,
+  permissionsFor,
+} from '@flowdesk/contracts';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { isPastDue } from '../../domain/filters';
+import { buildIssueWhere, isPastDue } from '../../domain/filters';
 import { assertCan } from '../../lib/context';
 import { badRequest, notFound } from '../../lib/errors';
 import { emit } from '../../realtime/eventBus';
@@ -67,17 +74,19 @@ export async function getGantt(
   projectId: string,
   query: GanttQueryInput,
 ): Promise<GanttDto> {
+  // The same filters as the board and the list; subtasks stay, since the
+  // chart draws them under their parents.
+  const { from: _from, to: _to, includeDone, ...filters } = query;
   const where: Prisma.IssueWhereInput = {
     projectId,
-    archivedAt: null,
-    ...(query.includeDone ? {} : { status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } }),
+    AND: [
+      buildIssueWhere(
+        { ...filters, projectId, includeSubtasks: true, includeDone },
+        { workspaceId: actor.workspaceId, allowedProjectIds: 'ALL', currentUserId: actor.userId },
+        { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES },
+      ),
+    ],
   };
-
-  if (query.assigneeId) {
-    const ids = Array.isArray(query.assigneeId) ? query.assigneeId : [query.assigneeId];
-    const resolved = ids.map((id) => (id === '@me' ? actor.userId : id));
-    where.assigneeId = { in: resolved };
-  }
 
   if (query.from || query.to) {
     // Scheduled issues are clipped to those overlapping the requested window;
@@ -91,7 +100,7 @@ export async function getGantt(
       ...(from ? { gte: from } : {}),
       ...(to ? { lte: to } : {}),
     };
-    where.AND = [
+    (where.AND as Prisma.IssueWhereInput[]).push(
       {
         OR: [
           { startDate: null, dueDate: null },
@@ -100,7 +109,7 @@ export async function getGantt(
           { AND: [{ dueDate: null }, { startDate: span }] },
         ],
       },
-    ];
+    );
   }
 
   // Deliberate cap: the chart stops being readable long before this, and the
@@ -298,6 +307,8 @@ export async function rescheduleIssue(
         dueDate: nextEnd,
         ...(input.startHasTime !== undefined ? { startHasTime: nextStart ? input.startHasTime : false } : {}),
         ...(input.dueHasTime !== undefined ? { dueHasTime: nextEnd ? input.dueHasTime : false } : {}),
+        // Moved by hand: the carry-over count starts again.
+        ...(iso(issue.dueDate) !== iso(nextEnd) ? { carriedOverDays: 0 } : {}),
       },
     });
 
