@@ -171,7 +171,10 @@ export function useUpdateIssue(issueId: string) {
           ...(patch.priority !== undefined ? { priority: patch.priority as never } : {}),
           ...(patch.type !== undefined ? { type: patch.type as never } : {}),
           ...(patch.storyPoints !== undefined ? { storyPoints: patch.storyPoints } : {}),
-          ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
+          ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate, dueHasTime: Boolean(patch.dueDate && patch.dueHasTime) } : {}),
+          ...(patch.startDate !== undefined
+            ? { startDate: patch.startDate, startHasTime: Boolean(patch.startDate && patch.startHasTime) }
+            : {}),
         });
       }
 

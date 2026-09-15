@@ -6,7 +6,7 @@ import { useUiStore } from '~/app/uiStore';
 import { useIssue, usePatchIssue } from '~/features/issues/hooks';
 import { Avatar } from '~/ui/Avatar';
 import { ProjectIcon } from '~/ui/ProjectIcon';
-import { relativeTime, shortDate } from '~/lib/format';
+import { dateWithTime, relativeTime, shortDate } from '~/lib/format';
 import { Button } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
 import {
@@ -61,8 +61,8 @@ const COLUMN_PX: Record<ListColumn, number> = {
   labels: 128,
   epic: 128,
   project: 96,
-  startDate: 80,
-  dueDate: 96,
+  startDate: 96,
+  dueDate: 112,
   comments: 40,
   created: 80,
   updated: 80,
@@ -268,14 +268,14 @@ export const IssueRow = memo(function IssueRow({
       )}
 
       {show('startDate') && (
-        <span className="fd-num hidden w-20 shrink-0 text-right text-2xs text-text-subtle sm:block">
-          {issue.startDate ? shortDate(issue.startDate) : ''}
+        <span className="fd-num hidden w-24 shrink-0 text-right text-2xs whitespace-nowrap text-text-subtle sm:block">
+          {issue.startDate ? dateWithTime(issue.startDate, issue.startHasTime) : ''}
         </span>
       )}
 
       {show('dueDate') && (
-        <span className="hidden w-24 shrink-0 justify-end sm:flex">
-          <DueDateChip value={issue.dueDate} />
+        <span className="hidden w-28 shrink-0 justify-end sm:flex">
+          <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} />
         </span>
       )}
 
@@ -449,8 +449,8 @@ export function IssueRowHeader({ columns, selectable = true }: { columns: ListCo
       {show('labels') && <span className="hidden w-32 shrink-0 sm:block">Метки</span>}
       {show('epic') && <span className="hidden w-32 shrink-0 sm:block">Эпик</span>}
       {show('project') && <span className="hidden w-24 shrink-0 sm:block">Проект</span>}
-      {show('startDate') && <span className="hidden w-20 shrink-0 text-right sm:block">Начало</span>}
-      {show('dueDate') && <span className="hidden w-24 shrink-0 text-right sm:block">Срок</span>}
+      {show('startDate') && <span className="hidden w-24 shrink-0 text-right sm:block">Начало</span>}
+      {show('dueDate') && <span className="hidden w-28 shrink-0 text-right sm:block">Срок</span>}
       {show('comments') && (
         <span className="hidden w-10 shrink-0 justify-end sm:flex" aria-label="Комментарии" title="Комментарии">
           <MessageSquare className="size-3" />

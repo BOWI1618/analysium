@@ -408,6 +408,8 @@ export async function createIssue(
         storyPoints: input.storyPoints ?? null,
         startDate: input.startDate ? new Date(input.startDate) : null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        startHasTime: Boolean(input.startDate && input.startHasTime),
+        dueHasTime: Boolean(input.dueDate && input.dueHasTime),
         isMilestone: input.isMilestone ?? false,
         rank,
         completedAt: nextCompletedAt(status.category as never, null),
@@ -575,13 +577,21 @@ export async function updateIssue(
     data.storyPoints = patch.storyPoints;
     after.storyPoints = patch.storyPoints;
   }
+  // A new date without a word about its time is a whole-day date; the flag can
+  // also change on its own (a time added to or removed from the same day).
   if (patch.dueDate !== undefined) {
     data.dueDate = patch.dueDate ? new Date(patch.dueDate) : null;
     after.dueDate = data.dueDate;
+    data.dueHasTime = Boolean(patch.dueDate && patch.dueHasTime);
+  } else if (patch.dueHasTime !== undefined) {
+    data.dueHasTime = patch.dueHasTime;
   }
   if (patch.startDate !== undefined) {
     data.startDate = patch.startDate ? new Date(patch.startDate) : null;
     after.startDate = data.startDate;
+    data.startHasTime = Boolean(patch.startDate && patch.startHasTime);
+  } else if (patch.startHasTime !== undefined) {
+    data.startHasTime = patch.startHasTime;
   }
   if (patch.isMilestone !== undefined) {
     data.isMilestone = patch.isMilestone;

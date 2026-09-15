@@ -504,6 +504,20 @@ test.describe('несохранённые данные', () => {
   test('закрытие формы с введёнными данными спрашивает, пустая закрывается сразу', async ({ page }) => {
     await register(page, 'Осторожный Пользователь');
 
+    await test.step('срок можно задать со временем', async () => {
+      await page.getByRole('button', { name: 'Создать задачу' }).first().click();
+      const dialog = page.getByRole('dialog', { name: 'Новая задача' });
+      await dialog.getByLabel('Название задачи').fill('Отправить отчёт к вечеру');
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const ymd = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+      await dialog.getByLabel('Срок', { exact: true }).fill(ymd);
+      await dialog.getByLabel('Срок: время').fill('18:30');
+      await dialog.getByRole('button', { name: 'Создать и открыть' }).click();
+      const panel = page.getByRole('dialog', { name: 'Детали задачи' });
+      await expect(panel.getByLabel('Срок: время')).toHaveValue('18:30', { timeout: 15_000 });
+      await page.keyboard.press('Escape');
+    });
+
     await test.step('новая задача: Escape и «Отмена» спрашивают', async () => {
       const create = page.getByRole('dialog', { name: 'Новая задача' });
       const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });

@@ -155,6 +155,9 @@ export interface IssueSummaryDto {
   storyPoints: number | null;
   startDate: string | null;
   dueDate: string | null;
+  /** Whether a time of day was set; without one the date is the whole day. */
+  startHasTime: boolean;
+  dueHasTime: boolean;
   isMilestone: boolean;
   rank: string;
   commentCount: number;
@@ -270,6 +273,9 @@ export interface GanttRowDto {
   /** Scheduled window. Null when the issue has no dates at all. */
   start: string | null;
   end: string | null;
+  /** Whether the edge is an exact time rather than a whole day. */
+  startHasTime: boolean;
+  endHasTime: boolean;
   /** Dates rolled up from children rather than set on the issue itself. */
   isSummary: boolean;
   isMilestone: boolean;

@@ -1,4 +1,5 @@
 import type { ActorContext, DashboardDto, IssuePriority, IssueType } from '@flowdesk/contracts';
+import { overdueWhere } from '../../domain/filters';
 import { ISSUE_PRIORITIES, ISSUE_TYPES, StatusCategory } from '@flowdesk/contracts';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -38,7 +39,7 @@ export async function projectDashboard(
       prisma.issue.groupBy({ by: ['type'], where: base, _count: { _all: true } }),
       prisma.issue.count({ where: base }),
       prisma.issue.count({
-        where: { ...base, dueDate: { lt: new Date() }, status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
+        where: { AND: [base, overdueWhere()], status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
       }),
       prisma.issue.count({ where: { ...base, assigneeId: null } }),
       prisma.issue.groupBy({ by: ['assigneeId'], where: base, _count: { _all: true } }),
@@ -206,7 +207,7 @@ export async function myWorkSummary(actor: ActorContext) {
     prisma.issue.count({ where: { ...scope, assigneeId: actor.userId, status: open } }),
     prisma.issue.count({ where: { ...scope, reporterId: actor.userId, status: open } }),
     prisma.issue.count({
-      where: { ...scope, assigneeId: actor.userId, dueDate: { lt: now }, status: open },
+      where: { AND: [scope, overdueWhere(now)], assigneeId: actor.userId, status: open },
     }),
     prisma.issue.count({
       where: { ...scope, assigneeId: actor.userId, dueDate: { gte: now, lte: soon }, status: open },

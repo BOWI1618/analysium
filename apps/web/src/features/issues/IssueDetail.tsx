@@ -687,11 +687,22 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
               </Field>
             )}
 
+            <Field label="Начало">
+              <DateField
+                label="Начало"
+                value={issue.startDate}
+                hasTime={issue.startHasTime}
+                disabled={!canEdit}
+                onChange={(startDate, startHasTime) => patch({ startDate, startHasTime })}
+              />
+            </Field>
+
             <Field label="Срок">
               <DateField
                 value={issue.dueDate}
+                hasTime={issue.dueHasTime}
                 disabled={!canEdit}
-                onChange={(dueDate) => patch({ dueDate })}
+                onChange={(dueDate, dueHasTime) => patch({ dueDate, dueHasTime })}
               />
             </Field>
 

@@ -179,7 +179,7 @@ export function HomePage() {
                           </span>
                           <IssueTypeIcon type={issue.type} className="size-3.5 shrink-0" />
                           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{issue.title}</span>
-                          <DueDateChip value={issue.dueDate} />
+                          <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} />
                           <StatusDot status={issue.status} className="size-3 shrink-0" />
                           <PriorityIcon priority={issue.priority} className="size-3.5 shrink-0" />
                         </button>

@@ -200,8 +200,16 @@ export function LabelChip({
 
 /* -------------------------------------------------------------- due date */
 
-export function DueDateChip({ value, className }: { value: string | null; className?: string }) {
-  const due = dueDateLabel(value);
+export function DueDateChip({
+  value,
+  hasTime = false,
+  className,
+}: {
+  value: string | null;
+  hasTime?: boolean;
+  className?: string;
+}) {
+  const due = dueDateLabel(value, hasTime);
   if (!due) return null;
 
   // Only a date that demands action is printed as a plate. A date that is

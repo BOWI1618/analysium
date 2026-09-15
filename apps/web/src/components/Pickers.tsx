@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
+import { format } from 'date-fns';
 import {
   ISSUE_PRIORITIES,
   ISSUE_TYPES,
@@ -370,20 +371,42 @@ export function MultiSelect({
 
 /* ---------------------------------------------------------- date picker */
 
+/**
+ * A date with an optional time of day. Without a time the value is the whole
+ * day, stored at noon UTC so it reads as the same date in any Russian zone;
+ * with one it is the exact local moment.
+ */
 export function DateField({
   value,
+  hasTime = false,
   onChange,
   disabled,
-  placeholder = 'Без срока',
+  label = 'Срок',
   className,
 }: {
   value: string | null;
-  onChange: (value: string | null) => void;
+  hasTime?: boolean;
+  onChange: (value: string | null, hasTime: boolean) => void;
   disabled?: boolean;
-  placeholder?: string;
+  /** Names the field for screen readers: «Срок», «Начало». */
+  label?: string;
   className?: string;
 }) {
-  const dateValue = value ? new Date(value).toISOString().slice(0, 10) : '';
+  const date = value ? new Date(value) : null;
+  const dateValue = date ? format(date, 'yyyy-MM-dd') : '';
+  const timeValue = date && hasTime ? format(date, 'HH:mm') : '';
+
+  const emit = (day: string, time: string) => {
+    if (!day) return onChange(null, false);
+    if (time) return onChange(new Date(`${day}T${time}:00`).toISOString(), true);
+    onChange(new Date(`${day}T12:00:00.000Z`).toISOString(), false);
+  };
+
+  const inputClass = clsx(
+    'h-7 rounded-md border-2 border-border-strong bg-surface px-1.5 text-sm',
+    'hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none',
+    'disabled:cursor-not-allowed disabled:opacity-60',
+  );
 
   return (
     <div className={clsx('flex items-center gap-1', className)}>
@@ -391,25 +414,25 @@ export function DateField({
         type="date"
         value={dateValue}
         disabled={disabled}
-        onChange={(event) => {
-          const next = event.target.value;
-          // Store noon UTC so the date does not shift across time zones.
-          onChange(next ? new Date(`${next}T12:00:00.000Z`).toISOString() : null);
-        }}
-        aria-label="Срок"
-        className={clsx(
-          'h-7 w-full rounded-md border-2 border-border-strong bg-surface px-1.5 text-sm',
-          'hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none',
-          'disabled:cursor-not-allowed disabled:opacity-60',
-          !dateValue && 'text-text-subtle',
-        )}
-        placeholder={placeholder}
+        onChange={(event) => emit(event.target.value, timeValue)}
+        aria-label={label}
+        className={clsx(inputClass, 'min-w-0 flex-1', !dateValue && 'text-text-subtle')}
+      />
+      <input
+        type="time"
+        value={timeValue}
+        // A time needs a day to belong to.
+        disabled={disabled || !dateValue}
+        onChange={(event) => emit(dateValue, event.target.value)}
+        aria-label={`${label}: время`}
+        title="Время — необязательно. Без него срок на весь день."
+        className={clsx(inputClass, 'w-[5.5rem] shrink-0', !timeValue && 'text-text-subtle')}
       />
       {value && !disabled && (
         <button
           type="button"
-          onClick={() => onChange(null)}
-          aria-label="Убрать срок"
+          onClick={() => onChange(null, false)}
+          aria-label={`Убрать: ${label.toLowerCase()}`}
           className="shrink-0 rounded-sm p-0.5 text-text-subtle hover:bg-surface-hover hover:text-text"
         >
           <X className="size-3" />

@@ -18,6 +18,7 @@ import type {
 import { ActivityType, Permission, RealtimeEventType, permissionsFor } from '@flowdesk/contracts';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { isPastDue } from '../../domain/filters';
 import { assertCan } from '../../lib/context';
 import { badRequest, notFound } from '../../lib/errors';
 import { emit } from '../../realtime/eventBus';
@@ -45,6 +46,8 @@ const ganttIssueSelect = {
   storyPoints: true,
   startDate: true,
   dueDate: true,
+  startHasTime: true,
+  dueHasTime: true,
   isMilestone: true,
   baselineStartDate: true,
   baselineDueDate: true,
@@ -167,6 +170,9 @@ export async function getGantt(
       storyPoints: issue.storyPoints,
       start: iso(bar.start),
       end: iso(bar.end),
+      // A summary bar spans its children's days; only a task's own edges carry a time.
+      startHasTime: !bar.isSummary && issue.startHasTime,
+      endHasTime: !bar.isSummary && issue.dueHasTime,
       isSummary: bar.isSummary,
       isMilestone: issue.isMilestone,
       progress: Number(bar.progress.toFixed(4)),
@@ -174,7 +180,7 @@ export async function getGantt(
       baselineEnd: iso(issue.baselineDueDate),
       slackDays: path?.slackDays ?? null,
       isCritical: path?.isCritical ?? false,
-      isOverdue: Boolean(bar.end && bar.end.getTime() < now && !isDone),
+      isOverdue: !isDone && isPastDue(bar.end, !bar.isSummary && issue.dueHasTime, now),
     };
   });
 
@@ -266,7 +272,7 @@ function orderForDisplay(
 export async function rescheduleIssue(
   actor: ActorContext,
   issueId: string,
-  input: { startDate: string | null; dueDate: string | null; cascade: boolean },
+  input: { startDate: string | null; dueDate: string | null; startHasTime?: boolean; dueHasTime?: boolean; cascade: boolean },
 ): Promise<{ suggestedShifts: ScheduleShiftDto[]; appliedShifts: number }> {
   assertCan(actor, Permission.ISSUE_UPDATE);
 
@@ -287,7 +293,12 @@ export async function rescheduleIssue(
   await prisma.$transaction(async (tx) => {
     await tx.issue.update({
       where: { id: issueId },
-      data: { startDate: nextStart, dueDate: nextEnd },
+      data: {
+        startDate: nextStart,
+        dueDate: nextEnd,
+        ...(input.startHasTime !== undefined ? { startHasTime: nextStart ? input.startHasTime : false } : {}),
+        ...(input.dueHasTime !== undefined ? { dueHasTime: nextEnd ? input.dueHasTime : false } : {}),
+      },
     });
 
     const entries: Prisma.ActivityEventCreateManyInput[] = [];

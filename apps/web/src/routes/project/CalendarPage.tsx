@@ -186,9 +186,12 @@ export function CalendarPage() {
                     setDragIssueId(null);
                     if (!issue || isSameDay(new Date(issue.dueDate ?? 0), day)) return;
                     // Noon UTC keeps the date stable across time zones.
-                    const dueDate = new Date(`${key}T12:00:00.000Z`).toISOString();
+                    // A due time moves with the task to the new day.
+                    const dueDate = issue.dueHasTime
+                      ? new Date(`${key}T${format(new Date(issue.dueDate!), 'HH:mm')}:00`).toISOString()
+                      : new Date(`${key}T12:00:00.000Z`).toISOString();
                     patchIssue.mutate(
-                      { issueId: issue.id, patch: { dueDate } },
+                      { issueId: issue.id, patch: { dueDate, dueHasTime: issue.dueHasTime } },
                       { onSuccess: () => toast.success(`Срок ${issue.issueKey}: ${format(day, 'd MMM', { locale: ru })}`) },
                     );
                   }}

@@ -397,6 +397,11 @@ model Issue {
   /// only says when work is due, not when it is planned to begin.
   startDate         DateTime?
   dueDate           DateTime?
+  /// Whether a time of day was given. Without one a date means the whole day
+  /// (stored at noon UTC, so it reads as the same date in any Russian zone)
+  /// and is overdue only once that day is over; with one it is an instant.
+  startHasTime      Boolean       @default(false)
+  dueHasTime        Boolean       @default(false)
   /// A milestone has no duration and renders as a diamond on the timeline.
   isMilestone       Boolean       @default(false)
   /// Snapshot of the original plan, kept so the chart can show plan vs actual.

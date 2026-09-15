@@ -50,22 +50,39 @@ export function fullDate(value: string | Date | null | undefined): string {
   return date ? format(date, 'd MMMM yyyy, HH:mm', { locale }) : '';
 }
 
-/** Due-date label: "Today", "Tomorrow", "12 Mar" — plus overdue detection. */
-export function dueDateLabel(value: string | Date | null | undefined): {
+/**
+ * Due-date label: "Сегодня", "Завтра, 14:30", "12 мар" — plus overdue detection.
+ * Without a time the date is the whole day and is overdue only the day after;
+ * with one it is overdue the moment that time passes.
+ */
+export function dueDateLabel(
+  value: string | Date | null | undefined,
+  hasTime = false,
+): {
   label: string;
   tone: 'overdue' | 'today' | 'soon' | 'normal';
 } | null {
   const date = toDate(value);
   if (!date) return null;
 
+  const time = hasTime ? `, ${format(date, 'HH:mm')}` : '';
   const days = differenceInCalendarDays(date, new Date());
-  if (days < 0) {
-    return { label: isYesterday(date) ? 'Вчера' : format(date, 'd MMM', { locale }), tone: 'overdue' };
+  const overdue = hasTime ? date.getTime() < Date.now() : days < 0;
+  if (overdue) {
+    const day = isToday(date) ? 'Сегодня' : isYesterday(date) ? 'Вчера' : format(date, 'd MMM', { locale });
+    return { label: day + time, tone: 'overdue' };
   }
-  if (isToday(date)) return { label: 'Сегодня', tone: 'today' };
-  if (isTomorrow(date)) return { label: 'Завтра', tone: 'soon' };
-  if (days <= 7) return { label: format(date, 'EEEEEE, d MMM', { locale }), tone: 'soon' };
-  return { label: format(date, isThisYear(date) ? 'd MMM' : 'd MMM yy', { locale }), tone: 'normal' };
+  if (isToday(date)) return { label: 'Сегодня' + time, tone: 'today' };
+  if (isTomorrow(date)) return { label: 'Завтра' + time, tone: 'soon' };
+  if (days <= 7) return { label: format(date, 'EEEEEE, d MMM', { locale }) + time, tone: 'soon' };
+  return { label: format(date, isThisYear(date) ? 'd MMM' : 'd MMM yy', { locale }) + time, tone: 'normal' };
+}
+
+/** "12 мар" or "12 мар, 14:30" — for dates that are not deadlines. */
+export function dateWithTime(value: string | Date | null | undefined, hasTime = false): string {
+  const date = toDate(value);
+  if (!date) return '';
+  return shortDate(date) + (hasTime ? `, ${format(date, 'HH:mm')}` : '');
 }
 
 export function shortDate(value: string | Date | null | undefined): string {

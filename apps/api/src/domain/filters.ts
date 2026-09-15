@@ -145,7 +145,7 @@ export function buildIssueWhere(
   if (filter.updatedAfter) and.push({ updatedAt: { gte: new Date(filter.updatedAfter) } });
 
   if (filter.isOverdue) {
-    and.push({ dueDate: { lt: new Date() } });
+    and.push(overdueWhere());
     and.push({ status: { category: { notIn: [StatusCategory.COMPLETED, StatusCategory.CANCELED] as never } } });
   }
 
@@ -179,3 +179,25 @@ export function orderByFor(sort: SortKey, order: 'asc' | 'desc'): Prisma.IssueOr
   }
 }
 
+/** A day's worth of milliseconds either side of noon UTC, where whole-day dates are stored. */
+const HALF_DAY_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Overdue: a due time has passed, or — for a due date without a time — its
+ * whole day is over. Whole-day dates sit at noon UTC; comparing them with the
+ * current moment made a task due today "overdue" from 15:00 Moscow time.
+ */
+export function overdueWhere(now = new Date()): Prisma.IssueWhereInput {
+  return {
+    OR: [
+      { dueHasTime: true, dueDate: { lt: now } },
+      { dueHasTime: false, dueDate: { lt: new Date(now.getTime() - HALF_DAY_MS) } },
+    ],
+  };
+}
+
+/** The same rule for one issue already in memory. */
+export function isPastDue(dueDate: Date | null, dueHasTime: boolean, now = Date.now()): boolean {
+  if (!dueDate) return false;
+  return dueHasTime ? dueDate.getTime() < now : dueDate.getTime() + HALF_DAY_MS < now;
+}

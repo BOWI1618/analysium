@@ -1,0 +1,115 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { createIssue, createProject, disconnectTestDb, migrateTestSchema, registerUser } from '../setup';
+
+let app: FastifyInstance;
+
+beforeAll(async () => {
+  await migrateTestSchema();
+  const { buildApp } = await import('../../src/app');
+  app = await buildApp();
+});
+
+afterAll(async () => {
+  await app?.close();
+  await disconnectTestDb();
+});
+
+const HOUR = 60 * 60 * 1000;
+const noonUtc = (offsetDays: number) => {
+  const d = new Date();
+  d.setUTCHours(12, 0, 0, 0);
+  return new Date(d.getTime() + offsetDays * 24 * HOUR).toISOString();
+};
+
+describe('время у сроков', () => {
+  it('срок со временем сохраняется и сбрасывается, если дату задать без времени', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Время сроков' });
+    const project = await createProject(app, owner);
+    const at = new Date(Date.now() + 5 * HOUR).toISOString();
+
+    const issue = await createIssue(app, owner, project.id, { title: 'Созвон', dueDate: at, dueHasTime: true });
+    expect(issue.dueHasTime).toBe(true);
+    expect(issue.dueDate).toBe(at);
+
+    const start = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/issues/${issue.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { startDate: new Date(Date.now() + 4 * HOUR).toISOString(), startHasTime: true },
+    });
+    expect(start.json().startHasTime).toBe(true);
+    expect(start.json().dueHasTime).toBe(true);
+
+    // A new date sent without a time is a whole-day date.
+    const wholeDay = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/issues/${issue.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { dueDate: noonUtc(1) },
+    });
+    expect(wholeDay.json().dueHasTime).toBe(false);
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/issues/${issue.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { startDate: null },
+    });
+    expect(cleared.json().startHasTime).toBe(false);
+  });
+
+  it('просрочено: время прошло, а срок без времени — только когда закончился его день', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Просрочка' });
+    const project = await createProject(app, owner);
+    const today = await createIssue(app, owner, project.id, { title: 'Сегодня весь день', dueDate: noonUtc(0) });
+    const passed = await createIssue(app, owner, project.id, {
+      title: 'Час назад',
+      dueDate: new Date(Date.now() - HOUR).toISOString(),
+      dueHasTime: true,
+    });
+    const yesterday = await createIssue(app, owner, project.id, { title: 'Вчера', dueDate: noonUtc(-1) });
+
+    const overdue = await app.inject({
+      method: 'GET',
+      url: `/api/v1/projects/${project.id}/issues?isOverdue=true`,
+      headers: { cookie: owner.cookie },
+    });
+    const ids = overdue.json().items.map((i: { id: string }) => i.id);
+    expect(ids).toContain(passed.id);
+    expect(ids).toContain(yesterday.id);
+    // Used to be overdue from noon UTC — 15:00 in Moscow — on the day itself.
+    expect(ids).not.toContain(today.id);
+
+    const gantt = await app.inject({ method: 'GET', url: `/api/v1/projects/${project.id}/gantt`, headers: { cookie: owner.cookie } });
+    const row = (id: string) => gantt.json().rows.find((r: { id: string }) => r.id === id);
+    expect(row(passed.id).isOverdue).toBe(true);
+    expect(row(passed.id).endHasTime).toBe(true);
+    expect(row(today.id).isOverdue).toBe(false);
+  });
+
+  it('перенос на диаграмме по часам сохраняет время', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Перенос по часам' });
+    const project = await createProject(app, owner);
+    const start = new Date(Date.now() + 24 * HOUR);
+    const issue = await createIssue(app, owner, project.id, {
+      title: 'Встреча',
+      startDate: start.toISOString(),
+      dueDate: new Date(start.getTime() + HOUR).toISOString(),
+      startHasTime: true,
+      dueHasTime: true,
+    });
+    const moved = await app.inject({
+      method: 'POST',
+      url: `/api/v1/issues/${issue.id}/reschedule`,
+      headers: { cookie: owner.cookie },
+      payload: {
+        startDate: new Date(start.getTime() + HOUR / 2).toISOString(),
+        dueDate: new Date(start.getTime() + 1.5 * HOUR).toISOString(),
+      },
+    });
+    expect(moved.statusCode).toBe(200);
+    expect(moved.json().issue.startHasTime).toBe(true);
+    expect(moved.json().issue.dueHasTime).toBe(true);
+  });
+});

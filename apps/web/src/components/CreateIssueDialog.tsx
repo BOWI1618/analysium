@@ -49,6 +49,7 @@ export function CreateIssueDialog() {
   const [sprintId, setSprintId] = useState<string | null>(null);
   const [epicId, setEpicId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<string | null>(null);
+  const [dueHasTime, setDueHasTime] = useState(false);
   const [createAnother, setCreateAnother] = useState(false);
 
   // An empty choice means "without a project". Such tasks live in the
@@ -102,6 +103,7 @@ export function CreateIssueDialog() {
     setAssigneeId(null);
     setLabelIds([]);
     setDueDate(seed?.dueDate ?? null);
+    setDueHasTime(false);
   }, [open]);
 
 
@@ -151,7 +153,7 @@ export function CreateIssueDialog() {
       ...(sprintId ? { sprintId } : {}),
       ...(epicId ? { epicId } : {}),
       ...(defaults?.parentId ? { parentId: defaults.parentId } : {}),
-      ...(dueDate ? { dueDate } : {}),
+      ...(dueDate ? { dueDate, dueHasTime } : {}),
       ...(isDocEmpty(description) ? {} : { description: description as Record<string, unknown> }),
     };
 
@@ -381,8 +383,15 @@ export function CreateIssueDialog() {
             </select>
           )}
 
-          <div className="w-36">
-            <DateField value={dueDate} onChange={setDueDate} />
+          <div className="w-56">
+            <DateField
+              value={dueDate}
+              hasTime={dueHasTime}
+              onChange={(value, hasTime) => {
+                setDueDate(value);
+                setDueHasTime(hasTime);
+              }}
+            />
           </div>
         </div>
 

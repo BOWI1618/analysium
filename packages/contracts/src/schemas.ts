@@ -242,6 +242,9 @@ export const createIssueSchema = z.object({
   storyPoints: z.number().int().min(0).max(100).nullable().optional(),
   startDate: z.string().datetime().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
+  /** Whether the date carries a time of day; without one it means the whole day. */
+  startHasTime: z.boolean().optional(),
+  dueHasTime: z.boolean().optional(),
   isMilestone: z.boolean().optional(),
   labelIds: z.array(cuidLike).max(20).optional(),
 });
@@ -277,6 +280,8 @@ export const updateIssueSchema = z
     storyPoints: z.number().int().min(0).max(100).nullable().optional(),
     startDate: z.string().datetime().nullable().optional(),
     dueDate: z.string().datetime().nullable().optional(),
+    startHasTime: z.boolean().optional(),
+    dueHasTime: z.boolean().optional(),
     isMilestone: z.boolean().optional(),
     /** Captures the current dates as the baseline the Gantt compares against. */
     setBaseline: z.boolean().optional(),
@@ -401,6 +406,9 @@ export const rescheduleIssueSchema = z
   .object({
     startDate: z.string().datetime().nullable(),
     dueDate: z.string().datetime().nullable(),
+    /** Left out, the edges keep whether they had a time of day. */
+    startHasTime: z.boolean().optional(),
+    dueHasTime: z.boolean().optional(),
     /** Apply the shifts the server suggests for dependent issues. */
     cascade: z.boolean().default(false),
   })
