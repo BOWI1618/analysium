@@ -18,11 +18,11 @@ import { Tooltip } from '~/ui/Tooltip';
 /* ------------------------------------------------------------ issue type */
 
 export const ISSUE_TYPE_META: Record<IssueType, { label: string; icon: typeof Bug; color: string }> = {
-  TASK: { label: 'Задача', icon: CheckSquare, color: '#3b82f6' },
+  TASK: { label: 'Задача', icon: CheckSquare, color: '#0083ca' },
   BUG: { label: 'Баг', icon: Bug, color: '#ef4444' },
   STORY: { label: 'История', icon: Bookmark, color: '#22c55e' },
   EPIC: { label: 'Эпик', icon: Zap, color: '#8b5cf6' },
-  SUBTASK: { label: 'Подзадача', icon: GitBranch, color: '#64748b' },
+  SUBTASK: { label: 'Подзадача', icon: GitBranch, color: '#7c88a1' },
 };
 
 export function IssueTypeIcon({

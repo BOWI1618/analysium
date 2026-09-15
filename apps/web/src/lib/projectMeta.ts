@@ -48,12 +48,12 @@ export interface ProjectColorOption {
  * outside the browser. The values mirror the palette tokens by hand.
  */
 export const PROJECT_COLORS: ProjectColorOption[] = [
-  { value: '#ff4d00', label: 'Сигнальный оранжевый' },
-  { value: '#b57a00', label: 'Тёплый янтарь' },
+  { value: '#005dac', label: 'Фирменный синий' },
+  { value: '#283a97', label: 'Индиго' },
+  { value: '#00aeef', label: 'Голубой' },
+  { value: '#14225a', label: 'Тёмно-синий' },
   { value: '#0f7a44', label: 'Зелёный' },
-  { value: '#c22e1f', label: 'Красный' },
-  { value: '#1d5fd0', label: 'Синий' },
-  { value: '#ffd600', label: 'Жёлтый маркер' },
   { value: '#e06412', label: 'Оранжевый' },
-  { value: '#7d7666', label: 'Нейтральный' },
+  { value: '#c22e1f', label: 'Красный' },
+  { value: '#7c88a1', label: 'Нейтральный' },
 ];

@@ -1,10 +1,19 @@
 /**
  * FlowDesk design tokens.
  *
- * Direction: neo-brutalist editorial. Warm paper surfaces, ink-black hard
- * borders and solid offset shadows instead of blur; the accent is signal
- * orange, highlight is marker yellow. Identifiers, counts and dates stay in
- * a monospace face with tabular figures.
+ * Direction: neo-brutalist editorial in the Alabuga brand palette. Cool paper
+ * surfaces, deep navy hard borders and solid offset shadows instead of blur;
+ * the accent is the brand blue, the highlighter is the brand sky blue.
+ * Identifiers, counts and dates stay in a monospace face with tabular figures.
+ *
+ * Brand colours used (RGB from the brand book):
+ *   blue       0/93/172    #005DAC  — accent, primary actions
+ *   indigo     40/58/151   #283A97
+ *   cyan       0/174/239   #00AEEF
+ *   sky        106/207/246 #6ACFF6  — marker
+ *   navy       (97/81/0/51 CMYK)     — ink: borders, shadows, text
+ *   azure      0/131/202   #0083CA  — info
+ *   pale tints 151/218/248, 185/229/251, 217/241/253
  *
  * Every colour in the product resolves through a semantic token — no component
  * hard-codes a hex value, so the palette is changed in one place.
@@ -16,42 +25,42 @@
 :root {
   color-scheme: light;
 
-  /* The colour that draws hard borders and offset shadows. */
-  --ink: #171512;
+  /* The colour that draws hard borders and offset shadows: brand navy. */
+  --ink: #14225a;
 
-  /* Surfaces — warm paper, from furthest back to closest to the reader */
-  --bg: #f4f1ea;
-  --bg-subtle: #ede9df;
-  --surface: #fcfbf5;
-  --surface-raised: #fffef9;
-  --surface-hover: #f2eee1;
-  --surface-active: #e8e2d0;
-  --surface-sunken: #efeade;
-  --overlay: rgb(23 21 18 / 0.48);
+  /* Surfaces — cool paper, from furthest back to closest to the reader */
+  --bg: #eef3f8;
+  --bg-subtle: #e4ecf4;
+  --surface: #fafcfe;
+  --surface-raised: #ffffff;
+  --surface-hover: #e8f1f9;
+  --surface-active: #d6e7f5;
+  --surface-sunken: #eaf1f7;
+  --overlay: rgb(20 34 90 / 0.45);
 
   /* Lines */
-  --border: #d9d1bf;
+  --border: #c9d8e6;
   --border-strong: var(--ink);
-  --border-focus: #ff4d00;
+  --border-focus: #005dac;
 
   /* Text */
-  --text: #171512;
-  --text-muted: #4a453c;
-  --text-subtle: #7d7666;
-  --text-inverted: #f4f1ea;
+  --text: #0f1a45;
+  --text-muted: #3b4a6b;
+  --text-subtle: #6a7894;
+  --text-inverted: #eef3f8;
 
-  /* Accent — signal orange */
-  --accent: #ff4d00;
-  --accent-hover: #e84500;
-  --accent-active: #c93a00;
-  --accent-fg: #fff8f2;
-  --accent-subtle: #ffe8da;
-  --accent-subtle-hover: #ffd9c2;
-  --accent-border: #ffb28c;
+  /* Accent — brand blue */
+  --accent: #005dac;
+  --accent-hover: #00508f;
+  --accent-active: #283a97;
+  --accent-fg: #ffffff;
+  --accent-subtle: #d9f1fd;
+  --accent-subtle-hover: #b9e5fb;
+  --accent-border: #97daf8;
 
-  /* Marker — the yellow highlighter of the editorial layer */
-  --marker: #ffd600;
-  --marker-subtle: #fff3b8;
+  /* Marker — the brand sky blue in place of a highlighter */
+  --marker: #6acff6;
+  --marker-subtle: #d9f1fd;
 
   /* Status */
   --success: #0f7a44;
@@ -63,16 +72,16 @@
   --danger: #c22e1f;
   --danger-subtle: #fce3de;
   --danger-border: #f2a79b;
-  --info: #1d5fd0;
-  --info-subtle: #e2ecfb;
-  --info-border: #a9c5f0;
+  --info: #0083ca;
+  --info-subtle: #d9f1fd;
+  --info-border: #97daf8;
 
   /* Priority ramp — distinct hues, still legible at 12px */
   --priority-urgent: #c22e1f;
   --priority-high: #e06412;
   --priority-medium: #b57a00;
-  --priority-low: #0b8ba8;
-  --priority-none: #8a8273;
+  --priority-low: #0083ca;
+  --priority-none: #7c88a1;
 
   /* Elevation — solid offset shadows; blur does not belong to this direction */
   --shadow-color: var(--ink);

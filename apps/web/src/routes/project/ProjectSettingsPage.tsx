@@ -219,7 +219,7 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
               label="Цвет"
               value={form.color}
               onChange={(event) => setForm((f) => ({ ...f, color: event.target.value }))}
-              placeholder="#ff4d00"
+              placeholder="#005dac"
               className="font-mono"
             />
           </div>
@@ -474,7 +474,7 @@ function LabelsSection({ project }: { project: Project }) {
   const updateLabel = useUpdateLabel(project.id);
   const deleteLabel = useDeleteLabel(project.id);
   const [name, setName] = useState('');
-  const [color, setColor] = useState('#ff4d00');
+  const [color, setColor] = useState('#005dac');
 
   return (
     <Card title="Метки" description="Общий словарь для фильтрации на досках и в списках.">

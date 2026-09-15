@@ -83,17 +83,19 @@ export function initials(name: string): string {
 }
 
 /** Stable colour per user so avatars stay recognisable across sessions. */
+// Distinct enough to tell people apart, deep enough for white initials, and
+// kept in the cool family of the brand palette so avatars do not shout.
 const AVATAR_COLORS = [
-  '#6d4aff',
-  '#ec4899',
-  '#14b8a6',
-  '#f59e0b',
-  '#0ea5e9',
-  '#8b5cf6',
-  '#ef4444',
-  '#22c55e',
-  '#f97316',
-  '#06b6d4',
+  '#005dac',
+  '#283a97',
+  '#0083ca',
+  '#0e7490',
+  '#0f7a44',
+  '#5b4bb7',
+  '#b45309',
+  '#9d174d',
+  '#1e3a8a',
+  '#0369a1',
 ];
 
 export function avatarColor(seed: string): string {

@@ -19,10 +19,10 @@ export interface StatusLike {
  * so renaming a column never breaks a report.
  */
 export const DEFAULT_STATUSES: { name: string; category: StatusCategory; color: string; wipLimit?: number }[] = [
-  { name: 'Бэклог', category: SC.BACKLOG, color: '#94a3b8' },
-  { name: 'К выполнению', category: SC.UNSTARTED, color: '#64748b' },
-  { name: 'В работе', category: SC.STARTED, color: '#3b82f6', wipLimit: 5 },
-  { name: 'На ревью', category: SC.STARTED, color: '#a855f7' },
+  { name: 'Бэклог', category: SC.BACKLOG, color: '#9fb0c6' },
+  { name: 'К выполнению', category: SC.UNSTARTED, color: '#7c88a1' },
+  { name: 'В работе', category: SC.STARTED, color: '#0083ca', wipLimit: 5 },
+  { name: 'На ревью', category: SC.STARTED, color: '#283a97' },
   { name: 'Готово', category: SC.COMPLETED, color: '#22c55e' },
 ];
 

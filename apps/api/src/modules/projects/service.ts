@@ -300,7 +300,7 @@ export async function ensureSystemProject(workspaceId: string): Promise<{ id: st
           key,
           description: 'Задачи, не привязанные к проекту.',
           icon: 'package',
-          color: '#78716c',
+          color: '#7c88a1',
           projectType: 'SIMPLE',
           isSystem: true,
         },

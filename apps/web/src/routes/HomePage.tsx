@@ -298,7 +298,7 @@ export function HomePage() {
 
 /**
  * A headline number. Each tone is a different printed plate — reversed ink,
- * a red alarm, a yellow marker, plain paper — so the four read as four
+ * a red alarm, a sky-blue marker, plain paper — so the four read as four
  * different kinds of news rather than four copies of one card.
  */
 function StatPlate({
@@ -320,7 +320,7 @@ function StatPlate({
 }) {
   const tones = {
     ink: 'bg-ink text-text-inverted shadow-md',
-    danger: 'bg-danger text-accent-fg shadow-[4px_4px_0_var(--accent)]',
+    danger: 'bg-danger text-accent-fg shadow-md',
     marker: 'bg-marker text-ink shadow-md',
     paper: 'bg-surface text-text shadow-md',
   } as const;
