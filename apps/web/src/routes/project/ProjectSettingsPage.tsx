@@ -49,7 +49,7 @@ export function ProjectSettingsPage() {
   const { projectId = '' } = useParams();
   const { workspace } = useSession();
   const navigate = useNavigate();
-  const [section, setSection] = useState<Section>('general');
+  const [chosenSection, setSection] = useState<Section | null>(null);
 
   const { data: project, isLoading, error, refetch } = useProject(projectId);
 
@@ -65,13 +65,21 @@ export function ProjectSettingsPage() {
 
   const canManageWorkflow = project.permissions.includes(Permission.PROJECT_MANAGE_WORKFLOW);
   const canDelete = project.permissions.includes(Permission.PROJECT_DELETE);
+  // The list of tasks without a project cannot be renamed, archived or
+  // deleted, and everyone in the workspace already works in it: only its
+  // statuses and labels are configurable.
+  const sections = SECTIONS.filter((s) =>
+    project.isSystem ? s === 'workflow' || s === 'labels' : s !== 'danger' || canDelete,
+  );
+  const section =
+    chosenSection && sections.includes(chosenSection) ? chosenSection : project.isSystem ? 'labels' : sections[0]!;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
       <div className="mx-auto flex max-w-4xl gap-6 p-4">
         <nav className="hidden w-40 shrink-0 sm:block" aria-label="Разделы настроек">
           <ul className="space-y-1">
-            {SECTIONS.filter((s) => s !== 'danger' || canDelete).map((item) => (
+            {sections.map((item) => (
               <li key={item}>
                 <button
                   type="button"
@@ -98,7 +106,7 @@ export function ProjectSettingsPage() {
               value={section}
               onChange={(event) => setSection((event.target as HTMLSelectElement).value as Section)}
             >
-              {SECTIONS.filter((s) => s !== 'danger' || canDelete).map((item) => (
+              {sections.map((item) => (
                 <option key={item} value={item}>
                   {SECTION_LABELS[item]}
                 </option>

@@ -63,9 +63,7 @@ export function ProjectLayout() {
     { to: `${base}/gantt`, label: 'Гант', icon: <GanttChartSquare className="size-3.5" /> },
     { to: `${base}/calendar`, label: 'Календарь', icon: <CalendarDays className="size-3.5" /> },
     { to: `${base}/dashboard`, label: 'Аналитика', icon: <PieChart className="size-3.5" /> },
-    // The list of tasks without a project has nothing to configure: it cannot
-    // be renamed, archived or deleted, and the server refuses to.
-    ...(project.permissions.includes(Permission.PROJECT_UPDATE) && !project.isSystem
+    ...(project.permissions.includes(Permission.PROJECT_UPDATE)
       ? [{ to: `${base}/settings`, label: 'Настройки', icon: <Settings className="size-3.5" /> }]
       : []),
   ];

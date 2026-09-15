@@ -63,7 +63,8 @@ test.describe('основной сценарий', () => {
       await dialog.getByLabel('Название задачи').fill('Починить оплату картой');
       await dialog.getByRole('button', { name: 'Создать', exact: true }).click();
 
-      await expect(page.getByText('Починить оплату картой')).toBeVisible({ timeout: 15_000 });
+      // The card itself, not the "created" toast that repeats the title.
+      await expect(page.getByLabel(/-1: Починить оплату картой$/)).toBeVisible({ timeout: 15_000 });
     });
 
     await test.step('карточка открывается и назначается на себя', async () => {
@@ -232,6 +233,14 @@ test.describe('первый запуск без демо-данных', () => {
     await expect(page.getByRole('link', { name: /Без проекта/ }).first()).toBeVisible({
       timeout: 15_000,
     });
+
+    // Its labels are managed like any project's: settings hold only statuses and labels.
+    await page.getByRole('link', { name: /Без проекта/ }).first().click();
+    await page.getByRole('link', { name: 'Настройки' }).click();
+    await expect(page.getByRole('button', { name: 'Основное' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Статусы' })).toBeVisible();
+    await page.getByRole('button', { name: 'Удалить метку «техдолг»' }).click();
+    await expect(page.getByRole('button', { name: 'Удалить метку «техдолг»' })).toBeHidden({ timeout: 15_000 });
 
     // The teammate finds it in their own work and moves it on.
     await mate.goto('/my-work');
