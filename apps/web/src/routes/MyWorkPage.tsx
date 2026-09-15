@@ -10,7 +10,16 @@ import { useFilterState } from '~/features/issues/useFilterState';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
-import { ColumnsMenu, IssueRow, IssueRowHeader, DEFAULT_COLUMNS, listMinWidth, type ListColumn } from '~/components/IssueRow';
+import {
+  ColumnWidthsContext,
+  ColumnsMenu,
+  IssueRow,
+  IssueRowHeader,
+  DEFAULT_COLUMNS,
+  listMinWidth,
+  useColumnWidths,
+  type ListColumn,
+} from '~/components/IssueRow';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import { Button } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
@@ -75,10 +84,15 @@ export function MyWorkPage() {
   const { data: members } = useMembers(workspaceId);
   const [columns, setColumns] = useLocalStorage<ListColumn[]>('flowdesk.my-work-columns', [...DEFAULT_COLUMNS, 'project']);
 
-  const filters = useMemo<IssueFilters>(
-    () => ({ ...presetFor(tab), ...extraFilters }),
-    [tab, extraFilters],
-  );
+  const [widths, resizeColumn] = useColumnWidths('flowdesk.my-work-widths');
+
+  const filters = useMemo<IssueFilters>(() => {
+    const preset = presetFor(tab);
+    // Chosen states replace the tab's «open only»: asking for finished work
+    // shows finished work, not everything.
+    if (extraFilters.statusCategory?.length) delete preset.includeDone;
+    return { ...preset, ...extraFilters };
+  }, [tab, extraFilters]);
 
   // The "upcoming" preset filters on dueAfter = now — refetch on a timer so
   // the window does not freeze at the moment the tab was opened.
@@ -123,9 +137,10 @@ export function MyWorkPage() {
         onChange={setExtraFilters}
         members={members?.map((m) => m.user)}
         currentUserId={user?.id ?? ''}
-        // «Назначено мне» and «Ближайшие» hide finished work until asked; an
-        // overdue task is open by definition.
-        doneByDefault={tab === 'overdue' ? null : presetFor(tab).includeDone !== false}
+        // Across projects there are no shared statuses, so work is picked by
+        // its state; an overdue task is open by definition.
+        stateFacet={tab !== 'overdue'}
+        hideDoneOption={false}
         trailing={
           <div className="flex items-center gap-2">
           <ColumnsMenu columns={columns} onChange={setColumns} />
@@ -144,10 +159,11 @@ export function MyWorkPage() {
         }
       />
 
+      <ColumnWidthsContext.Provider value={widths}>
       <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
           className="sm:min-w-[var(--list-min)]"
-          style={{ '--list-min': `${listMinWidth(columns, false)}px` } as React.CSSProperties}
+          style={{ '--list-min': `${listMinWidth(columns, false, widths)}px` } as React.CSSProperties}
         >
         {query.error ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
@@ -165,7 +181,7 @@ export function MyWorkPage() {
           />
         ) : groupBy === 'none' ? (
           <>
-            <IssueRowHeader columns={columns} selectable={false} />
+            <IssueRowHeader columns={columns} selectable={false} onResize={resizeColumn} />
             {issues.map((issue) => (
               <IssueRow
                 key={issue.id}
@@ -217,6 +233,7 @@ export function MyWorkPage() {
         )}
         </div>
       </div>
+      </ColumnWidthsContext.Provider>
     </>
   );
 }

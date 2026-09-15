@@ -35,13 +35,20 @@ export interface FilterBarProps {
   savedViews?: { id: string; name: string; filters: Record<string, unknown> }[];
   onApplyView?: (filters: Record<string, unknown>) => void;
   sortOptions?: boolean;
-  /**
-   * Whether this view shows finished tasks when nothing is chosen. A view that
-   * hides them («Назначено мне») offers «Показывать завершённые» instead of
-   * «Скрыть завершённые»; `null` leaves the option out where it means nothing.
-   */
-  doneByDefault?: boolean | null;
+  /** «Скрыть завершённые» in «Ещё»; left out where the state is picked in «Состояние». */
+  hideDoneOption?: boolean;
+  /** «Состояние»: open, in progress, finished — for lists across projects, which share no statuses. */
+  stateFacet?: boolean;
 }
+
+/** The state a task is in, whatever its project calls the status. */
+const STATE_OPTIONS = [
+  { value: 'BACKLOG', label: 'В бэклоге' },
+  { value: 'UNSTARTED', label: 'Не начаты' },
+  { value: 'STARTED', label: 'В работе' },
+  { value: 'COMPLETED', label: 'Завершены' },
+  { value: 'CANCELED', label: 'Отменены' },
+];
 
 const SORT_LABELS: Record<string, string> = {
   rank: 'Вручную',
@@ -72,7 +79,8 @@ export function FilterBar({
   savedViews = [],
   onApplyView,
   sortOptions = true,
-  doneByDefault = true,
+  hideDoneOption = true,
+  stateFacet = false,
 }: FilterBarProps) {
   const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
   const [facetsOpen, setFacetsOpen] = useState(false);
@@ -154,6 +162,17 @@ export function FilterBar({
             onChange={(statusId) => patch({ statusId: statusId.length ? statusId : undefined })}
           >
             <FacetButton label="Статус" count={filters.statusId?.length} />
+          </MultiSelect>
+        )}
+
+        {stateFacet && (
+          <MultiSelect
+            title="Состояние"
+            options={STATE_OPTIONS}
+            value={filters.statusCategory ?? []}
+            onChange={(statusCategory) => patch({ statusCategory: statusCategory.length ? statusCategory : undefined })}
+          >
+            <FacetButton label="Состояние" count={filters.statusCategory?.length} />
           </MultiSelect>
         )}
 
@@ -246,22 +265,13 @@ export function FilterBar({
             >
               Только просроченные
             </MenuItem>
-            {doneByDefault === true && (
+            {hideDoneOption && (
               <MenuItem
                 keepOpen
                 selected={filters.includeDone === false}
                 onSelect={() => patch({ includeDone: filters.includeDone === false ? undefined : false })}
               >
                 Скрыть завершённые
-              </MenuItem>
-            )}
-            {doneByDefault === false && (
-              <MenuItem
-                keepOpen
-                selected={filters.includeDone === true}
-                onSelect={() => patch({ includeDone: filters.includeDone === true ? undefined : true })}
-              >
-                Показывать завершённые
               </MenuItem>
             )}
             <MenuItem

@@ -1,4 +1,5 @@
-import { memo } from 'react';
+import { createContext, memo, useCallback, useContext } from 'react';
+import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import clsx from 'clsx';
 import { ChevronRight, Columns3, CornerDownRight, MessageSquare, UserPen } from 'lucide-react';
 import type { IssueSummaryDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
@@ -73,13 +74,53 @@ const COLUMN_PX: Record<ListColumn, number> = {
  * a minimum width from `sm` up and scroll sideways past it, so every column the
  * user picked stays visible instead of running off the edge.
  */
-export function listMinWidth(columns: ListColumn[], selectable = true): number {
+export function listMinWidth(columns: ListColumn[], selectable = true, widths: ColumnWidths = {}): number {
   const fixed =
     24 /* padding */ + (selectable ? 14 : 0) + 16 /* fold */ + 14 /* type icon */ + 68 /* key */ + 160 /* title */ + 12; /* subtask indent */
-  const cells = columns.reduce((sum, column) => sum + (COLUMN_PX[column] ?? 0), 0);
+  const cells = columns.reduce((sum, column) => sum + (widths[column] ?? COLUMN_PX[column] ?? 0), 0);
   const items = (selectable ? 1 : 0) + 4 + columns.length;
   return fixed + cells + 8 * (items - 1);
 }
+
+/** Columns whose width can be dragged in the header; the rest hold an icon or an avatar. */
+const RESIZABLE: ReadonlySet<ListColumn> = new Set([
+  'type',
+  'labels',
+  'epic',
+  'project',
+  'startDate',
+  'dueDate',
+  'status',
+  'created',
+  'updated',
+]);
+
+export type ColumnWidths = Partial<Record<ListColumn, number>>;
+
+/**
+ * Widths the user dragged, shared by a list's header and every row in it —
+ * subtask rows included — without passing them through each level.
+ */
+export const ColumnWidthsContext = createContext<ColumnWidths>({});
+
+/** Dragged column widths of one list, remembered in this browser. */
+export function useColumnWidths(storageKey: string): [ColumnWidths, (column: ListColumn, width: number | null) => void] {
+  const [widths, setWidths] = useLocalStorage<ColumnWidths>(storageKey, {});
+  const resize = useCallback(
+    (column: ListColumn, width: number | null) =>
+      setWidths((current) => {
+        const next = { ...current };
+        if (width === null) delete next[column];
+        else next[column] = width;
+        return next;
+      }),
+    [setWidths],
+  );
+  return [widths, resize];
+}
+
+const widthStyle = (widths: ColumnWidths, column: ListColumn) =>
+  widths[column] ? { width: widths[column] } : undefined;
 
 export const DEFAULT_COLUMNS: ListColumn[] = ['status', 'priority', 'assignee', 'labels', 'dueDate', 'updated'];
 
@@ -132,6 +173,8 @@ export const IssueRow = memo(function IssueRow({
   alignWithCheckbox = false,
 }: IssueRowProps) {
   const show = (column: ListColumn) => columns.includes(column);
+  const widths = useContext(ColumnWidthsContext);
+  const sized = (column: ListColumn) => widthStyle(widths, column);
   const expandable = depth === 0 && issue.subtaskCount > 0;
   const expanded = useUiStore((s) => expandable && Boolean(s.expandedIssueIds[issue.id]));
   const toggleExpanded = useUiStore((s) => s.toggleIssueExpanded);
@@ -237,44 +280,48 @@ export const IssueRow = memo(function IssueRow({
       </span>
 
       {show('type') && (
-        <span className="hidden w-24 shrink-0 items-center gap-1 truncate text-2xs text-text-muted sm:flex">
+        <span style={sized('type')} className="hidden w-24 shrink-0 items-center gap-1 truncate text-2xs text-text-muted sm:flex">
           <IssueTypeIcon type={issue.type} withTooltip={false} className="size-3 shrink-0" />
           {ISSUE_TYPE_META[issue.type].label}
         </span>
       )}
 
       {show('labels') && (
-        <span className="hidden w-32 shrink-0 items-center gap-1 overflow-hidden sm:flex">
-          {issue.labels.slice(0, 2).map((label) => (
-            <LabelChip key={label.id} label={label} size="sm" />
+        <span
+          style={sized('labels')}
+          title={issue.labels.map((label) => label.name).join(', ') || undefined}
+          className="hidden w-32 shrink-0 items-center gap-1 overflow-hidden sm:flex"
+        >
+          {/* As many as the column fits: widen it to see them all. */}
+          {issue.labels.map((label) => (
+            <span key={label.id} className="shrink-0">
+              <LabelChip label={label} size="sm" />
+            </span>
           ))}
-          {issue.labels.length > 2 && (
-            <span className="text-2xs text-text-subtle">+{issue.labels.length - 2}</span>
-          )}
         </span>
       )}
 
       {show('epic') && (
-        <span className="hidden w-32 shrink-0 sm:block">
+        <span style={sized('epic')} className="hidden w-32 shrink-0 overflow-hidden sm:block">
           {issue.epic && <EpicChip epic={issue.epic} />}
         </span>
       )}
 
       {show('project') && (
-        <span className="hidden w-24 shrink-0 items-center gap-1 truncate text-2xs text-text-subtle sm:flex" title={issue.project.name}>
+        <span style={sized('project')} className="hidden w-24 shrink-0 items-center gap-1 truncate text-2xs text-text-subtle sm:flex" title={issue.project.name}>
           <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
           <span className="fd-key">{issue.project.key}</span>
         </span>
       )}
 
       {show('startDate') && (
-        <span className="fd-num hidden w-24 shrink-0 text-right text-2xs whitespace-nowrap text-text-subtle sm:block">
+        <span style={sized('startDate')} className="fd-num hidden w-24 shrink-0 truncate text-right text-2xs whitespace-nowrap text-text-subtle sm:block">
           {issue.startDate ? dateWithTime(issue.startDate, issue.startHasTime) : ''}
         </span>
       )}
 
       {show('dueDate') && (
-        <span className="hidden w-28 shrink-0 justify-end sm:flex">
+        <span style={sized('dueDate')} className="hidden w-28 shrink-0 justify-end overflow-hidden sm:flex">
           <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} />
         </span>
       )}
@@ -291,7 +338,7 @@ export const IssueRow = memo(function IssueRow({
       )}
 
       {show('status') && (
-        <span className="hidden w-32 shrink-0 sm:block" onClick={(event) => event.stopPropagation()}>
+        <span style={sized('status')} className="hidden w-32 shrink-0 overflow-hidden sm:block" onClick={(event) => event.stopPropagation()}>
           {editable && onPatch && statuses.length > 0 ? (
             <StatusPicker
               statuses={statuses}
@@ -324,13 +371,13 @@ export const IssueRow = memo(function IssueRow({
       )}
 
       {show('created') && (
-        <span className="fd-num hidden w-20 shrink-0 text-right text-2xs whitespace-nowrap text-text-subtle sm:block" title={shortDate(issue.createdAt)}>
+        <span style={sized('created')} className="fd-num hidden w-20 shrink-0 truncate text-right text-2xs whitespace-nowrap text-text-subtle sm:block" title={shortDate(issue.createdAt)}>
           {relativeTime(issue.createdAt)}
         </span>
       )}
 
       {show('updated') && (
-        <span className="fd-num hidden w-20 shrink-0 text-right text-2xs whitespace-nowrap text-text-subtle sm:block">
+        <span style={sized('updated')} className="fd-num hidden w-20 shrink-0 truncate text-right text-2xs whitespace-nowrap text-text-subtle sm:block">
           {relativeTime(issue.updatedAt)}
         </span>
       )}
@@ -428,9 +475,28 @@ function SubtaskRows({
   );
 }
 
-/** Sticky header describing the visible columns. */
-export function IssueRowHeader({ columns, selectable = true }: { columns: ListColumn[]; selectable?: boolean }) {
+/** Sticky header describing the visible columns; their edges are dragged to resize them. */
+export function IssueRowHeader({
+  columns,
+  selectable = true,
+  onResize,
+}: {
+  columns: ListColumn[];
+  selectable?: boolean;
+  /** `null` puts the column back to its own width. Without it columns do not resize. */
+  onResize?: (column: ListColumn, width: number | null) => void;
+}) {
   const show = (column: ListColumn) => columns.includes(column);
+  const widths = useContext(ColumnWidthsContext);
+
+  const cell = (column: ListColumn, className: string, children: React.ReactNode) => (
+    <span style={widthStyle(widths, column)} className={clsx('relative shrink-0', className)}>
+      {children}
+      {onResize && RESIZABLE.has(column) && (
+        <ColumnResizer column={column} label={ALL_COLUMNS.find((c) => c.key === column)!.label} onResize={onResize} />
+      )}
+    </span>
+  );
 
   return (
     <div
@@ -445,21 +511,21 @@ export function IssueRowHeader({ columns, selectable = true }: { columns: ListCo
         Ключ
       </span>
       <span className="min-w-0 flex-1 sm:min-w-40">Задача</span>
-      {show('type') && <span className="hidden w-24 shrink-0 sm:block">Тип</span>}
-      {show('labels') && <span className="hidden w-32 shrink-0 sm:block">Метки</span>}
-      {show('epic') && <span className="hidden w-32 shrink-0 sm:block">Эпик</span>}
-      {show('project') && <span className="hidden w-24 shrink-0 sm:block">Проект</span>}
-      {show('startDate') && <span className="hidden w-24 shrink-0 text-right sm:block">Начало</span>}
-      {show('dueDate') && <span className="hidden w-28 shrink-0 text-right sm:block">Срок</span>}
+      {show('type') && cell('type', 'hidden w-24 sm:block', 'Тип')}
+      {show('labels') && cell('labels', 'hidden w-32 sm:block', 'Метки')}
+      {show('epic') && cell('epic', 'hidden w-32 sm:block', 'Эпик')}
+      {show('project') && cell('project', 'hidden w-24 sm:block', 'Проект')}
+      {show('startDate') && cell('startDate', 'hidden w-24 text-right sm:block', 'Начало')}
+      {show('dueDate') && cell('dueDate', 'hidden w-28 text-right sm:block', 'Срок')}
       {show('comments') && (
         <span className="hidden w-10 shrink-0 justify-end sm:flex" aria-label="Комментарии" title="Комментарии">
           <MessageSquare className="size-3" />
         </span>
       )}
-      {show('status') && <span className="hidden w-32 shrink-0 sm:block">Статус</span>}
+      {show('status') && cell('status', 'hidden w-32 sm:block', 'Статус')}
       {show('priority') && <span className="w-5 shrink-0" aria-label="Приоритет" />}
-      {show('created') && <span className="hidden w-20 shrink-0 text-right sm:block">Создано</span>}
-      {show('updated') && <span className="hidden w-20 shrink-0 text-right sm:block">Обновлено</span>}
+      {show('created') && cell('created', 'hidden w-20 text-right sm:block', 'Создано')}
+      {show('updated') && cell('updated', 'hidden w-20 text-right sm:block', 'Обновлено')}
       {show('reporter') && (
         <span className="hidden w-6 shrink-0 justify-center sm:flex" aria-label="Автор" title="Автор">
           <UserPen className="size-3" />
@@ -467,6 +533,58 @@ export function IssueRowHeader({ columns, selectable = true }: { columns: ListCo
       )}
       {show('assignee') && <span className="w-6 shrink-0" />}
     </div>
+  );
+}
+
+const MIN_COLUMN_PX = 40;
+const MAX_COLUMN_PX = 480;
+
+/**
+ * The grip on a column's right edge: drag it, or focus it and press the arrow
+ * keys. A double click gives the column its own width back.
+ */
+function ColumnResizer({
+  column,
+  label,
+  onResize,
+}: {
+  column: ListColumn;
+  label: string;
+  onResize: (column: ListColumn, width: number | null) => void;
+}) {
+  const clamp = (width: number) => Math.round(Math.min(MAX_COLUMN_PX, Math.max(MIN_COLUMN_PX, width)));
+
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Ширина столбца «${label}»`}
+      tabIndex={0}
+      title="Потяните, чтобы изменить ширину. Двойной щелчок — ширина по умолчанию"
+      onPointerDown={(event) => {
+        event.preventDefault();
+        const cellElement = event.currentTarget.parentElement!;
+        const startWidth = cellElement.offsetWidth;
+        const startX = event.clientX;
+        const move = (moveEvent: PointerEvent) => onResize(column, clamp(startWidth + moveEvent.clientX - startX));
+        const up = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          document.body.style.cursor = '';
+        };
+        document.body.style.cursor = 'col-resize';
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      }}
+      onDoubleClick={() => onResize(column, null)}
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const width = event.currentTarget.parentElement!.offsetWidth;
+        onResize(column, clamp(width + (event.key === 'ArrowRight' ? 16 : -16)));
+      }}
+      className="absolute top-1/2 -right-1.5 z-10 h-5 w-2 -translate-y-1/2 cursor-col-resize border-x-2 border-transparent hover:border-accent focus:border-accent focus:outline-none"
+    />
   );
 }
 

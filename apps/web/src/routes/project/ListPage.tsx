@@ -12,7 +12,16 @@ import { useBulkUpdate, useCreateIssue, useIssueList, usePatchIssue, flattenPage
 import { useFilterState } from '~/features/issues/useFilterState';
 import { useSavedViews, useCreateSavedView } from '~/features/views/hooks';
 import { FilterBar } from '~/components/FilterBar';
-import { ColumnsMenu, IssueRow, IssueRowHeader, DEFAULT_COLUMNS, listMinWidth, type ListColumn } from '~/components/IssueRow';
+import {
+  ColumnWidthsContext,
+  ColumnsMenu,
+  IssueRow,
+  IssueRowHeader,
+  DEFAULT_COLUMNS,
+  listMinWidth,
+  useColumnWidths,
+  type ListColumn,
+} from '~/components/IssueRow';
 import { BulkActionBar } from '~/components/BulkActionBar';
 import { Button } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
@@ -54,6 +63,7 @@ export function ListPage() {
 
   const [filters, setFilters] = useFilterState({ sort: 'updated', order: 'desc' });
   const [columns, setColumns] = useLocalStorage<ListColumn[]>('flowdesk.list-columns', DEFAULT_COLUMNS);
+  const [widths, resizeColumn] = useColumnWidths('flowdesk.list-widths');
   const [groupBy, setGroupBy] = useLocalStorage<ListGroupBy>('flowdesk.list-group', 'none');
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string[]>([]);
@@ -179,12 +189,13 @@ export function ListPage() {
         }
       />
 
+      <ColumnWidthsContext.Provider value={widths}>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
           className="sm:min-w-[var(--list-min)]"
-          style={{ '--list-min': `${listMinWidth(columns)}px` } as React.CSSProperties}
+          style={{ '--list-min': `${listMinWidth(columns, true, widths)}px` } as React.CSSProperties}
         >
-        <IssueRowHeader columns={columns} />
+        <IssueRowHeader columns={columns} onResize={resizeColumn} />
         {canCreate && <QuickAddRow projectId={projectId} />}
 
         {query.isLoading ? (
@@ -287,6 +298,7 @@ description="Ослабьте фильтры или создайте перву�
         )}
         </div>
       </div>
+      </ColumnWidthsContext.Provider>
 
       <BulkActionBar
         count={selected.length}

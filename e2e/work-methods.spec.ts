@@ -108,7 +108,7 @@ test.describe('работа с задачами', () => {
     await expect(page.getByText('Цифры')).toBeVisible();
   });
 
-  test('мои задачи: закрытые задачи показываются по фильтру «Показывать завершённые»', async ({ page }) => {
+  test('мои задачи: состояние выбирается фильтром, ширина столбца меняется перетаскиванием', async ({ page }) => {
     const projectId = await setup(page);
     const me = (await (await page.request.get('/api/v1/auth/session')).json()).user.id;
     const project = await (await page.request.get(`/api/v1/projects/${projectId}`)).json();
@@ -120,8 +120,21 @@ test.describe('работа с задачами', () => {
     await expect(page.getByText('Ещё в работе')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Уже сделано')).toBeHidden();
 
-    await page.getByRole('button', { name: 'Ещё' }).click();
-    await page.getByRole('menuitem', { name: 'Показывать завершённые' }).click();
+    // Only the finished ones, not everything.
+    await page.getByRole('button', { name: 'Состояние' }).click();
+    await page.getByRole('option', { name: 'Завершены' }).or(page.getByRole('menuitem', { name: 'Завершены' })).click();
+    await page.keyboard.press('Escape');
     await expect(page.getByText('Уже сделано')).toBeVisible();
+    await expect(page.getByText('Ещё в работе')).toBeHidden();
+
+    const grip = page.getByRole('separator', { name: 'Ширина столбца «Метки»' });
+    const header = grip.locator('..');
+    const before = (await header.boundingBox())!.width;
+    const box = (await grip.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 150, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await header.boundingBox())!.width).toBeGreaterThan(before + 100);
   });
 });
