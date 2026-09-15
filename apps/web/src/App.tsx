@@ -1,5 +1,5 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from './lib/api';
 import { qk } from './lib/queryKeys';
@@ -111,19 +111,30 @@ function SessionExpiryWatcher() {
   return null;
 }
 
+/**
+ * A data router, only so that a half-filled form can ask before the page is
+ * left (`useBlocker`). The routes themselves stay declared in `AppRoutes`.
+ */
+const router = createBrowserRouter([
+  {
+    path: '*',
+    element: (
+      <SessionProvider>
+        <RealtimeProvider>
+          <AppRoutes />
+        </RealtimeProvider>
+      </SessionProvider>
+    ),
+  },
+]);
+
 export function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <SessionExpiryWatcher />
         <ToastProvider>
-          <BrowserRouter>
-            <SessionProvider>
-              <RealtimeProvider>
-                <AppRoutes />
-              </RealtimeProvider>
-            </SessionProvider>
-          </BrowserRouter>
+          <RouterProvider router={router} />
         </ToastProvider>
       </QueryClientProvider>
     </ErrorBoundary>

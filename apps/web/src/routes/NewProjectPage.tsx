@@ -10,6 +10,7 @@ import { Button } from '~/ui/Button';
 import { Input, Select, Textarea } from '~/ui/Input';
 import { PROJECT_ICONS, PROJECT_COLORS } from '~/lib/projectMeta';
 import { Marker, Masthead } from '~/ui/Masthead';
+import { useLeavePageGuard } from '~/lib/hooks/useLeavePageGuard';
 
 export function NewProjectPage() {
   const { workspace, user } = useSession();
@@ -28,6 +29,7 @@ export function NewProjectPage() {
     leadId: '',
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const leaveGuard = useLeavePageGuard(Boolean(form.name.trim() || form.description.trim()));
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -42,6 +44,7 @@ export function NewProjectPage() {
         projectType: form.projectType,
         leadId: form.leadId || null,
       });
+      leaveGuard.allowLeave();
       navigate(`/projects/${project.id}`);
     } catch (error) {
       if (error instanceof ApiError) setFieldErrors(error.fields);
@@ -50,6 +53,7 @@ export function NewProjectPage() {
 
   return (
     <>
+      {leaveGuard.dialog}
       <Topbar breadcrumbs={[{ label: 'Проекты', to: '/projects' }, { label: 'Новый проект' }]} />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">

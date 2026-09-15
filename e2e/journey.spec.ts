@@ -313,6 +313,75 @@ test.describe('сброс пароля', () => {
   });
 });
 
+test.describe('несохранённые данные', () => {
+  test('закрытие формы с введёнными данными спрашивает, пустая закрывается сразу', async ({ page }) => {
+    await register(page, 'Осторожный Пользователь');
+
+    await test.step('новая задача: Escape и «Отмена» спрашивают', async () => {
+      const create = page.getByRole('dialog', { name: 'Новая задача' });
+      const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+
+      // Nothing typed: closes without a question.
+      await page.getByRole('button', { name: 'Создать задачу' }).first().click();
+      await expect(create).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(create).toBeHidden();
+
+      await page.getByRole('button', { name: 'Создать задачу' }).first().click();
+      await create.getByLabel('Название задачи').fill('Черновик, который жалко');
+      await page.keyboard.press('Escape');
+      await expect(ask).toBeVisible();
+      await expect(ask).toContainText('Введённые данные не сохранятся.');
+      await ask.getByRole('button', { name: 'Продолжить' }).click();
+      await expect(ask).toBeHidden();
+      await expect(create.getByLabel('Название задачи')).toHaveValue('Черновик, который жалко');
+
+      await create.getByRole('button', { name: 'Отмена' }).click();
+      await ask.getByRole('button', { name: 'Не сохранять' }).click();
+      await expect(create).toBeHidden();
+    });
+
+    await test.step('новый проект: уход со страницы спрашивает', async () => {
+      await page.goto('/projects/new');
+      await page.getByLabel('Название').fill('Незаконченный проект');
+      await page.getByRole('link', { name: /Главная/ }).click();
+      const ask = page.getByRole('dialog', { name: 'Уйти без сохранения?' });
+      await ask.getByRole('button', { name: 'Остаться' }).click();
+      await expect(page).toHaveURL(/\/projects\/new$/);
+      await expect(page.getByLabel('Название')).toHaveValue('Незаконченный проект');
+
+      await page.getByRole('link', { name: /Главная/ }).click();
+      await ask.getByRole('button', { name: 'Уйти' }).click();
+      await expect(page).toHaveURL(/\/$/);
+    });
+
+    await test.step('созданный проект открывается без вопросов', async () => {
+      await createProject(page, 'Готовый проект');
+    });
+
+    await test.step('недописанный комментарий не теряется при закрытии задачи', async () => {
+      const response = await page.request.post('/api/v1/issues', {
+        data: { projectId: new URL(page.url()).pathname.split('/')[2], title: 'Задача с черновиком' },
+      });
+      const issue = await response.json();
+      await page.goto(`/projects/${issue.projectId}/list`);
+      await page.getByText('Задача с черновиком').click();
+      const panel = page.getByRole('dialog', { name: 'Детали задачи' });
+      await panel.locator('[contenteditable="true"]').last().click();
+      await page.keyboard.type('Ещё думаю');
+      await page.keyboard.press('Escape');
+      const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+      await ask.getByRole('button', { name: 'Продолжить' }).click();
+      await expect(panel).toBeVisible();
+      await expect(panel.getByText('Ещё думаю')).toBeVisible();
+
+      await panel.getByRole('button', { name: 'Закрыть', exact: true }).click();
+      await ask.getByRole('button', { name: 'Не сохранять' }).click();
+      await expect(panel).toBeHidden();
+    });
+  });
+});
+
 test.describe('мобильная версия', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

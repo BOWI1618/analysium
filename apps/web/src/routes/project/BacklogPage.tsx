@@ -22,7 +22,7 @@ import { BulkActionBar } from '~/components/BulkActionBar';
 import { Button } from '~/ui/Button';
 import { Badge } from '~/ui/Badge';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '~/ui/Menu';
-import { Dialog, ConfirmDialog } from '~/ui/Dialog';
+import { Dialog, ConfirmDialog, DialogCloseButton } from '~/ui/Dialog';
 import { Input, Textarea, Select } from '~/ui/Input';
 import { EmptyState, ErrorState, ProgressBar, SkeletonRows } from '~/ui/Feedback';
 import { shortDate } from '~/lib/format';
@@ -186,7 +186,9 @@ description="Всё уже запланировано — или задач ещ
         pending={bulkUpdate.isPending}
       />
 
+      {/* Mounted only while open, so a closed dialog starts empty next time. */}
       <CreateSprintDialog
+        key={createSprintOpen ? 'open' : 'closed'}
         open={createSprintOpen}
         onClose={() => setCreateSprintOpen(false)}
         onCreate={(input) => {
@@ -409,14 +411,15 @@ function CreateSprintDialog({
     <Dialog
       open={open}
       onClose={onClose}
+      dirty={Boolean(name.trim() || goal.trim() || start || end)}
       title="Новый спринт"
       description="Дайте имя и цель, по которой команда сверится в конце."
       size="sm"
       footer={
         <>
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <DialogCloseButton size="sm" variant="ghost">
             Отмена
-          </Button>
+          </DialogCloseButton>
           <Button
             size="sm"
             variant="primary"

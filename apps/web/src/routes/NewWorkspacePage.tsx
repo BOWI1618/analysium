@@ -7,6 +7,7 @@ import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
 import { Button } from '~/ui/Button';
 import { Input } from '~/ui/Input';
+import { useLeavePageGuard } from '~/lib/hooks/useLeavePageGuard';
 
 export function NewWorkspacePage() {
   const navigate = useNavigate();
@@ -15,10 +16,12 @@ export function NewWorkspacePage() {
 
   const [name, setName] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const leaveGuard = useLeavePageGuard(name.trim().length > 0);
 
   const createWorkspace = useMutation({
     mutationFn: (input: { name: string }) => api.post<WorkspaceDto>('/workspaces', input),
     onSuccess: async (workspace) => {
+      leaveGuard.allowLeave();
       await queryClient.invalidateQueries({ queryKey: qk.session });
       switchWorkspace(workspace.id);
       navigate('/');
@@ -30,6 +33,7 @@ export function NewWorkspacePage() {
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-bg p-6">
+      {leaveGuard.dialog}
       <form
         className="w-full max-w-sm space-y-4"
         onSubmit={(event) => {

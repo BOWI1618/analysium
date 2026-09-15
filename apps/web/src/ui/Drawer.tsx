@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
+import { useDiscardGuard } from './Dialog';
 
 export interface DrawerProps {
   open: boolean;
@@ -17,6 +18,9 @@ export interface DrawerProps {
  */
 export function Drawer({ open, onClose, children, width = 'max-w-[42rem]', label }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // An unsent comment inside reports itself; closing then asks first.
+  const guard = useDiscardGuard(onClose);
+  const { requestClose } = guard;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -32,7 +36,7 @@ export function Drawer({ open, onClose, children, width = 'max-w-[42rem]', label
         const hasNestedLayer = Array.from(layers).some((el) => !panelRef.current?.contains(el));
         if (hasNestedLayer) return;
         event.stopPropagation();
-        onClose();
+        requestClose();
       }
     };
 
@@ -41,13 +45,13 @@ export function Drawer({ open, onClose, children, width = 'max-w-[42rem]', label
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = overflow;
     };
-  }, [open, onClose]);
+  }, [open, requestClose]);
 
   if (!open) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[var(--z-drawer)] flex justify-end">
-      <div className="fixed inset-0 bg-[var(--overlay)] animate-in" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-0 bg-[var(--overlay)] animate-in" onClick={requestClose} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
@@ -59,8 +63,9 @@ export function Drawer({ open, onClose, children, width = 'max-w-[42rem]', label
           width,
         )}
       >
-        {children}
+        <guard.Provider value={guard.scope}>{children}</guard.Provider>
       </div>
+      {guard.confirm}
     </div>,
     document.body,
   );

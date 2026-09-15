@@ -54,7 +54,7 @@ import {
 import { Avatar } from '~/ui/Avatar';
 import { Button, IconButton } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '~/ui/Menu';
-import { ConfirmDialog } from '~/ui/Dialog';
+import { ConfirmDialog, useGuardedClose } from '~/ui/Dialog';
 import { ProgressBar, SkeletonText } from '~/ui/Feedback';
 import { Panel } from '~/ui/Panel';
 import { ProjectIcon } from '~/ui/ProjectIcon';
@@ -74,7 +74,10 @@ export interface IssueDetailProps {
  * Every field edits in place: there is no "edit mode" and no save button, and
  * each change is an isolated PATCH that the server records in the history.
  */
-export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailProps) {
+export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueDetailProps) {
+  // In the side panel, closing asks first when a comment is typed but not sent.
+  const guardedClose = useGuardedClose(close);
+  const onClose = close ? guardedClose : undefined;
   const currentUser = useCurrentUser();
   const { workspace } = useSession();
   const toast = useToast();
@@ -208,7 +211,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
             <Tooltip content="Open full page">
               <Link
                 to={`/issue/${issue.issueKey}`}
-                onClick={onClose}
+                onClick={close}
                 aria-label="Открыть на отдельной странице"
                 className="inline-flex size-8 items-center justify-center rounded-sm text-text-muted hover:bg-surface-hover hover:text-text"
               >
@@ -656,7 +659,7 @@ export function IssueDetail({ issue, onClose, variant = 'panel' }: IssueDetailPr
         onConfirm={() => {
           deleteIssue.mutate(
             { id: issue.id, projectId: issue.projectId, issueKey: issue.issueKey },
-            { onSuccess: () => onClose?.() },
+            { onSuccess: () => close?.() },
           );
           setConfirmDelete(false);
         }}

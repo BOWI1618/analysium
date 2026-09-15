@@ -15,7 +15,7 @@ import {
 import { useMembers } from '~/features/members/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import { useCreateIssue, useIssueList } from '~/features/issues/hooks';
-import { Dialog } from '~/ui/Dialog';
+import { Dialog, DialogCloseButton } from '~/ui/Dialog';
 import { Button } from '~/ui/Button';
 import { Input } from '~/ui/Input';
 import { Checkbox } from '~/ui/Input';
@@ -126,6 +126,14 @@ export function CreateIssueDialog() {
     }
   };
 
+  // What would be lost by closing: anything the person typed or picked.
+  const dirty =
+    title.trim().length > 0 ||
+    !isDocEmpty(description) ||
+    Boolean(assigneeId) ||
+    labelIds.length > 0 ||
+    Boolean(dueDate);
+
   const canSubmit = title.trim().length > 0 && Boolean(workspace) && !createIssue.isPending;
 
   const submit = async (openAfter: boolean) => {
@@ -173,6 +181,7 @@ export function CreateIssueDialog() {
     <Dialog
       open={open}
       onClose={close}
+      dirty={dirty}
       title="Новая задача"
       size="lg"
       footer={
@@ -183,9 +192,9 @@ export function CreateIssueDialog() {
             label={<span className="text-xs text-text-muted">Создать ещё</span>}
           />
           <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={close}>
+            <DialogCloseButton size="sm" variant="ghost">
               Отмена
-            </Button>
+            </DialogCloseButton>
             <Button
               size="sm"
               variant="secondary"

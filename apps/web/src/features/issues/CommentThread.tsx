@@ -5,7 +5,7 @@ import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
 import { Button, IconButton } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '~/ui/Menu';
-import { ConfirmDialog } from '~/ui/Dialog';
+import { ConfirmDialog, useUnsavedChanges } from '~/ui/Dialog';
 import { EmptyState, SkeletonText } from '~/ui/Feedback';
 import { relativeTime, fullDate } from '~/lib/format';
 import { RichTextEditor, RichTextViewer } from '~/components/RichText';
@@ -28,6 +28,7 @@ export function CommentThread({
   const createComment = useCreateComment(issueId);
   const [draft, setDraft] = useState<unknown>(EMPTY_DOC);
   const [draftKey, setDraftKey] = useState(0);
+  useUnsavedChanges(!isDocEmpty(draft));
 
   const submit = async () => {
     if (isDocEmpty(draft) || createComment.isPending) return;
