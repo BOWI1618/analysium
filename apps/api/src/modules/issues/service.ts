@@ -178,10 +178,25 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
 }
 
 export async function getIssueByKey(actor: ActorContext, issueKey: string) {
-  const issue = await prisma.issue.findFirst({
-    where: { issueKey: issueKey.toUpperCase(), project: { workspaceId: actor.workspaceId } },
+  const key = issueKey.toUpperCase();
+  let issue = await prisma.issue.findFirst({
+    where: { issueKey: key, project: { workspaceId: actor.workspaceId } },
     select: { id: true, projectId: true },
   });
+  // A key the issue had before it moved to another project: old links keep
+  // opening it. The newest move wins if a key was ever reused.
+  if (!issue) {
+    const moved = await prisma.activityEvent.findFirst({
+      where: {
+        type: ActivityType.PROJECT_CHANGED,
+        fromValue: key,
+        issue: { project: { workspaceId: actor.workspaceId } },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { issue: { select: { id: true, projectId: true } } },
+    });
+    issue = moved?.issue ?? null;
+  }
   if (!issue) throw notFound('Задача');
 
   // The lookup above is workspace-wide, so a guest could resolve any issue

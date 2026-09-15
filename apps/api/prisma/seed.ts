@@ -9,7 +9,17 @@
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { hashPassword } from '../src/lib/password';
-import { DEFAULT_LABELS, DEFAULT_STATUSES, formatIssueKey } from '../src/domain/issueRules';
+import { DEFAULT_STATUSES, formatIssueKey } from '../src/domain/issueRules';
+
+/** Demo data only — real projects start without labels. */
+const DEMO_LABELS: { name: string; color: string }[] = [
+  { name: 'фронтенд', color: '#3b82f6' },
+  { name: 'бэкенд', color: '#8b5cf6' },
+  { name: 'дизайн', color: '#ec4899' },
+  { name: 'инфраструктура', color: '#f59e0b' },
+  { name: 'техдолг', color: '#64748b' },
+  { name: 'от клиента', color: '#14b8a6' },
+];
 import { rankBetween } from '@flowdesk/contracts';
 
 const prisma = new PrismaClient();
@@ -303,7 +313,7 @@ async function main(): Promise<void> {
     const statusByCategory = (category: string) => statuses.filter((s) => s.category === category);
 
     const labels = await Promise.all(
-      DEFAULT_LABELS.map((l) =>
+      DEMO_LABELS.map((l) =>
         prisma.label.create({ data: { projectId: project.id, name: l.name, color: l.color } }),
       ),
     );

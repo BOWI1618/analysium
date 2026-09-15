@@ -26,15 +26,6 @@ export const DEFAULT_STATUSES: { name: string; category: StatusCategory; color: 
   { name: 'Готово', category: SC.COMPLETED, color: '#22c55e' },
 ];
 
-export const DEFAULT_LABELS: { name: string; color: string }[] = [
-  { name: 'фронтенд', color: '#3b82f6' },
-  { name: 'бэкенд', color: '#8b5cf6' },
-  { name: 'дизайн', color: '#ec4899' },
-  { name: 'инфраструктура', color: '#f59e0b' },
-  { name: 'техдолг', color: '#64748b' },
-  { name: 'от клиента', color: '#14b8a6' },
-];
-
 /** `completedAt` is derived from the status category, never set by the client. */
 export function nextCompletedAt(
   category: StatusCategory,

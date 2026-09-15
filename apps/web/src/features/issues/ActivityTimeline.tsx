@@ -74,6 +74,12 @@ function describe(event: ActivityDto, lookups: Lookups): string | null {
       return `удалил(а) ${event.fromValue}`;
     case 'ISSUE_ARCHIVED':
       return 'архивировал(а) задачу';
+    case 'PROJECT_CHANGED': {
+      const to = event.metadata?.toProject;
+      return typeof to === 'string'
+        ? `перенёс(ла) задачу в проект «${to}»: ${event.fromValue} → ${event.toValue}`
+        : `перенёс(ла) задачу: ${event.fromValue} → ${event.toValue}`;
+    }
     default:
       return null;
   }

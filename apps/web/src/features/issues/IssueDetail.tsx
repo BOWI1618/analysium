@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import type { IssueDetailDto, UserSummaryDto } from '@flowdesk/contracts';
+import type { IssueDetailDto, ProjectDto, UserSummaryDto } from '@flowdesk/contracts';
 import { Permission } from '@flowdesk/contracts';
 import {
   ChevronDown,
@@ -21,13 +21,14 @@ import { useUiStore } from '~/app/uiStore';
 import { useHotkeys } from '~/lib/hooks/useHotkeys';
 import { SHORTCUTS } from '~/lib/shortcuts';
 import { useToast } from '~/app/toast';
-import { nextLabelColor, useCreateLabel, useProject } from '~/features/projects/hooks';
+import { nextLabelColor, useCreateLabel, useProject, useProjects } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import {
   useDeleteAttachment,
   useDeleteIssue,
   useIssueActivity,
   useIssueList,
+  useTransferIssue,
   useUpdateIssue,
   useUploadAttachment,
 } from './hooks';
@@ -119,6 +120,10 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
 
   const [tab, setTab] = useState<'comments' | 'activity'>('comments');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigate = useNavigate();
+  const { data: workspaceProjects } = useProjects(workspace?.id ?? '', false, { includeSystem: true });
+  const transferIssue = useTransferIssue(issue.id);
+  const [transferTo, setTransferTo] = useState<ProjectDto | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Description value at the moment the editor took focus — compared on blur
   // to detect that a teammate saved while we were typing.
@@ -588,13 +593,47 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
             </Field>
 
             <Field label="Проект">
-              <Link
-                to={`/projects/${issue.projectId}`}
-                className="flex items-center gap-1.5 text-sm hover:text-accent"
-              >
-                <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
-                {issue.project.name}
-              </Link>
+              {canEdit && workspaceProjects && workspaceProjects.length > 1 ? (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
+                  <select
+                    value={issue.projectId}
+                    aria-label="Перенести в проект"
+                    disabled={transferIssue.isPending}
+                    onChange={(event) => {
+                      const next = workspaceProjects.find((p) => p.id === event.target.value);
+                      if (next && next.id !== issue.projectId) setTransferTo(next);
+                    }}
+                    className="h-7 min-w-0 flex-1 border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none"
+                  >
+                    {/* The current project stays listed even if archived, so the value shows. */}
+                    {!workspaceProjects.some((p) => p.id === issue.projectId) && (
+                      <option value={issue.projectId}>{issue.project.name}</option>
+                    )}
+                    {workspaceProjects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Link
+                    to={`/projects/${issue.projectId}`}
+                    aria-label="Открыть проект"
+                    title="Открыть проект"
+                    className="inline-flex size-7 shrink-0 items-center justify-center text-text-muted hover:bg-surface-hover hover:text-text"
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </Link>
+                </div>
+              ) : (
+                <Link
+                  to={`/projects/${issue.projectId}`}
+                  className="flex items-center gap-1.5 text-sm hover:text-accent"
+                >
+                  <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
+                  {issue.project.name}
+                </Link>
+              )}
             </Field>
 
             {issue.type !== 'EPIC' && (
@@ -652,6 +691,31 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
           </dl>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(transferTo)}
+        onClose={() => setTransferTo(null)}
+        onConfirm={() => {
+          const target = transferTo;
+          setTransferTo(null);
+          if (!target) return;
+          transferIssue.mutate(target.id, {
+            // The full page is addressed by key, and the key has just changed.
+            onSuccess: (moved) => {
+              if (variant === 'page') navigate(`/issue/${moved.issueKey}`, { replace: true });
+            },
+          });
+        }}
+        title={`Перенести ${issue.issueKey} в «${transferTo?.name}»?`}
+        message={
+          <>
+            Задача получит новый номер в этом проекте
+            {issue.subtasks.length > 0 ? ', подзадачи переедут вместе с ней' : ''}. Статус и метки подберутся
+            по названию, спринт и эпик сбросятся. Старая ссылка на задачу продолжит работать.
+          </>
+        }
+        confirmLabel="Перенести"
+      />
 
       <ConfirmDialog
         open={confirmDelete}

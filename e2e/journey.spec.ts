@@ -241,8 +241,12 @@ test.describe('первый запуск без демо-данных', () => {
     await page.getByRole('link', { name: 'Настройки' }).click();
     await expect(page.getByRole('button', { name: 'Основное' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Статусы' })).toBeVisible();
-    await page.getByRole('button', { name: 'Удалить метку «техдолг»' }).click();
-    await expect(page.getByRole('button', { name: 'Удалить метку «техдолг»' })).toBeHidden({ timeout: 15_000 });
+    // The only label here is the one created from the task form: no starter set.
+    await expect(page.getByRole('button', { name: /^Удалить метку/ })).toHaveCount(1);
+    await page.getByLabel('Новая метка').fill('временная');
+    await page.getByRole('button', { name: 'Добавить метку' }).click();
+    await page.getByRole('button', { name: 'Удалить метку «временная»' }).click();
+    await expect(page.getByRole('button', { name: 'Удалить метку «временная»' })).toBeHidden({ timeout: 15_000 });
 
     // The teammate finds it in their own work and moves it on.
     await mate.goto('/my-work');
@@ -321,6 +325,45 @@ test.describe('сброс пароля', () => {
 
     await fresh.close();
     await mateContext.close();
+  });
+});
+
+test.describe('перенос задачи', () => {
+  test('задача без проекта переносится в проект и получает его номер', async ({ page }) => {
+    await register(page, 'Перенос Задач');
+
+    // A task without a project, created from the API with the page's session.
+    const workspaceId = (await (await page.request.get('/api/v1/auth/session')).json()).workspaces[0].id;
+    const created = await page.request.post('/api/v1/issues', {
+      data: { workspaceId, title: 'Потом разберёмся куда' },
+    });
+    const task = await created.json();
+
+    await createProject(page, 'Алабуга Старт');
+    const projectId = new URL(page.url()).pathname.split('/')[2]!;
+
+    await page.goto(`/projects/${task.projectId}/list`);
+    await page.getByText('Потом разберёмся куда').click();
+    const panel = page.getByRole('dialog', { name: 'Детали задачи' });
+    await panel.getByLabel('Перенести в проект').selectOption({ label: 'Алабуга Старт' });
+
+    const ask = page.getByRole('dialog', { name: /Перенести .* в «Алабуга Старт»\?/ });
+    await expect(ask).toContainText('Старая ссылка на задачу продолжит работать');
+    const transferred = page.waitForResponse((r) => r.url().includes('/transfer'));
+    await ask.getByRole('button', { name: 'Перенести' }).click();
+    const reply = await transferred;
+    expect(reply.status(), await reply.text()).toBe(200);
+
+    await expect(page.getByText('Новый номер: AS-1')).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByLabel('Перенести в проект')).toHaveValue(projectId);
+    await expect(panel.getByText('AS-1').first()).toBeVisible();
+
+    // It lives in the project now, and the old key still opens it.
+    await page.keyboard.press('Escape');
+    await page.goto(`/projects/${projectId}/list`);
+    await expect(page.getByText('Потом разберёмся куда')).toBeVisible({ timeout: 15_000 });
+    await page.goto(`/issue/${task.issueKey}`);
+    await expect(page.getByText('Потом разберёмся куда').first()).toBeVisible({ timeout: 15_000 });
   });
 });
 

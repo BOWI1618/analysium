@@ -124,6 +124,29 @@ export function useCreateIssue() {
   });
 }
 
+/** Moves an issue, with its subtasks, to another project; it gets a new key there. */
+export function useTransferIssue(issueId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (projectId: string) => api.post<IssueDetailDto>(`/issues/${issueId}/transfer`, { projectId }),
+    onSuccess: (issue) => {
+      const before = queryClient.getQueryData<IssueDetailDto>(qk.issue(issueId));
+      queryClient.setQueryData(qk.issue(issueId), issue);
+      if (before) invalidateIssueViews(queryClient, before.projectId);
+      invalidateIssueViews(queryClient, issue.projectId);
+      void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issueId) });
+      // Open-issue counts in the sidebar move with it.
+      void queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'workspace' && query.queryKey[2] === 'projects',
+      });
+      toast.success(`Задача перенесена в «${issue.project.name}»`, `Новый номер: ${issue.issueKey}`);
+    },
+    onError: (error) => toast.error(error, 'Не удалось перенести задачу'),
+  });
+}
+
 /**
  * Inline field edits. Applies an optimistic patch to the cached issue detail,
  * then reconciles with the server response; board and list views catch up

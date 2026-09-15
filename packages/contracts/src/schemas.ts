@@ -301,6 +301,12 @@ export const moveIssueSchema = z.object({
 });
 export type MoveIssueInput = z.infer<typeof moveIssueSchema>;
 
+/** Moves an issue, with its subtasks, to another project of the workspace. */
+export const transferIssueSchema = z.object({
+  projectId: cuidLike,
+});
+export type TransferIssueInput = z.infer<typeof transferIssueSchema>;
+
 export const bulkUpdateSchema = z.object({
   issueIds: z.array(cuidLike).min(1).max(200),
   patch: z.object({

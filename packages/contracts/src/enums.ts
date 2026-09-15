@@ -148,6 +148,7 @@ export const ActivityType = {
   ATTACHMENT_ADDED: 'ATTACHMENT_ADDED',
   ATTACHMENT_REMOVED: 'ATTACHMENT_REMOVED',
   ISSUE_ARCHIVED: 'ISSUE_ARCHIVED',
+  PROJECT_CHANGED: 'PROJECT_CHANGED',
 } as const;
 export type ActivityType = (typeof ActivityType)[keyof typeof ActivityType];
 

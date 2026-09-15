@@ -552,6 +552,7 @@ enum ActivityType {
   ATTACHMENT_ADDED
   ATTACHMENT_REMOVED
   ISSUE_ARCHIVED
+  PROJECT_CHANGED
 }
 
 /// Append-only per-issue history powering the activity timeline.

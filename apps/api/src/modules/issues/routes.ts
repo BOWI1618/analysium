@@ -5,6 +5,7 @@ import {
   createIssueRequestSchema,
   issueFilterSchema,
   moveIssueSchema,
+  transferIssueSchema,
   updateIssueSchema,
 } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
@@ -12,6 +13,7 @@ import { assertCan, issueContext, projectContext, workspaceContext } from '../..
 import { ensureSystemProject } from '../projects/service';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import * as service from './service';
+import { transferIssue } from './transfer';
 
 type IssueParams = { issueId: string };
 
@@ -86,6 +88,12 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const { actor } = await issueContext(currentUser(req).id, req.params.issueId);
     const input = parse(moveIssueSchema, req.body);
     return service.moveIssue(actor, req.params.issueId, input);
+  });
+
+  /** To another project: new key, statuses and labels matched in the target. */
+  app.post<{ Params: IssueParams }>('/issues/:issueId/transfer', async (req) => {
+    const { projectId } = parse(transferIssueSchema, req.body);
+    return transferIssue(currentUser(req).id, req.params.issueId, projectId);
   });
 
   app.post<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/issues/bulk', async (req) => {

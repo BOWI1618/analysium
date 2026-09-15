@@ -175,12 +175,14 @@ describe('updating an issue', () => {
   });
 
   it('records label additions and removals by name', async () => {
-    const full = await app.inject({
-      method: 'GET',
-      url: `/api/v1/projects/${project.id}`,
-      headers: { cookie: owner.cookie },
-    });
-    const label = full.json().labels[0];
+    const label = (
+      await app.inject({
+        method: 'POST',
+        url: `/api/v1/projects/${project.id}/labels`,
+        headers: { cookie: owner.cookie },
+        payload: { name: 'для истории', color: '#0083ca' },
+      })
+    ).json();
     const issue = await createIssue(app, owner, project.id, { title: 'С меткой' });
 
     await app.inject({
