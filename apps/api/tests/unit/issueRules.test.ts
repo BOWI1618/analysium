@@ -41,6 +41,11 @@ describe('issue keys', () => {
   it('joins the project key and number', () => {
     expect(formatIssueKey('WEB', 42)).toBe('WEB-42');
   });
+
+  it('numbers a subtask after its parent', () => {
+    expect(formatIssueKey('WEB', 4, 2)).toBe('WEB-4.2');
+    expect(formatIssueKey('WEB', 4, 0)).toBe('WEB-4');
+  });
 });
 
 describe('hierarchy rules', () => {

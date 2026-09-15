@@ -220,6 +220,77 @@ describe('subtasks', () => {
   });
 });
 
+describe('subtask numbers', () => {
+  it('follow the parent and leave task numbers alone', async () => {
+    const own = await createProject(app, owner, { name: 'Нумерация' });
+    const parent = await createIssue(app, owner, own.id, { title: 'Родитель' });
+    const first = await createIssue(app, owner, own.id, { title: 'Раз', type: 'SUBTASK', parentId: parent.id });
+    const second = await createIssue(app, owner, own.id, { title: 'Два', type: 'SUBTASK', parentId: parent.id });
+    const nextTask = await createIssue(app, owner, own.id, { title: 'Следующая задача' });
+
+    expect(parent.issueKey).toBe(`${own.key}-1`);
+    expect(first.issueKey).toBe(`${own.key}-1.1`);
+    expect(second.issueKey).toBe(`${own.key}-1.2`);
+    // Subtasks used to take project numbers, so this was -4.
+    expect(nextTask.issueKey).toBe(`${own.key}-2`);
+  });
+
+  it('change with the parent, and old keys still open the issue', async () => {
+    const own = await createProject(app, owner, { name: 'Смена родителя' });
+    const a = await createIssue(app, owner, own.id, { title: 'A' });
+    const b = await createIssue(app, owner, own.id, { title: 'B' });
+    const child = await createIssue(app, owner, own.id, { title: 'Ребёнок', type: 'SUBTASK', parentId: a.id });
+    expect(child.issueKey).toBe(`${own.key}-1.1`);
+
+    const moved = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/issues/${child.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { parentId: b.id },
+    });
+    expect(moved.json().issueKey).toBe(`${own.key}-2.1`);
+
+    const detached = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/issues/${child.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { parentId: null, type: 'TASK' },
+    });
+    expect(detached.statusCode).toBe(200);
+    expect(detached.json().issueKey).toBe(`${own.key}-3`);
+
+    const byOldKey = await app.inject({
+      method: 'GET',
+      url: `/api/v1/workspaces/${owner.workspaceId}/issues/by-key/${own.key}-1.1`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(byOldKey.json().id).toBe(child.id);
+  });
+
+  it('allow one level only', async () => {
+    const own = await createProject(app, owner, { name: 'Один уровень' });
+    const parent = await createIssue(app, owner, own.id, { title: 'Родитель' });
+    const child = await createIssue(app, owner, own.id, { title: 'Ребёнок', type: 'SUBTASK', parentId: parent.id });
+
+    const grandchild = await app.inject({
+      method: 'POST',
+      url: '/api/v1/issues',
+      headers: { cookie: owner.cookie },
+      payload: { projectId: own.id, title: 'Внук', type: 'TASK', parentId: child.id },
+    });
+    expect(grandchild.statusCode).toBe(400);
+
+    const other = await createIssue(app, owner, own.id, { title: 'Другая' });
+    const parentUnderOther = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/issues/${parent.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { parentId: other.id },
+    });
+    expect(parentUnderOther.statusCode).toBe(400);
+  });
+});
+
 describe('moving an issue', () => {
   it('places a card between its neighbours', async () => {
     const target = statusNamed('К выполнению');

@@ -45,8 +45,9 @@ export function isClosedCategory(category: StatusCategory): boolean {
   return category === SC.COMPLETED || category === SC.CANCELED;
 }
 
-export function formatIssueKey(projectKey: string, number: number): string {
-  return `${projectKey}-${number}`;
+/** WEB-4 for a task, WEB-4.2 for the second subtask of WEB-4. */
+export function formatIssueKey(projectKey: string, number: number, subNumber = 0): string {
+  return subNumber > 0 ? `${projectKey}-${number}.${subNumber}` : `${projectKey}-${number}`;
 }
 
 /**

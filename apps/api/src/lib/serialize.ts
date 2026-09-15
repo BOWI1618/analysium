@@ -202,7 +202,7 @@ export function toActivity(
   return {
     id: a.id,
     type: a.type,
-    actor: toUserSummary(a.actor) ?? { id: 'system', name: 'System', email: '', avatarUrl: null },
+    actor: toUserSummary(a.actor) ?? { id: 'system', name: 'Система', email: '', avatarUrl: null },
     field: a.field,
     fromValue: a.fromValue,
     toValue: a.toValue,

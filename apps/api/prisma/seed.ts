@@ -531,14 +531,17 @@ async function main(): Promise<void> {
       // Subtasks on a few larger items
       if (type === 'STORY' && chance(0.4)) {
         const subCount = 2 + Math.floor(rand() * 3);
+        await prisma.issue.update({ where: { id: issue.id }, data: { subtaskCounter: subCount } });
         for (let i = 0; i < subCount; i += 1) {
-          const subKey = nextKey();
+          // Numbered after the parent (WEB-4.1), not from the project counter.
+          const subKey = { number: issue.number, subNumber: i + 1, issueKey: formatIssueKey(spec.key, issue.number, i + 1) };
           const subDone = chance(0.5);
           const subStatus = subDone ? pick(statusByCategory('COMPLETED')) : pick(statusByCategory('UNSTARTED'));
           await prisma.issue.create({
             data: {
               projectId: project.id,
               number: subKey.number,
+              subNumber: subKey.subNumber,
               issueKey: subKey.issueKey,
               title: `${title} — шаг ${i + 1}`,
               type: 'SUBTASK',

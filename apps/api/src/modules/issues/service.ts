@@ -164,7 +164,7 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
     where: { parentId: issueId, archivedAt: null },
     // In the order they were added, oldest first — a checklist, not a board
     // column where new cards land on top.
-    orderBy: [{ number: 'asc' }],
+    orderBy: [{ subNumber: 'asc' }],
     select: issueSummarySelect,
   });
 
@@ -190,7 +190,7 @@ export async function getIssueByKey(actor: ActorContext, issueKey: string) {
   if (!issue) {
     const moved = await prisma.activityEvent.findFirst({
       where: {
-        type: ActivityType.PROJECT_CHANGED,
+        type: { in: [ActivityType.PROJECT_CHANGED, ActivityType.KEY_CHANGED] },
         fromValue: key,
         issue: { project: { workspaceId: actor.workspaceId } },
       },
@@ -262,6 +262,17 @@ async function checkHierarchy(
     : [];
 
   if (ids.length !== related.length) throw badRequest('Связанная задача должна быть в том же проекте');
+
+  // One level of subtasks: a subtask's number is built from its parent's
+  // (WEB-4.1), so a parent must itself be a task, and a task that already has
+  // subtasks cannot become someone's subtask.
+  if (input.parentId) {
+    const parent = await prisma.issue.findUnique({ where: { id: input.parentId }, select: { parentId: true } });
+    if (parent?.parentId) throw badRequest(HIERARCHY_MESSAGES.PARENT_CANNOT_BE_SUBTASK);
+    if (input.issueId && (await prisma.issue.count({ where: { parentId: input.issueId } })) > 0) {
+      throw badRequest('У задачи есть свои подзадачи — она не может стать подзадачей');
+    }
+  }
 
   const error = validateHierarchy({
     issueId: input.issueId ?? null,
@@ -356,18 +367,33 @@ export async function createIssue(
     const rank = rankBetween(null, first?.rank ?? null);
 
     // Reserve the next number atomically so two concurrent creates cannot
-    // produce the same issue key.
-    const project = await tx.project.update({
-      where: { id: input.projectId },
-      data: { issueCounter: { increment: 1 } },
-      select: { issueCounter: true },
-    });
+    // produce the same issue key. A subtask is numbered after its parent
+    // (WEB-4.1) and leaves the project's task numbers alone.
+    let number: number;
+    let subNumber = 0;
+    if (input.parentId) {
+      const parent = await tx.issue.update({
+        where: { id: input.parentId },
+        data: { subtaskCounter: { increment: 1 } },
+        select: { number: true, subtaskCounter: true },
+      });
+      number = parent.number;
+      subNumber = parent.subtaskCounter;
+    } else {
+      const project = await tx.project.update({
+        where: { id: input.projectId },
+        data: { issueCounter: { increment: 1 } },
+        select: { issueCounter: true },
+      });
+      number = project.issueCounter;
+    }
 
     const created = await tx.issue.create({
       data: {
         projectId: input.projectId,
-        number: project.issueCounter,
-        issueKey: formatIssueKey(projectKey, project.issueCounter),
+        number,
+        subNumber,
+        issueKey: formatIssueKey(projectKey, number, subNumber),
         title: input.title,
         description: description as never,
         descriptionText,
@@ -499,6 +525,7 @@ export async function updateIssue(
       completedAt: true,
       status: { select: { id: true, name: true, category: true } },
       labels: { select: { labelId: true } },
+      project: { select: { key: true } },
     },
   });
   if (!before) throw notFound('Задача');
@@ -617,9 +644,52 @@ export async function updateIssue(
     labelChanges.removed = currentIds.filter((id) => !patch.labelIds!.includes(id));
   }
 
+  const parentChanged = patch.parentId !== undefined && patch.parentId !== before.parentId;
+  let issueKey = before.issueKey;
+
   await prisma.$transaction(async (tx) => {
+    // A new parent means a new number: WEB-4.1 under WEB-4, and back to a
+    // task number of its own when the issue stops being a subtask.
+    if (parentChanged) {
+      let number: number;
+      let subNumber = 0;
+      if (patch.parentId) {
+        const parent = await tx.issue.update({
+          where: { id: patch.parentId },
+          data: { subtaskCounter: { increment: 1 } },
+          select: { number: true, subtaskCounter: true },
+        });
+        number = parent.number;
+        subNumber = parent.subtaskCounter;
+      } else {
+        const project = await tx.project.update({
+          where: { id: before.projectId },
+          data: { issueCounter: { increment: 1 } },
+          select: { issueCounter: true },
+        });
+        number = project.issueCounter;
+      }
+      issueKey = formatIssueKey(before.project.key, number, subNumber);
+      data.number = number;
+      data.subNumber = subNumber;
+      data.issueKey = issueKey;
+    }
+
     if (Object.keys(data).length > 0) {
       await tx.issue.update({ where: { id: issueId }, data });
+    }
+
+    if (issueKey !== before.issueKey) {
+      await tx.activityEvent.create({
+        data: {
+          issueId,
+          actorId: actor.userId,
+          type: ActivityType.KEY_CHANGED,
+          field: 'issueKey',
+          fromValue: before.issueKey,
+          toValue: issueKey,
+        },
+      });
     }
 
     if (patch.labelIds) {
@@ -666,7 +736,7 @@ export async function updateIssue(
     actorId: actor.userId,
     payload: {
       issueId,
-      issueKey: before.issueKey,
+      issueKey,
       projectId: before.projectId,
       patch: after as Record<string, unknown>,
     },

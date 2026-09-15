@@ -370,7 +370,14 @@ enum IssuePriority {
 model Issue {
   id                String        @id @default(cuid())
   projectId         String
+  /// A task's number in its project (WEB-4). A subtask shares its parent's
+  /// number and is told apart by `subNumber` (WEB-4.1, WEB-4.2), so subtasks
+  /// never use up the project's task numbers.
   number            Int
+  /// 0 for a task; 1, 2, … for the subtasks of one parent.
+  subNumber         Int           @default(0)
+  /// Counter behind the `subNumber` of this issue's subtasks.
+  subtaskCounter    Int           @default(0)
   issueKey          String
   title             String
   /// TipTap/ProseMirror JSON, sanitized server-side before storage.
@@ -419,7 +426,7 @@ model Issue {
   activity      ActivityEvent[]
   notifications Notification[]
 
-  @@unique([projectId, number])
+  @@unique([projectId, number, subNumber])
   /// Not globally unique: two workspaces may each run a project keyed "WEB",
   /// and both legitimately number their first issue WEB-1. Uniqueness comes
   /// from (projectId, number) above, combined with a project key that is
@@ -553,6 +560,7 @@ enum ActivityType {
   ATTACHMENT_REMOVED
   ISSUE_ARCHIVED
   PROJECT_CHANGED
+  KEY_CHANGED
 }
 
 /// Append-only per-issue history powering the activity timeline.

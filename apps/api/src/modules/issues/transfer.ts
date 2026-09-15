@@ -3,8 +3,9 @@
  * task created without a project that turned out to belong to one.
  *
  * Everything project-scoped is translated rather than dropped where it can be:
- *   - the issue gets the next number of the target project (TASK-3 → AS-7);
- *     the old key keeps resolving through the activity history;
+ *   - the issue gets the next number of the target project (TASK-3 → AS-7),
+ *     its subtasks are numbered after it (AS-7.1, AS-7.2); old keys keep
+ *     resolving through the activity history;
  *   - the status is matched by name, then by category, then the default;
  *   - labels are matched by name, and missing ones are created in the target;
  *   - subtasks move along; a subtask moved on its own becomes a plain task;
@@ -39,7 +40,7 @@ export async function transferIssue(userId: string, issueId: string, targetProje
   });
   const subtasks = await prisma.issue.findMany({
     where: { parentId: root.id },
-    orderBy: { number: 'asc' },
+    orderBy: { subNumber: 'asc' },
     select: { id: true },
   });
   const movedIds = [root.id, ...subtasks.map((s) => s.id)];
@@ -100,29 +101,35 @@ export async function transferIssue(userId: string, issueId: string, targetProje
       ).map((m) => m.userId),
     );
 
+    // The moved task takes the target's next number; its subtasks follow it
+    // as .1, .2, … in their existing order.
+    const { issueCounter: rootNumber } = await tx.project.update({
+      where: { id: targetProjectId },
+      data: { issueCounter: { increment: 1 } },
+      select: { issueCounter: true },
+    });
+
     const keys: { id: string; from: string; to: string }[] = [];
-    for (const id of movedIds) {
+    for (const [index, id] of movedIds.entries()) {
       const current = moved.find((m) => m.id === id)!;
       const status = statusFor(current.status);
-      const { issueCounter } = await tx.project.update({
-        where: { id: targetProjectId },
-        data: { issueCounter: { increment: 1 } },
-        select: { issueCounter: true },
-      });
       const first = await tx.issue.findFirst({
         where: { projectId: targetProjectId, statusId: status.id },
         orderBy: { rank: 'asc' },
         select: { rank: true },
       });
-      const issueKey = formatIssueKey(target.project.key, issueCounter);
       const isRoot = id === root.id;
+      const subNumber = isRoot ? 0 : index;
+      const issueKey = formatIssueKey(target.project.key, rootNumber, subNumber);
 
       await tx.issueLabel.deleteMany({ where: { issueId: id } });
       await tx.issue.update({
         where: { id },
         data: {
           projectId: targetProjectId,
-          number: issueCounter,
+          number: rootNumber,
+          subNumber,
+          ...(isRoot ? { subtaskCounter: subtasks.length } : {}),
           issueKey,
           statusId: status.id,
           rank: rankBetween(null, first?.rank ?? null),

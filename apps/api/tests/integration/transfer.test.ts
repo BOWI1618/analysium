@@ -70,7 +70,7 @@ describe('перенос задачи в другой проект', () => {
     expect(moved.assignee.id).toBe(owner.id);
     expect(moved.labels.map((l: { name: string }) => l.name)).toEqual(['важно']);
     expect(moved.subtasks).toHaveLength(1);
-    expect(moved.subtasks[0].issueKey).toBe(`${target.key}-2`);
+    expect(moved.subtasks[0].issueKey).toBe(`${target.key}-1.1`);
 
     // The label now exists in the target project too.
     const targetLabels = (await app.inject({ method: 'GET', url: `/api/v1/projects/${target.id}/labels`, headers: { cookie: owner.cookie } })).json();

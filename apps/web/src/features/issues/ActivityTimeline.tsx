@@ -74,6 +74,8 @@ function describe(event: ActivityDto, lookups: Lookups): string | null {
       return `удалил(а) ${event.fromValue}`;
     case 'ISSUE_ARCHIVED':
       return 'архивировал(а) задачу';
+    case 'KEY_CHANGED':
+      return `номер задачи изменился: ${event.fromValue} → ${event.toValue}`;
     case 'PROJECT_CHANGED': {
       const to = event.metadata?.toProject;
       return typeof to === 'string'
