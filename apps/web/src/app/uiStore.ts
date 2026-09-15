@@ -18,8 +18,11 @@ interface UiState {
     sprintId?: string;
     parentId?: string;
     epicId?: string;
-    /** ISO date, e.g. from a calendar day's «+». */
+    /** ISO dates, e.g. from a calendar day or an hour slot. */
     dueDate?: string;
+    dueHasTime?: boolean;
+    startDate?: string;
+    startHasTime?: boolean;
   } | null;
   shortcutsOpen: boolean;
   /** Issue currently shown in the side panel (null = closed). */

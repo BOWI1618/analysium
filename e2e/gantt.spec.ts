@@ -119,36 +119,6 @@ test.describe('диаграмма Ганта', () => {
     });
   });
 
-  test('день по часам: задача со временем на своём месте, дни переключаются', async ({ page }) => {
-    await register(page, 'Часовщик Планов');
-    const projectId = await createProject(page);
-    const at = (hours: number) => {
-      const d = new Date();
-      d.setHours(hours, 0, 0, 0);
-      return d.toISOString();
-    };
-    const response = await page.request.post('/api/v1/issues', {
-      data: { projectId, title: 'Созвон по часам', startDate: at(15), dueDate: at(17), startHasTime: true, dueHasTime: true },
-    });
-    const call = await response.json();
-
-    await page.goto(`/projects/${projectId}/gantt`);
-    await page.getByRole('radio', { name: 'День' }).click();
-    await expect(page.getByText('15:00', { exact: true })).toBeVisible({ timeout: 20_000 });
-    const bar = page.locator(`[data-bar-id="${call.id}"]`);
-    await expect(bar).toBeVisible();
-    // Two hours wide: the hour columns and the bar agree.
-    const hour = await page.getByText('15:00', { exact: true }).boundingBox();
-    const box = await bar.boundingBox();
-    expect(Math.abs(box!.width - hour!.width * 2)).toBeLessThan(6);
-
-    await page.getByRole('button', { name: 'Следующий день' }).click();
-    await expect(bar).toHaveCount(0);
-    await expect(page.getByText('На этот день ничего не запланировано')).toBeVisible();
-    await page.getByRole('button', { name: 'Сегодня' }).click();
-    await expect(bar).toBeVisible();
-  });
-
   test('перенос предлагает сдвинуть зависимые задачи', async ({ page }) => {
     await register(page, 'Роман Сдвигов');
     const projectId = await createProject(page);

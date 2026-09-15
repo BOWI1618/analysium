@@ -14,7 +14,6 @@ import {
   eachMonthOfInterval,
   eachQuarterOfInterval,
   eachWeekOfInterval,
-  endOfDay,
   endOfMonth,
   endOfQuarter,
   endOfWeek,
@@ -58,55 +57,6 @@ export interface Timeline {
   /** Fine header row: days or weeks depending on zoom. */
   minorTicks: TimelineTick[];
   todayX: number | null;
-  /**
-   * The day zoom: one calendar day split into hours, positioned by exact
-   * moments rather than whole days.
-   */
-  hourly: boolean;
-  /** Pixels per hour in the hourly view; 0 otherwise. */
-  hourWidth: number;
-}
-
-const HOUR_MS = 60 * 60 * 1000;
-
-/**
- * One day in hours, for the day zoom. At least as wide as the viewport, never
- * narrower than a readable hour.
- */
-export function buildHourTimeline(day: Date, minWidthPx = 0): Timeline {
-  const start = startOfDay(day);
-  const hourWidth = Math.max(56, Math.floor(minWidthPx / 24));
-  const totalWidth = hourWidth * 24;
-  const now = new Date();
-  const isThisDay = startOfDay(now).getTime() === start.getTime();
-
-  return {
-    start,
-    end: endOfDay(day),
-    dayWidth: totalWidth,
-    totalWidth,
-    hourly: true,
-    hourWidth,
-    majorTicks: [
-      {
-        key: `d-${start.toISOString()}`,
-        label: format(start, 'EEEE, d MMMM yyyy', { locale: ru }),
-        x: 0,
-        width: totalWidth,
-        isWeekend: false,
-        isToday: false,
-      },
-    ],
-    minorTicks: Array.from({ length: 24 }, (_, hour) => ({
-      key: `h-${hour}`,
-      label: `${String(hour).padStart(2, '0')}:00`,
-      x: hour * hourWidth,
-      width: hourWidth,
-      isWeekend: hour < 8 || hour >= 20,
-      isToday: isThisDay && now.getHours() === hour,
-    })),
-    todayX: isThisDay ? ((now.getTime() - start.getTime()) / HOUR_MS) * hourWidth : null,
-  };
 }
 
 /** How far past the planned work (or today) the chart reaches at each zoom. */
@@ -212,29 +162,17 @@ export function buildTimeline(
     majorTicks,
     minorTicks,
     todayX,
-    hourly: false,
-    hourWidth: 0,
   };
 }
 
 /** Horizontal position of a date on the timeline, in pixels. */
 export function xForDate(timeline: Timeline, date: Date): number {
-  if (timeline.hourly) return ((date.getTime() - timeline.start.getTime()) / HOUR_MS) * timeline.hourWidth;
   return differenceInCalendarDays(startOfDay(date), timeline.start) * timeline.dayWidth;
 }
 
-/**
- * Where an edge of a bar falls. A whole-day date covers its day, so as an end
- * it reaches the day's close; a date with a time is that exact moment (on the
- * day-and-wider zooms it still occupies its whole day column).
- */
-export function edgeX(timeline: Timeline, value: string, hasTime: boolean, edge: 'start' | 'end'): number {
-  const date = new Date(value);
-  if (timeline.hourly) {
-    if (hasTime) return xForDate(timeline, date);
-    return edge === 'start' ? xForDate(timeline, startOfDay(date)) : xForDate(timeline, endOfDay(date)) + 1;
-  }
-  return xForDate(timeline, date) + (edge === 'end' ? timeline.dayWidth : 0);
+/** Where an edge of a bar falls: a date occupies its whole day column, so an end reaches the day's close. */
+export function edgeX(timeline: Timeline, value: string, edge: 'start' | 'end'): number {
+  return xForDate(timeline, new Date(value)) + (edge === 'end' ? timeline.dayWidth : 0);
 }
 
 /** Inverse of `xForDate`, used when a drag finishes. */
@@ -255,23 +193,9 @@ export function barGeometry(
   timeline: Timeline,
   start: string | null,
   end: string | null,
-  startHasTime = false,
-  endHasTime = false,
 ): BarGeometry | null {
   if (!start && !end) return null;
 
-  if (timeline.hourly) {
-    // Clipped to the day on screen; work that does not touch it has no bar.
-    const from = start ?? end!;
-    const to = end ?? start!;
-    const left = edgeX(timeline, from, start ? startHasTime : endHasTime, 'start');
-    let right = edgeX(timeline, to, end ? endHasTime : startHasTime, 'end');
-    // A single moment (only one timed edge) still needs something to grab.
-    if (right - left < 8) right = left + 8;
-    if (right <= 0 || left >= timeline.totalWidth) return null;
-    const x = Math.max(0, left);
-    return { x, width: Math.min(timeline.totalWidth, right) - x };
-  }
 
   const from = start ? new Date(start) : new Date(end!);
   const to = end ? new Date(end) : new Date(start!);
@@ -284,10 +208,6 @@ export function barGeometry(
 
 /** Weekend bands drawn behind the bars; only legible at the day zoom. */
 export function weekendBands(timeline: Timeline): { x: number; width: number }[] {
-  // In hours the night is shaded instead, through the header ticks' `isWeekend`.
-  if (timeline.hourly) {
-    return timeline.minorTicks.filter((tick) => tick.isWeekend).map((tick) => ({ x: tick.x, width: tick.width }));
-  }
   if (timeline.dayWidth < 10) return [];
   return eachDayOfInterval({ start: timeline.start, end: timeline.end })
     .filter((d) => isWeekend(d))

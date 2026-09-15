@@ -10,7 +10,6 @@ import { IssueTypeIcon } from '~/components/IssueMeta';
 import {
   ROW_HEIGHT,
   barGeometry,
-  buildHourTimeline,
   buildTimeline,
   dateForX,
   edgeX,
@@ -23,8 +22,6 @@ export interface GanttChartProps {
   dependencies: DependencyDto[];
   range: { start: string; end: string };
   scale: GanttScale;
-  /** The day shown at the day zoom, in hours. */
-  day: Date;
   editable: boolean;
   showBaseline: boolean;
   collapsed: Set<string>;
@@ -41,7 +38,7 @@ interface DragState {
   rowId: string;
   mode: DragMode;
   originX: number;
-  /** Whole days, or half hours in the hourly view. */
+  /** Whole days. */
   steps: number;
   /** Set once the pointer travels far enough to count as a drag. */
   moved: boolean;
@@ -65,7 +62,6 @@ export function GanttChart({
   dependencies,
   range,
   scale,
-  day,
   editable,
   showBaseline,
   collapsed,
@@ -86,39 +82,23 @@ export function GanttChart({
     return () => observer.disconnect();
   }, []);
 
-  const dayKey = day.toDateString();
   const timeline = useMemo(
-    () =>
-      scale === 'DAY'
-        ? buildHourTimeline(new Date(dayKey), viewportWidth)
-        : buildTimeline(new Date(range.start), new Date(range.end), scale, viewportWidth),
-    [range.start, range.end, scale, dayKey, viewportWidth],
+    () => buildTimeline(new Date(range.start), new Date(range.end), scale, viewportWidth),
+    [range.start, range.end, scale, viewportWidth],
   );
 
-  // Open on now rather than on the far past: once per zoom level, and for each
-  // day in hours (a day other than today opens at the start of the working day).
+  // Open on today rather than on the far past, once per zoom level.
   const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
     const el = timelineRef.current;
-    const key = timeline.hourly ? `${scale}-${dayKey}` : scale;
-    if (!el || viewportWidth === 0 || scrolledFor.current === key) return;
-    const anchor = timeline.todayX ?? (timeline.hourly ? 8 * timeline.hourWidth : null);
-    if (anchor === null) return;
-    scrolledFor.current = key;
-    el.scrollLeft = Math.max(0, anchor - Math.min(240, viewportWidth / 3));
-  }, [scale, dayKey, timeline, viewportWidth]);
+    if (!el || viewportWidth === 0 || timeline.todayX === null || scrolledFor.current === scale) return;
+    scrolledFor.current = scale;
+    el.scrollLeft = Math.max(0, timeline.todayX - Math.min(240, viewportWidth / 3));
+  }, [scale, timeline.todayX, viewportWidth]);
 
-  // In hours a day can hold none of the planned work; say so rather than show blank rows.
-  const dayIsEmpty = useMemo(
-    () =>
-      timeline.hourly &&
-      !rows.some((row) => barGeometry(timeline, row.start, row.end, row.startHasTime, row.endHasTime)),
-    [rows, timeline],
-  );
-
-  // A drag moves by whole days, or by half hours in the hourly view.
-  const stepPx = timeline.hourly ? timeline.hourWidth / 2 : timeline.dayWidth;
-  const stepMs = timeline.hourly ? 30 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  // A drag moves by whole days.
+  const stepPx = timeline.dayWidth;
+  const stepMs = 24 * 60 * 60 * 1000;
 
   // A row is hidden when any ancestor is collapsed.
   const visibleRows = useMemo(() => {
@@ -330,12 +310,6 @@ export function GanttChart({
             ))}
 
             {link && <LinkPreview link={link} rows={visibleRows} rowIndex={rowIndex} timeline={timeline} />}
-
-            {timeline.hourly && dayIsEmpty && (
-              <p className="pointer-events-none sticky left-0 top-0 w-fit px-4 pt-2 text-xs text-text-subtle" style={{ transform: `translateY(${chartHeight}px)` }}>
-                На этот день ничего не запланировано — переключите день стрелками выше.
-              </p>
-            )}
           </div>
         </div>
       </div>
@@ -504,13 +478,8 @@ function Bar({
   onStartLink: (x: number, y: number) => void;
   onOpen: () => void;
 }) {
-  const geometry = barGeometry(timeline, row.start, row.end, row.startHasTime, row.endHasTime);
-  // In hours only a task with exact times moves: nudging a whole-day task by
-  // half an hour would quietly turn its dates into times.
-  const draggable =
-    editable &&
-    !row.isSummary &&
-    (!timeline.hourly || ((!row.start || row.startHasTime) && (!row.end || row.endHasTime)));
+  const geometry = barGeometry(timeline, row.start, row.end);
+  const draggable = editable && !row.isSummary;
   const baseline = showBaseline ? barGeometry(timeline, row.baselineStart, row.baselineEnd) : null;
 
   const top = index * ROW_HEIGHT;
@@ -546,7 +515,7 @@ function Bar({
             onClick={onOpen}
             aria-label={`Веха ${row.issueKey}: ${row.title}, ${dateLabel}`}
             className="absolute size-3.5 rotate-45 border-2 border-border-strong bg-marker hover:scale-125"
-            style={{ left: adjusted.x + (timeline.hourly ? 0 : timeline.dayWidth / 2) - 6, top: ROW_HEIGHT / 2 - 6 }}
+            style={{ left: adjusted.x + timeline.dayWidth / 2 - 6, top: ROW_HEIGHT / 2 - 6 }}
           />
         </Tooltip>
       </div>
@@ -556,7 +525,7 @@ function Bar({
   const progressPercent = Math.round(row.progress * 100);
 
   const slackWidth =
-    linked && !timeline.hourly && !row.isSummary && row.slackDays !== null && row.slackDays > 0
+    linked && !row.isSummary && row.slackDays !== null && row.slackDays > 0
       ? Math.min(row.slackDays, 90) * timeline.dayWidth
       : 0;
 
@@ -725,7 +694,7 @@ function Bar({
           className="fd-num pointer-events-none absolute z-30 border-2 border-border-strong bg-surface-raised px-1.5 py-0.5 text-2xs shadow-sm"
           style={{ left: adjusted.x, top: -4 }}
         >
-          {formatShift(drag.steps, timeline.hourly)}
+          {drag.steps > 0 ? `+${drag.steps}` : drag.steps} дн
         </span>
       )}
     </div>
@@ -759,9 +728,9 @@ function DependencyArrows({
       const toIndex = rowIndex.get(dependency.successorId);
       if (!from?.end || !to?.start || fromIndex === undefined || toIndex === undefined) return null;
 
-      const x1 = edgeX(timeline, from.end, from.endHasTime, 'end');
+      const x1 = edgeX(timeline, from.end, 'end');
       const y1 = fromIndex * ROW_HEIGHT + ROW_HEIGHT / 2;
-      const x2 = edgeX(timeline, to.start, to.startHasTime, 'start');
+      const x2 = edgeX(timeline, to.start, 'start');
       const y2 = toIndex * ROW_HEIGHT + ROW_HEIGHT / 2;
 
       // A successor that starts before its predecessor finishes is a broken
@@ -851,7 +820,7 @@ function LinkPreview({
   const index = rowIndex.get(link.fromId);
   if (!from?.end || index === undefined) return null;
 
-  const x1 = edgeX(timeline, from.end, from.endHasTime, 'end');
+  const x1 = edgeX(timeline, from.end, 'end');
   const y1 = index * ROW_HEIGHT + ROW_HEIGHT / 2;
 
   return (
@@ -870,13 +839,3 @@ function LinkPreview({
 }
 
 export { dateForX };
-
-/** "+2 дн", or "+1 ч 30 мин" when moving in the hourly view. */
-function formatShift(steps: number, hourly: boolean): string {
-  const sign = steps > 0 ? '+' : steps < 0 ? '−' : '';
-  const n = Math.abs(steps);
-  if (!hourly) return `${sign}${n} дн`;
-  const hours = Math.floor(n / 2);
-  const half = n % 2 === 1;
-  return `${sign}${hours ? `${hours} ч` : ''}${hours && half ? ' ' : ''}${half ? '30 мин' : ''}` || '0';
-}

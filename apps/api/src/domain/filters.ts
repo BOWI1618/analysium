@@ -143,6 +143,15 @@ export function buildIssueWhere(
   if (filter.createdBefore) and.push({ createdAt: { lte: new Date(filter.createdBefore) } });
   if (filter.createdAfter) and.push({ createdAt: { gte: new Date(filter.createdAfter) } });
   if (filter.updatedAfter) and.push({ updatedAt: { gte: new Date(filter.updatedAfter) } });
+  if (filter.overlapsFrom) {
+    const from = new Date(filter.overlapsFrom);
+    and.push({ OR: [{ dueDate: { gte: from } }, { dueDate: null, startDate: { gte: from } }] });
+  }
+  if (filter.overlapsTo) {
+    const to = new Date(filter.overlapsTo);
+    and.push({ OR: [{ startDate: { lte: to } }, { startDate: null, dueDate: { lte: to } }] });
+  }
+  if (filter.noDates) and.push({ startDate: null, dueDate: null });
 
   if (filter.isOverdue) {
     and.push(overdueWhere());

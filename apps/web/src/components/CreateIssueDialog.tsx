@@ -103,7 +103,7 @@ export function CreateIssueDialog() {
     setAssigneeId(null);
     setLabelIds([]);
     setDueDate(seed?.dueDate ?? null);
-    setDueHasTime(false);
+    setDueHasTime(seed?.dueHasTime ?? false);
   }, [open]);
 
 
@@ -154,6 +154,8 @@ export function CreateIssueDialog() {
       ...(epicId ? { epicId } : {}),
       ...(defaults?.parentId ? { parentId: defaults.parentId } : {}),
       ...(dueDate ? { dueDate, dueHasTime } : {}),
+      // A start comes only from where the form was opened (an hour slot in the calendar).
+      ...(defaults?.startDate ? { startDate: defaults.startDate, startHasTime: defaults.startHasTime ?? false } : {}),
       ...(isDocEmpty(description) ? {} : { description: description as Record<string, unknown> }),
     };
 

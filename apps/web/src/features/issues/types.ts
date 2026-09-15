@@ -30,6 +30,9 @@ export interface IssueFilters {
   noSprint?: boolean;
   dueBefore?: string;
   dueAfter?: string;
+  overlapsFrom?: string;
+  overlapsTo?: string;
+  noDates?: boolean;
   sort?: IssueFilterInput['sort'];
   order?: IssueFilterInput['order'];
 }

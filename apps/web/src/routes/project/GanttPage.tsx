@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { GANTT_SCALES, Permission, type GanttScale } from '@flowdesk/contracts';
-import { addDays, format, isToday, startOfDay } from 'date-fns';
-import { ru } from 'date-fns/locale';
-import { CalendarClock, ChevronLeft, ChevronRight, GitBranch, Plus } from 'lucide-react';
+import { CalendarClock, GitBranch, Plus } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import {
@@ -38,8 +36,6 @@ export function GanttPage() {
   const [scale, setScale] = useLocalStorage<GanttScale>('flowdesk.gantt-scale', 'WEEK');
   const [showBaseline, setShowBaseline] = useLocalStorage('flowdesk.gantt-baseline', false);
   const [onlyMine, setOnlyMine] = useState(false);
-  // The day shown in hours at the day zoom.
-  const [day, setDay] = useState(() => startOfDay(new Date()));
   const [includeDone, setIncludeDone] = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [pendingShifts, setPendingShifts] = useState<{
@@ -99,31 +95,6 @@ export function GanttPage() {
           options={GANTT_SCALES.map((value) => ({ value, label: SCALE_LABEL[value] }))}
         />
 
-        {scale === 'DAY' && (
-          <div className="flex items-center gap-1" role="group" aria-label="Выбор дня">
-            <Button size="xs" variant="ghost" aria-label="Предыдущий день" onClick={() => setDay((d) => addDays(d, -1))}>
-              <ChevronLeft className="size-3.5" />
-            </Button>
-            <input
-              type="date"
-              aria-label="День"
-              value={format(day, 'yyyy-MM-dd')}
-              onChange={(event) => event.target.value && setDay(startOfDay(new Date(`${event.target.value}T00:00:00`)))}
-              className="h-7 border-2 border-border-strong bg-surface px-1.5 text-xs"
-            />
-            <Button size="xs" variant="ghost" aria-label="Следующий день" onClick={() => setDay((d) => addDays(d, 1))}>
-              <ChevronRight className="size-3.5" />
-            </Button>
-            {!isToday(day) && (
-              <Button size="xs" variant="secondary" onClick={() => setDay(startOfDay(new Date()))}>
-                Сегодня
-              </Button>
-            )}
-            <span className="hidden text-2xs text-text-subtle lg:inline">
-              {format(day, 'EEEE', { locale: ru })} · по часам
-            </span>
-          </div>
-        )}
 
         <div className="hidden flex-wrap items-center gap-2 md:flex">
           <Checkbox
@@ -201,7 +172,6 @@ export function GanttPage() {
           dependencies={data.dependencies}
           range={data.range}
           scale={scale}
-          day={day}
           editable={editable}
           showBaseline={showBaseline}
           collapsed={collapsed}
@@ -255,9 +225,7 @@ export function GanttPage() {
           )}
           {editable && (
             <span className="ml-auto hidden normal-case tracking-normal lg:inline">
-              {scale === 'DAY'
-                ? 'По часам двигаются задачи со временем — шаг 30 минут · время задаётся в сроке задачи'
-                : 'Перетащите полосу, чтобы сдвинуть · потяните за край, чтобы изменить длительность'}
+              Перетащите полосу, чтобы сдвинуть · потяните за край, чтобы изменить длительность
             </span>
           )}
         </div>

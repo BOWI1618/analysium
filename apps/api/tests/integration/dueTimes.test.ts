@@ -113,3 +113,36 @@ describe('время у сроков', () => {
     expect(moved.json().issue.dueHasTime).toBe(true);
   });
 });
+
+describe('фильтры календаря', () => {
+  it('includeDone=false скрывает закрытые; периоды попадают по пересечению; noDates — только без дат', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Фильтры календаря' });
+    const project = await createProject(app, owner);
+    const statuses = (await app.inject({ method: 'GET', url: `/api/v1/projects/${project.id}`, headers: { cookie: owner.cookie } })).json().statuses;
+    const doneId = statuses.find((s: { category: string }) => s.category === 'COMPLETED').id;
+
+    const closed = await createIssue(app, owner, project.id, { title: 'Закрыта', statusId: doneId });
+    const open = await createIssue(app, owner, project.id, { title: 'Открыта' });
+    const list = async (query: string) =>
+      (await app.inject({ method: 'GET', url: `/api/v1/projects/${project.id}/issues?${query}`, headers: { cookie: owner.cookie } }))
+        .json()
+        .items.map((i: { id: string }) => i.id);
+
+    // "false" in a query string used to be read as true.
+    const withoutDone = await list('includeDone=false');
+    expect(withoutDone).toContain(open.id);
+    expect(withoutDone).not.toContain(closed.id);
+
+    const period = await createIssue(app, owner, project.id, { title: 'Период', startDate: noonUtc(-3), dueDate: noonUtc(3) });
+    const later = await createIssue(app, owner, project.id, { title: 'Позже', dueDate: noonUtc(10) });
+    const window = `overlapsFrom=${encodeURIComponent(noonUtc(0))}&overlapsTo=${encodeURIComponent(noonUtc(1))}`;
+    const inWindow = await list(window);
+    expect(inWindow).toContain(period.id);
+    expect(inWindow).not.toContain(later.id);
+    expect(inWindow).not.toContain(open.id);
+
+    const undated = await list('noDates=true');
+    expect(undated).toContain(open.id);
+    expect(undated).not.toContain(period.id);
+  });
+});

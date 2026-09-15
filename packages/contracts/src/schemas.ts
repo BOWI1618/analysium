@@ -328,6 +328,17 @@ export type BulkUpdateInput = z.infer<typeof bulkUpdateSchema>;
 
 /* --------------------------------------------------------------- filters */
 
+/**
+ * A boolean from a query string. `z.coerce.boolean()` turns any non-empty
+ * string into `true`, so `includeDone=false` used to mean "include done" —
+ * «Скрыть завершённые» never hid anything.
+ */
+const queryBoolean = z.preprocess(
+  (value) => (value === 'false' || value === '0' ? false : value === 'true' || value === '1' ? true : value),
+  z.boolean(),
+);
+
+
 const csv = z
   .union([z.string(), z.array(z.string())])
   .transform((v) => (Array.isArray(v) ? v : v.split(',')).map((s) => s.trim()).filter(Boolean));
@@ -350,11 +361,16 @@ export const issueFilterSchema = z.object({
   createdBefore: z.string().datetime().optional(),
   createdAfter: z.string().datetime().optional(),
   updatedAfter: z.string().datetime().optional(),
+  /** Issues whose dates touch [overlapsFrom, overlapsTo] — a period started earlier still shows. */
+  overlapsFrom: z.string().datetime().optional(),
+  overlapsTo: z.string().datetime().optional(),
+  /** Only issues with neither a start nor a due date. */
+  noDates: queryBoolean.optional(),
   /** `true` → only issues with no sprint; used by the backlog view. */
-  noSprint: z.coerce.boolean().optional(),
-  includeSubtasks: z.coerce.boolean().optional(),
-  includeDone: z.coerce.boolean().optional(),
-  isOverdue: z.coerce.boolean().optional(),
+  noSprint: queryBoolean.optional(),
+  includeSubtasks: queryBoolean.optional(),
+  includeDone: queryBoolean.optional(),
+  isOverdue: queryBoolean.optional(),
   sort: z
     .enum(['rank', 'created', 'updated', 'priority', 'dueDate', 'title', 'status'])
     .default('rank'),
@@ -388,7 +404,7 @@ export const ganttQuerySchema = z.object({
   /** Optional window: scheduled issues are clipped to those overlapping [from, to]; unscheduled ones are always returned for planning. */
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
-  includeDone: z.coerce.boolean().default(true),
+  includeDone: queryBoolean.default(true),
   assigneeId: z.union([z.string(), z.array(z.string())]).optional(),
 });
 export type GanttQueryInput = z.infer<typeof ganttQuerySchema>;
@@ -447,7 +463,7 @@ export const completeSprintSchema = z.object({
 /* --------------------------------------------------------- notifications */
 
 export const notificationQuerySchema = z.object({
-  unreadOnly: z.coerce.boolean().default(false),
+  unreadOnly: queryBoolean.default(false),
   limit: z.coerce.number().int().min(1).max(100).default(30),
   cursor: z.string().max(200).optional(),
 });
