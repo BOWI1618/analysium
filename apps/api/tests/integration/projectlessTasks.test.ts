@@ -109,6 +109,22 @@ describe('задачи без проекта', () => {
     expect((await create()).json().key).toBe('AS2');
   });
 
+  it('проект создаётся с любой иконкой из набора, в том числе с длинным именем', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Иконки проектов' });
+    // Names longer than eight characters used to be rejected, so picking
+    // «Телефон», «Щит», «График» and others made the project impossible to create.
+    for (const icon of ['smartphone', 'shield-check', 'bar-chart-3', 'settings-2', 'flask-conical', 'message-square']) {
+      const created = await app.inject({
+        method: 'POST',
+        url: `/api/v1/workspaces/${owner.workspaceId}/projects`,
+        headers: { cookie: owner.cookie },
+        payload: { name: `Проект ${icon}`, icon },
+      });
+      expect(created.statusCode, icon).toBe(201);
+      expect(created.json().icon).toBe(icon);
+    }
+  });
+
   it('без проекта и без пространства запрос отклоняется', async () => {
     const owner = await registerUser(app, { workspaceName: 'Нет адресата' });
     const response = await app.inject({

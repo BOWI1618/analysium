@@ -166,6 +166,9 @@ export const updateMemberSchema = z.object({
 
 /* --------------------------------------------------------------- project */
 
+/** An icon name such as "message-square" (older projects store an emoji). */
+const projectIcon = z.string().trim().min(1).max(32).optional();
+
 export const createProjectSchema = z.object({
   name: z.string().trim().min(2).max(80),
   /** Normally left out: the server derives a unique key from the name. */
@@ -178,7 +181,7 @@ export const createProjectSchema = z.object({
     .regex(/^[A-Z][A-Z0-9]+$/, '2–6 заглавных латинских букв или цифр, первая — буква')
     .optional(),
   description: z.string().trim().max(2000).optional(),
-  icon: z.string().max(8).optional(),
+  icon: projectIcon,
   color: hexColor.optional(),
   projectType: z.enum(PROJECT_TYPES as [string, ...string[]]).default('KANBAN'),
   leadId: cuidLike.nullable().optional(),
@@ -188,7 +191,7 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export const updateProjectSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   description: z.string().trim().max(2000).nullable().optional(),
-  icon: z.string().max(8).optional(),
+  icon: projectIcon,
   color: hexColor.optional(),
   projectType: z.enum(PROJECT_TYPES as [string, ...string[]]).optional(),
   leadId: cuidLike.nullable().optional(),

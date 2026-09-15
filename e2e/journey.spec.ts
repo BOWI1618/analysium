@@ -31,6 +31,8 @@ async function register(page: Page, name: string) {
 async function createProject(page: Page, name: string) {
   await page.goto('/projects/new');
   await page.getByLabel('Название').fill(name);
+  // Not the default icon: names longer than eight characters were once refused.
+  await page.getByRole('button', { name: 'Иконка «Сообщение»' }).click();
   await page.getByRole('button', { name: 'Создать проект' }).click();
   // `/projects/new` itself matches a bare `/projects/<segment>` pattern, which
   // let this wait succeed before the redirect — exclude it explicitly.
