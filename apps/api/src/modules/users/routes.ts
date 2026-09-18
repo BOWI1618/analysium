@@ -17,7 +17,15 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const updated = await prisma.user.update({
       where: { id: user.id },
       data: patch,
-      select: { id: true, name: true, email: true, avatarUrl: true, timezone: true, status: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+        timezone: true,
+        status: true,
+        emailNotifications: true,
+      },
     });
     return updated;
   });

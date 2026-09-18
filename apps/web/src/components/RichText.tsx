@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { EditorContent, useEditor, type Editor, ReactRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -7,14 +7,16 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Mention from '@tiptap/extension-mention';
+import Image from '@tiptap/extension-image';
 import tippy, { type Instance } from 'tippy.js';
-import type { UserSummaryDto } from '@flowdesk/contracts';
+import type { RichNode, UserSummaryDto } from '@flowdesk/contracts';
 import { EMPTY_DOC } from '@flowdesk/contracts';
 import {
   Bold,
   Code,
   Code2,
   Heading2,
+  ImagePlus,
   Italic,
   Link2,
   List,
@@ -163,7 +165,34 @@ function buildExtensions(placeholder: string, getUsers: () => UserSummaryDto[]) 
       renderText: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
       suggestion: createMentionSuggestion(getUsers),
     }),
+    // Pictures are task files shown in place: the source is the file's own
+    // address, never inline base64 that would bloat every saved description.
+    Image.configure({ allowBase64: false, HTMLAttributes: { class: 'fd-image' } }),
   ];
+}
+
+/** Image files among those pasted or dropped; anything else is left to the editor. */
+function imageFiles(list: FileList | null | undefined): File[] {
+  return [...(list ?? [])].filter((file) => file.type.startsWith('image/'));
+}
+
+/**
+ * Rewrites picture sources in a document: a source found in `sources` is
+ * replaced, and a `blob:` picture that is not — one that never made it to the
+ * server — is dropped rather than saved as a broken image.
+ */
+export function replaceImageSources(doc: unknown, sources: Map<string, string>): unknown {
+  const walk = (node: RichNode): RichNode | null => {
+    if (node.type === 'image') {
+      const src = typeof node.attrs?.src === 'string' ? node.attrs.src : '';
+      const next = sources.get(src);
+      if (next) return { ...node, attrs: { ...node.attrs, src: next } };
+      return src.startsWith('blob:') ? null : node;
+    }
+    if (!node.content) return node;
+    return { ...node, content: node.content.map(walk).filter((n): n is RichNode => n !== null) };
+  };
+  return doc && typeof doc === 'object' ? walk(doc as RichNode) : doc;
 }
 
 export interface RichTextEditorProps {
@@ -182,6 +211,12 @@ export interface RichTextEditorProps {
   footer?: ReactNode;
   /** Cmd/Ctrl+Enter — used by the comment composer to submit. */
   onSubmit?: () => void;
+  /**
+   * Stores a pasted, dropped or picked picture and resolves to its address
+   * (null when it failed — the caller has already said why). Without it the
+   * editor takes no pictures.
+   */
+  onUploadImage?: (file: File) => Promise<string | null>;
 }
 
 export function RichTextEditor({
@@ -198,11 +233,35 @@ export function RichTextEditor({
   toolbar = true,
   footer,
   onSubmit,
+  onUploadImage,
 }: RichTextEditorProps) {
   // Suggestion callbacks capture this ref so the member list can change
   // without recreating the editor instance.
   const usersRef = useMemo(() => ({ current: users }), []);
   usersRef.current = users;
+
+  // Paste and drop handlers are fixed when the editor is built; refs keep them
+  // pointing at the current uploader and editor.
+  const uploadRef = useRef(onUploadImage);
+  uploadRef.current = onUploadImage;
+  const editorRef = useRef<Editor | null>(null);
+  const [uploading, setUploading] = useState(0);
+
+  const insertImages = async (files: File[], at?: number) => {
+    const upload = uploadRef.current;
+    if (!upload) return;
+    setUploading((n) => n + files.length);
+    for (const file of files) {
+      const src = await upload(file).catch(() => null);
+      setUploading((n) => n - 1);
+      const instance = editorRef.current;
+      if (!src || !instance || instance.isDestroyed) continue;
+      const image = { type: 'image', attrs: { src, alt: file.name } };
+      // The document may have changed while the file was uploading.
+      if (at === undefined) instance.chain().focus().insertContent(image).run();
+      else instance.chain().focus().insertContentAt(Math.min(at, instance.state.doc.content.size), image).run();
+    }
+  };
 
   const editor = useEditor({
     extensions: buildExtensions(placeholder, () => usersRef.current),
@@ -223,11 +282,28 @@ export function RichTextEditor({
         }
         return false;
       },
+      // A screenshot pasted with Ctrl+V or a picture dragged in goes straight
+      // into the text — the most common way a bug gets described.
+      handlePaste: (_view, event) => {
+        const files = imageFiles(event.clipboardData?.files);
+        if (!files.length || !uploadRef.current) return false;
+        event.preventDefault();
+        void insertImages(files);
+        return true;
+      },
+      handleDrop: (view, event, _slice, moved) => {
+        const files = imageFiles(event.dataTransfer?.files);
+        if (moved || !files.length || !uploadRef.current) return false;
+        event.preventDefault();
+        void insertImages(files, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos);
+        return true;
+      },
     },
     onUpdate: ({ editor: instance }) => onChange?.(instance.getJSON()),
     onFocus: ({ editor: instance }) => onFocus?.(instance.getJSON()),
     onBlur: ({ editor: instance }) => onBlur?.(instance.getJSON()),
   });
+  editorRef.current = editor;
 
   // Sync external changes (a realtime update, or switching issues) without
   // clobbering what the user is typing.
@@ -254,7 +330,13 @@ export function RichTextEditor({
         className,
       )}
     >
-      {toolbar && editable && <EditorToolbar editor={editor} />}
+      {toolbar && editable && (
+        <EditorToolbar
+          editor={editor}
+          uploading={uploading > 0}
+          onPickImages={onUploadImage ? (files) => void insertImages(files) : undefined}
+        />
+      )}
       <div className="px-3 py-2">
         <EditorContent editor={editor} />
       </div>
@@ -293,7 +375,16 @@ function ToolbarButton({
   );
 }
 
-function EditorToolbar({ editor }: { editor: Editor }) {
+function EditorToolbar({
+  editor,
+  uploading,
+  onPickImages,
+}: {
+  editor: Editor;
+  uploading: boolean;
+  onPickImages?: (files: File[]) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const setLink = () => {
     const previous = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('Ссылка', previous ?? 'https://');
@@ -379,7 +470,31 @@ function EditorToolbar({ editor }: { editor: Editor }) {
         <Link2 className="size-3.5" />
       </ToolbarButton>
 
-      <span className="ml-auto text-2xs text-text-subtle">Введите @ для упоминания</span>
+      {onPickImages && (
+        <>
+          <ToolbarButton label="Картинка — или вставьте её через Ctrl+V" onClick={() => fileInputRef.current?.click()}>
+            <ImagePlus className="size-3.5" />
+          </ToolbarButton>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(event) => {
+              const files = imageFiles(event.target.files);
+              if (files.length) onPickImages(files);
+              event.target.value = '';
+            }}
+          />
+        </>
+      )}
+
+      <span className="ml-auto text-2xs text-text-subtle">
+        {uploading ? 'Загружаем картинку…' : 'Введите @ для упоминания'}
+      </span>
     </div>
   );
 }

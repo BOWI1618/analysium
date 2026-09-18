@@ -252,7 +252,7 @@ export function GanttChart({
           className="fd-eyebrow sticky top-0 z-20 flex shrink-0 items-end border-b-2 border-border-strong bg-surface-sunken px-3 pb-1"
           style={{ height: 52 }}
         >
-          Декомпозиция
+          Задачи
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden" id="gantt-tree">

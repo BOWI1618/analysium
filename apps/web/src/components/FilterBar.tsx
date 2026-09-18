@@ -104,7 +104,7 @@ export function FilterBar({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b-2 border-border-strong bg-surface px-3 py-2">
+    <div className="@container flex flex-wrap items-center gap-1.5 border-b-2 border-border-strong bg-surface px-3 py-2">
       {/* Search */}
       <div className="relative min-w-40 flex-1 sm:max-w-64">
         <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-text-subtle" />
@@ -133,15 +133,17 @@ export function FilterBar({
         )}
       </div>
 
-      {/* On a phone the facet row costs three lines of vertical space, so it
-          collapses behind one button; the active-filter count stays visible
-          on the button itself. */}
+      {/* Where the bar is too narrow for one row of facets — a phone, or a
+          laptop window at half the screen — they would wrap into three lines
+          and push the board down, so they collapse behind one button; the
+          active-filter count stays visible on the button itself. Measured on
+          the bar, not the window, because the sidebar takes its share. */}
       <button
         type="button"
         onClick={() => setFacetsOpen((open) => !open)}
         aria-expanded={facetsOpen}
         className={clsx(
-          'inline-flex h-7 items-center gap-1.5 border-2 px-2 text-xs font-bold sm:hidden',
+          'inline-flex h-7 items-center gap-1.5 border-2 px-2 text-xs font-bold @4xl:hidden',
           count
             ? 'border-accent-border bg-accent-subtle text-accent'
             : 'border-border-strong text-text-muted hover:bg-surface-hover hover:text-text hover:shadow-xs',
@@ -152,7 +154,7 @@ export function FilterBar({
         {count ? <span className="fd-num">{count}</span> : null}
       </button>
 
-      <div className={clsx('flex-wrap items-center gap-1.5 sm:flex', facetsOpen ? 'flex w-full' : 'hidden')}>
+      <div className={clsx('flex-wrap items-center gap-1.5 @4xl:flex', facetsOpen ? 'flex w-full' : 'hidden')}>
         {/* Facets */}
         {statuses.length > 0 && (
           <MultiSelect

@@ -149,6 +149,16 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   const can = (permission: Permission) => issue.permissions.includes(permission);
   const canEdit = can(Permission.ISSUE_UPDATE);
   const canComment = can(Permission.COMMENT_CREATE);
+  const canUpload = can(Permission.ATTACHMENT_UPLOAD);
+
+  // A picture in the text is a task file shown in place, so it lands in «Файлы» too.
+  const uploadImage = async (file: File) => {
+    try {
+      return (await uploadAttachment.mutateAsync(file)).url;
+    } catch {
+      return null; // the mutation's onError already said why
+    }
+  };
 
   const patch = (values: Parameters<typeof updateIssue.mutate>[0]) => updateIssue.mutate(values);
 
@@ -343,6 +353,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
               toolbar={canEdit}
               placeholder={canEdit ? 'Добавьте описание…' : 'Описания нет'}
               minHeight="4rem"
+              onUploadImage={canEdit && canUpload ? uploadImage : undefined}
               onFocus={() => {
                 descriptionBaseRef.current = issue.description;
               }}
@@ -551,6 +562,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                 members={members}
                 canComment={canComment}
                 currentUser={currentUser}
+                onUploadImage={canUpload ? uploadImage : undefined}
               />
             ) : activityLoading ? (
               <SkeletonText lines={5} />
@@ -711,7 +723,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                   onChange={(event) => patch({ sprintId: event.target.value || null })}
                   className="h-7 w-full border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
                 >
-                  <option value="">Бэклог</option>
+                  <option value="">Без спринта</option>
                   {sprints.map((sprint) => (
                     <option key={sprint.id} value={sprint.id}>
                       {sprint.name}

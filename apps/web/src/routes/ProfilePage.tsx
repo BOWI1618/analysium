@@ -87,7 +87,7 @@ export function ProfilePage() {
 
                 <dl className="flex gap-2">
                   {[
-                    ['В работе', data.stats.assigned],
+                    ['Открыто', data.stats.assigned],
                     ['Создано', data.stats.created],
                     ['Завершено', data.stats.completed],
                   ].map(([label, value]) => (

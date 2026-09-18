@@ -2,7 +2,7 @@
   "name": "flowdesk",
   "version": "1.0.0",
   "private": true,
-  "description": "FlowDesk — modern project & issue tracking for product teams",
+  "description": "Analysium — modern project & issue tracking for product teams",
   "workspaces": [
     "packages/*",
     "apps/*"

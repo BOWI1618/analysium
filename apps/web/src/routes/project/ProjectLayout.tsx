@@ -58,7 +58,7 @@ export function ProjectLayout() {
     { to: `${base}/board`, label: 'Доска', icon: <Columns3 className="size-3.5" /> },
     { to: `${base}/list`, label: 'Список', icon: <LayoutList className="size-3.5" /> },
     ...(project.projectType === 'SCRUM'
-      ? [{ to: `${base}/backlog`, label: 'Бэклог', icon: <ListTodo className="size-3.5" /> }]
+      ? [{ to: `${base}/backlog`, label: 'Спринты', icon: <ListTodo className="size-3.5" /> }]
       : []),
     { to: `${base}/gantt`, label: 'Гант', icon: <GanttChartSquare className="size-3.5" /> },
     { to: `${base}/calendar`, label: 'Календарь', icon: <CalendarDays className="size-3.5" /> },

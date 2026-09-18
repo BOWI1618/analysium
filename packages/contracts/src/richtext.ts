@@ -153,6 +153,13 @@ export function collectMentions(doc: unknown): string[] {
   return [...ids];
 }
 
+/** No text and no picture: a comment that is just a screenshot is not empty. */
 export function isDocEmpty(doc: unknown): boolean {
-  return docToText(doc).length === 0;
+  return docToText(doc).length === 0 && !hasImage(doc as RichNode | undefined);
+}
+
+function hasImage(node: RichNode | undefined): boolean {
+  if (!node || typeof node !== 'object') return false;
+  if (node.type === 'image' && typeof node.attrs?.src === 'string' && node.attrs.src) return true;
+  return Array.isArray(node.content) && node.content.some(hasImage);
 }

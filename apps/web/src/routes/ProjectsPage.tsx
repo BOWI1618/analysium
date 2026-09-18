@@ -180,7 +180,7 @@ export function ProjectsPage() {
 
                       <div className="mt-2 flex items-center gap-2">
                         <span className="fd-num truncate text-2xs whitespace-nowrap text-text-subtle">
-                          {open} в работе · {done} готово
+                          {open} открыто · {done} готово
                         </span>
                         <span className="ml-auto flex shrink-0 items-center gap-1.5">
                           {project.lead && <Avatar user={project.lead} size="sm" />}

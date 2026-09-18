@@ -61,11 +61,11 @@ export function HomePage() {
   const visibleProjects = (favorites.length > 0 ? favorites : (projects ?? [])).slice(0, 6);
 
   const greeting = getGreeting();
-  const firstName = user?.name.split(' ')[0] ?? 'there';
+  const firstName = user?.name.split(' ')[0] ?? '';
 
   return (
     <>
-      <Topbar breadcrumbs={[{ label: workspace?.name ?? 'Home' }]} />
+      <Topbar breadcrumbs={[{ label: workspace?.name ?? 'Главная' }]} />
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
@@ -99,8 +99,8 @@ export function HomePage() {
               tone="ink"
             />
             <StatPlate
-              to="/my-work?isOverdue=true"
-              eyebrow="срочно"
+              to="/my-work?tab=overdue"
+              eyebrow="горит"
               label="Просрочено"
               value={summary?.overdue}
               icon={<TriangleAlert className="size-5" />}
@@ -108,15 +108,15 @@ export function HomePage() {
               className="lg:translate-y-4"
             />
             <StatPlate
-              to="/my-work"
-              eyebrow="дедлайны"
+              to="/my-work?tab=upcoming"
+              eyebrow="сроки"
               label="Срок на неделе"
               value={summary?.upcoming}
               icon={<Clock className="size-5" />}
               tone="marker"
             />
             <StatPlate
-              to="/my-work"
+              to="/my-work?tab=done"
               eyebrow="эта неделя"
               label="Сделано за неделю"
               value={summary?.completedThisWeek}

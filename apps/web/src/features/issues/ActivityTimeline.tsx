@@ -55,11 +55,11 @@ function describe(event: ActivityDto, lookups: Lookups): string | null {
     case 'DUE_DATE_CHANGED':
       return event.toValue ? `установил(а) срок ${shortDate(event.toValue)}` : 'убрал(а) срок';
     case 'STORY_POINTS_CHANGED':
-      return event.toValue ? `оценил(а) в ${event.toValue} SP` : 'убрал(а) оценку';
+      return event.toValue ? `поставил(а) оценку ${event.toValue}` : 'убрал(а) оценку';
     case 'EPIC_CHANGED':
       return event.toValue ? 'перенёс(ла) задачу в эпик' : 'убрал(а) задачу из эпика';
     case 'SPRINT_CHANGED':
-      return event.toValue ? 'перенёс(ла) задачу в спринт' : 'вернул(а) задачу в бэклог';
+      return event.toValue ? 'перенёс(ла) задачу в спринт' : 'убрал(а) задачу из спринта';
     case 'PARENT_CHANGED':
       return event.toValue ? 'сменил(а) родительскую задачу' : 'отвязал(а) от родительской задачи';
     case 'SUBTASK_CREATED':

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CreateIssueRequest, IssuePriority, IssueType } from '@flowdesk/contracts';
+import { useQueryClient } from '@tanstack/react-query';
+import type { AttachmentDto, CreateIssueRequest, IssuePriority, IssueType } from '@flowdesk/contracts';
 import { EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
 import { ChevronDown, CornerDownLeft } from 'lucide-react';
+import { api } from '~/lib/api';
+import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useToast } from '~/app/toast';
@@ -21,7 +24,7 @@ import { Input } from '~/ui/Input';
 import { Checkbox } from '~/ui/Input';
 import { Kbd } from '~/ui/Tooltip';
 import { Avatar } from '~/ui/Avatar';
-import { RichTextEditor } from './RichText';
+import { RichTextEditor, replaceImageSources } from './RichText';
 import { LabelPicker, PriorityPicker, StatusPicker, TypePicker, UserPicker, DateField } from './Pickers';
 import { IssueTypeIcon, LabelChip, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 
@@ -71,7 +74,49 @@ export function CreateIssueDialog() {
   const epics = useMemo(() => epicPages?.pages.flatMap((p) => p.items) ?? [], [epicPages]);
 
   const createIssue = useCreateIssue();
+  const queryClient = useQueryClient();
   const createLabel = useCreateLabel(effectiveProjectId);
+
+  // Pictures pasted before the task exists have nowhere to be stored yet: they
+  // are shown from memory and uploaded to the task the moment it is created.
+  const heldImages = useRef(new Map<string, File>());
+  const holdImage = async (file: File) => {
+    const url = URL.createObjectURL(file);
+    heldImages.current.set(url, file);
+    return url;
+  };
+  const releaseImages = () => {
+    for (const url of heldImages.current.keys()) URL.revokeObjectURL(url);
+    heldImages.current.clear();
+  };
+
+  /** Uploads the held pictures still in the text and points the description at them. */
+  const attachHeldImages = async (issueId: string, doc: unknown) => {
+    const text = JSON.stringify(doc);
+    const used = [...heldImages.current].filter(([url]) => text.includes(url));
+    if (used.length === 0) return;
+    const uploaded = new Map<string, string>();
+    for (const [url, file] of used) {
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        uploaded.set(url, (await api.upload<AttachmentDto>(`/issues/${issueId}/attachments`, form)).url);
+      } catch {
+        /* reported below, together with the rest */
+      }
+    }
+    if (uploaded.size > 0) {
+      await api.patch(`/issues/${issueId}`, { description: replaceImageSources(doc, uploaded) });
+      void queryClient.invalidateQueries({ queryKey: qk.issue(issueId) });
+    }
+    if (uploaded.size < used.length) {
+      toast.toast({
+        tone: 'error',
+        title: 'Не все картинки загрузились',
+        description: 'Задача создана — добавьте недостающие картинки в неё ещё раз.',
+      });
+    }
+  };
   const createProjectlessLabel = useCreateProjectlessLabel(workspace?.id ?? '');
 
   // Latest values without making them effect dependencies — a background
@@ -98,6 +143,7 @@ export function CreateIssueDialog() {
     setEpicId(seed?.epicId ?? null);
     setTitle('');
     setDescription(EMPTY_DOC);
+    releaseImages();
     setType(seed?.parentId ? 'SUBTASK' : 'TASK');
     setPriority('MEDIUM');
     setAssigneeId(null);
@@ -142,6 +188,9 @@ export function CreateIssueDialog() {
   const submit = async (openAfter: boolean) => {
     if (!canSubmit) return;
 
+    // Held pictures are left out of the first save — the server would keep them
+    // as broken images — and put back once they are uploaded to the new task.
+    const body = replaceImageSources(description, new Map());
     const input: CreateIssueRequest = {
       ...(effectiveProjectId ? { projectId: effectiveProjectId } : { workspaceId: workspace!.id }),
       title: title.trim(),
@@ -156,11 +205,13 @@ export function CreateIssueDialog() {
       ...(dueDate ? { dueDate, dueHasTime } : {}),
       // A start comes only from where the form was opened (an hour slot in the calendar).
       ...(defaults?.startDate ? { startDate: defaults.startDate, startHasTime: defaults.startHasTime ?? false } : {}),
-      ...(isDocEmpty(description) ? {} : { description: description as Record<string, unknown> }),
+      ...(isDocEmpty(body) ? {} : { description: body as Record<string, unknown> }),
     };
 
     try {
       const issue = await createIssue.mutateAsync(input);
+      await attachHeldImages(issue.id, description).catch(() => undefined);
+      releaseImages();
       // «Создать и открыть» opens the task itself; a toast offering to open it
       // would only cover the panel.
       if (!openAfter) toast.toast({
@@ -301,6 +352,7 @@ export function CreateIssueDialog() {
           users={members}
           placeholder="Описание… (введите @, чтобы упомянуть)"
           minHeight="6rem"
+          onUploadImage={holdImage}
         />
 
         {/* Secondary fields */}
@@ -358,7 +410,7 @@ export function CreateIssueDialog() {
               aria-label="Спринт"
               className="h-7 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
             >
-              <option value="">Бэклог</option>
+              <option value="">Без спринта</option>
               {sprints
                 .filter((s) => s.status !== 'COMPLETED')
                 .map((sprint) => (

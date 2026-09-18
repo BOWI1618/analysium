@@ -126,6 +126,7 @@ export async function buildSession(userId: string): Promise<SessionDto> {
       status: true,
       timezone: true,
       lastActiveAt: true,
+      emailNotifications: true,
     },
   });
 
@@ -171,6 +172,7 @@ export async function buildSession(userId: string): Promise<SessionDto> {
       status: user.status,
       timezone: user.timezone,
       lastActiveAt: user.lastActiveAt?.toISOString() ?? null,
+      emailNotifications: user.emailNotifications,
     },
     workspaces,
     activeWorkspaceId: workspaces[0]?.id ?? null,

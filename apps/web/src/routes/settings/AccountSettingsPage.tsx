@@ -2,24 +2,35 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ApiError, api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
-import { useSession } from '~/app/session';
+import { useAuthConfig, useSession } from '~/app/session';
 import { useToast } from '~/app/toast';
 import { Topbar } from '~/components/Topbar';
 import { Marker, Masthead } from '~/ui/Masthead';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
-import { Input, Select } from '~/ui/Input';
+import { Checkbox, Input, Select } from '~/ui/Input';
 
-const TIMEZONES = [
-  'UTC',
-  'Europe/London',
-  'Europe/Berlin',
-  'Europe/Moscow',
-  'America/New_York',
-  'America/Los_Angeles',
-  'Asia/Dubai',
-  'Asia/Tokyo',
-  'Australia/Sydney',
+/** Every Russian zone first, by its city; then a few common foreign ones. */
+const TIMEZONES: { value: string; label: string }[] = [
+  { value: 'Europe/Kaliningrad', label: 'Калининград (UTC+2)' },
+  { value: 'Europe/Moscow', label: 'Москва (UTC+3)' },
+  { value: 'Europe/Samara', label: 'Самара (UTC+4)' },
+  { value: 'Asia/Yekaterinburg', label: 'Екатеринбург (UTC+5)' },
+  { value: 'Asia/Omsk', label: 'Омск (UTC+6)' },
+  { value: 'Asia/Novosibirsk', label: 'Новосибирск (UTC+7)' },
+  { value: 'Asia/Krasnoyarsk', label: 'Красноярск (UTC+7)' },
+  { value: 'Asia/Irkutsk', label: 'Иркутск (UTC+8)' },
+  { value: 'Asia/Yakutsk', label: 'Якутск (UTC+9)' },
+  { value: 'Asia/Vladivostok', label: 'Владивосток (UTC+10)' },
+  { value: 'Asia/Magadan', label: 'Магадан (UTC+11)' },
+  { value: 'Asia/Kamchatka', label: 'Петропавловск-Камчатский (UTC+12)' },
+  { value: 'Europe/Minsk', label: 'Минск (UTC+3)' },
+  { value: 'Asia/Almaty', label: 'Алматы (UTC+5)' },
+  { value: 'Asia/Tashkent', label: 'Ташкент (UTC+5)' },
+  { value: 'Asia/Dubai', label: 'Дубай (UTC+4)' },
+  { value: 'Europe/Berlin', label: 'Берлин (UTC+1)' },
+  { value: 'Europe/London', label: 'Лондон (UTC+0)' },
+  { value: 'UTC', label: 'UTC' },
 ];
 
 export function AccountSettingsPage() {
@@ -44,6 +55,16 @@ export function AccountSettingsPage() {
       toast.success('Профиль обновлён');
     },
     onError: (error) => toast.error(error, 'Не удалось обновить профиль'),
+  });
+
+  const { data: config } = useAuthConfig();
+  const updateNotifications = useMutation({
+    mutationFn: (emailNotifications: boolean) => api.patch('/me', { emailNotifications }),
+    onSuccess: async (_, emailNotifications) => {
+      await queryClient.invalidateQueries({ queryKey: qk.session });
+      toast.success(emailNotifications ? 'Письма включены' : 'Письма выключены');
+    },
+    onError: (error) => toast.error(error, 'Не удалось сохранить настройку'),
   });
 
   const changePassword = useMutation({
@@ -115,9 +136,13 @@ export function AccountSettingsPage() {
                 value={profile.timezone}
                 onChange={(event) => setProfile((p) => ({ ...p, timezone: (event.target as HTMLSelectElement).value }))}
               >
+                {/* A zone saved before this list existed stays selectable. */}
+                {!TIMEZONES.some((zone) => zone.value === profile.timezone) && (
+                  <option value={profile.timezone}>{profile.timezone}</option>
+                )}
                 {TIMEZONES.map((zone) => (
-                  <option key={zone} value={zone}>
-                    {zone}
+                  <option key={zone.value} value={zone.value}>
+                    {zone.label}
                   </option>
                 ))}
               </Select>
@@ -137,6 +162,23 @@ export function AccountSettingsPage() {
               >
                 Сохранить профиль
               </Button>
+            </div>
+          </section>
+
+          <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
+            <h2 className="fd-eyebrow">Уведомления</h2>
+            <div className="mt-3">
+              <Checkbox
+                checked={user.emailNotifications}
+                disabled={config?.mailEnabled === false || updateNotifications.isPending}
+                onChange={(event) => updateNotifications.mutate(event.target.checked)}
+                label="Присылать непрочитанные уведомления на почту"
+              />
+              <p className="mt-1 pl-6 text-xs text-text-subtle">
+                {config?.mailEnabled === false
+                  ? 'На этом сервере почта выключена — письма начнут приходить, когда администратор её включит.'
+                  : `Письмо на ${user.email} приходит, только если уведомление пролежало непрочитанным 10 минут. Несколько уведомлений собираются в одно письмо — не чаще раза в полчаса.`}
+              </p>
             </div>
           </section>
 

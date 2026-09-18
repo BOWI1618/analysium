@@ -1,4 +1,4 @@
-# FlowDesk — заметки для работы в проекте
+# Analysium — заметки для работы в проекте
 
 Русскоязычный таск-трекер. Монорепозиторий npm workspaces:
 `packages/contracts` (zod-схемы, DTO, права), `apps/api` (Fastify + Prisma + Postgres),

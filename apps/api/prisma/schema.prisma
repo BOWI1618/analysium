@@ -1,4 +1,4 @@
-// FlowDesk data model — PostgreSQL.
+// Analysium data model — PostgreSQL.
 //
 // Conventions:
 //  * every foreign key is declared and indexed;
@@ -55,6 +55,13 @@ model User {
   /// Hash of the one-time token issued by that password-less sign-in. It is
   /// good only for choosing the new password, never as a session.
   passwordResetTokenHash String?   @unique
+
+  /// Whether notifications left unread in the app are sent on by e-mail.
+  emailNotifications      Boolean   @default(true)
+  /// When the last notification e-mail went out — spaces them out, so a busy
+  /// hour is one letter rather than a dozen and the mailbox stays under the
+  /// provider's daily limit.
+  lastNotificationEmailAt DateTime?
 
   sessions           Session[]
   ownedWorkspaces    Workspace[]         @relation("WorkspaceOwner")
@@ -640,6 +647,8 @@ model Notification {
   issueId     String?
   commentId   String?
   readAt      DateTime?
+  /// Set once the notification went out in an e-mail digest; never mailed twice.
+  emailedAt   DateTime?
   createdAt   DateTime         @default(now())
 
   user      User      @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
@@ -649,6 +658,7 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@index([userId, createdAt])
+  @@index([readAt, emailedAt, createdAt])
   @@map("notifications")
 }
 

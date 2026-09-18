@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { LogoMark } from '~/ui/Logo';
 
 /** Split layout: form on the left, product framing on the right. */
 export function AuthLayout({
@@ -21,12 +22,10 @@ export function AuthLayout({
               className="flex size-9 items-center justify-center border-2 border-border-strong bg-accent text-accent-fg shadow-sm"
               aria-hidden="true"
             >
-              <svg viewBox="0 0 32 32" className="size-5" fill="none" stroke="currentColor" strokeWidth="3">
-                <path d="M9 9h14M9 16h9M9 23h5" strokeLinecap="square" />
-              </svg>
+              <LogoMark />
             </span>
             <span>
-              <span className="block font-display text-base font-extrabold uppercase leading-none">FlowDesk</span>
+              <span className="block font-display text-base font-extrabold uppercase leading-none">Analysium</span>
               <span className="fd-num mt-1 block text-[10px] text-text-subtle">трекер задач · v1.0</span>
             </span>
           </div>

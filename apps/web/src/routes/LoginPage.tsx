@@ -212,6 +212,9 @@ export function LoginPage() {
           error={fieldErrors.password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="••••••••"
+          // There is no self-service reset — an admin resets it — and without
+          // this line nobody who forgot a password would know whom to ask.
+          hint="Забыли пароль? Попросите администратора пространства сбросить его."
         />
 
         <Button type="submit" variant="primary" size="lg" fullWidth loading={pending}>

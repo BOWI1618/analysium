@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { differenceInCalendarDays } from 'date-fns';
 import { Plus } from 'lucide-react';
@@ -27,7 +28,7 @@ import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
 import { shortDate } from '~/lib/format';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
 
-type Tab = 'assigned' | 'created' | 'overdue' | 'upcoming' | 'recent';
+type Tab = 'assigned' | 'created' | 'overdue' | 'upcoming' | 'done' | 'recent';
 type GroupBy = 'none' | 'status' | 'project' | 'dueDate';
 
 const TABS: { value: Tab; label: string }[] = [
@@ -35,8 +36,14 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'created', label: 'Создано мной' },
   { value: 'overdue', label: 'Просрочено' },
   { value: 'upcoming', label: 'Ближайшие' },
+  { value: 'done', label: 'Сделано' },
   { value: 'recent', label: 'Недавно обновлённые' },
 ];
+
+const isTab = (value: string | null): value is Tab => TABS.some((item) => item.value === value);
+
+/** «Ближайшие» is the same week-long window as «Срок на неделе» on the home page. */
+const UPCOMING_DAYS = 7;
 
 /**
  * Filter preset per tab — the tab *is* a filter, so the URL stays honest.
@@ -53,14 +60,25 @@ function presetFor(tab: Tab): IssueFilters {
       return { reporterId: ['@me'], sort: 'created', order: 'desc' };
     case 'overdue':
       return { assigneeId: ['@me'], isOverdue: true, includeSubtasks: true, sort: 'dueDate', order: 'asc' };
-    case 'upcoming':
+    case 'upcoming': {
+      const now = new Date();
       return {
         assigneeId: ['@me'],
         includeDone: false,
         includeSubtasks: true,
-        dueAfter: new Date().toISOString(),
+        dueAfter: now.toISOString(),
+        dueBefore: new Date(now.getTime() + UPCOMING_DAYS * 86_400_000).toISOString(),
         sort: 'dueDate',
         order: 'asc',
+      };
+    }
+    case 'done':
+      return {
+        assigneeId: ['@me'],
+        statusCategory: ['COMPLETED'],
+        includeSubtasks: true,
+        sort: 'updated',
+        order: 'desc',
       };
     case 'recent':
       return { sort: 'updated', order: 'desc' };
@@ -77,7 +95,21 @@ export function MyWorkPage() {
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
   const workspaceId = workspace?.id ?? '';
 
-  const [tab, setTab] = useState<Tab>('assigned');
+  // The tab lives in the URL like the filters, so a reload keeps it and the
+  // home page can link straight to «Просрочено» or «Ближайшие».
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: Tab = isTab(tabParam) ? tabParam : 'assigned';
+  const setTab = (next: Tab) =>
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        if (next === 'assigned') params.delete('tab');
+        else params.set('tab', next);
+        return params;
+      },
+      { replace: true },
+    );
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [extraFilters, setExtraFilters] = useFilterState();
 
@@ -138,8 +170,8 @@ export function MyWorkPage() {
         members={members?.map((m) => m.user)}
         currentUserId={user?.id ?? ''}
         // Across projects there are no shared statuses, so work is picked by
-        // its state; an overdue task is open by definition.
-        stateFacet={tab !== 'overdue'}
+        // its state; an overdue task is open and a done one closed by definition.
+        stateFacet={tab !== 'overdue' && tab !== 'done'}
         hideDoneOption={false}
         trailing={
           <div className="flex items-center gap-2">
@@ -317,6 +349,8 @@ function emptyTitle(tab: Tab): string {
       return 'Просроченных задач нет';
     case 'upcoming':
       return 'Ближайших сроков нет';
+    case 'done':
+      return 'Завершённых задач пока нет';
     case 'recent':
       return 'Недавней активности нет';
   }
@@ -331,7 +365,9 @@ function emptyDescription(tab: Tab): string {
     case 'overdue':
       return 'Со сроками всё в порядке.';
     case 'upcoming':
-      return 'В ближайшее время ничего не горит.';
+      return 'На неделю вперёд ничего не горит.';
+    case 'done':
+      return 'Здесь соберутся задачи, которые вы закрыли, — свежие сверху.';
     case 'recent':
       return 'Здесь появятся задачи, которые обновляет команда.';
   }

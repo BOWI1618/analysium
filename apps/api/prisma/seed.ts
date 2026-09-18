@@ -217,7 +217,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log('Заполняем демо-данные FlowDesk…');
+  console.log('Заполняем демо-данные Analysium…');
 
   const existing = await prisma.workspace.findUnique({ where: { slug: DEMO_SLUG }, select: { id: true } });
   if (existing) {

@@ -20,6 +20,7 @@ import {
   StatusPill,
 } from './IssueMeta';
 import { PriorityPicker, StatusPicker, UserPicker } from './Pickers';
+import { isClosedStatus } from './DoneToggle';
 
 export type ListColumn =
   | 'status'
@@ -322,7 +323,12 @@ export const IssueRow = memo(function IssueRow({
 
       {show('dueDate') && (
         <span style={sized('dueDate')} className="hidden w-28 shrink-0 justify-end overflow-hidden sm:flex">
-          <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} />
+          <DueDateChip
+            value={issue.dueDate}
+            hasTime={issue.dueHasTime}
+            carriedDays={issue.carriedOverDays}
+            done={isClosedStatus(issue.status)}
+          />
         </span>
       )}
 

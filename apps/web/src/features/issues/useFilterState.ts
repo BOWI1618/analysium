@@ -16,6 +16,9 @@ const ARRAY_KEYS = new Set([
 ]);
 
 const BOOL_KEYS = new Set(['includeDone', 'includeSubtasks', 'isOverdue', 'noSprint']);
+const SCALAR_KEYS = new Set(['sort', 'order', 'search']);
+
+const isFilterKey = (key: string) => ARRAY_KEYS.has(key) || BOOL_KEYS.has(key) || SCALAR_KEYS.has(key);
 
 /**
  * Filter state lives in the URL, not in a store.
@@ -36,7 +39,7 @@ export function useFilterState(defaults: IssueFilters = {}): [IssueFilters, (nex
         (result as Record<string, unknown>)[key] = value.split(',').filter(Boolean);
       } else if (BOOL_KEYS.has(key)) {
         (result as Record<string, unknown>)[key] = value === 'true';
-      } else if (key === 'sort' || key === 'order' || key === 'search') {
+      } else if (SCALAR_KEYS.has(key)) {
         (result as Record<string, unknown>)[key] = value;
       }
     }
@@ -49,17 +52,27 @@ export function useFilterState(defaults: IssueFilters = {}): [IssueFilters, (nex
 
   const setFilters = useCallback(
     (next: IssueFilters) => {
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(next)) {
-        if (value === undefined || value === null || value === '') continue;
-        if (Array.isArray(value)) {
-          if (value.length) params.set(key, value.join(','));
-        } else {
-          params.set(key, String(value));
-        }
-      }
-      // Replace rather than push: typing in the filter box must not fill history.
-      setSearchParams(params, { replace: true });
+      // Parameters the filters do not own (a page's tab, say) survive a
+      // filter change; only the filter keys are rewritten.
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams();
+          for (const [key, value] of current.entries()) {
+            if (!isFilterKey(key)) params.set(key, value);
+          }
+          for (const [key, value] of Object.entries(next)) {
+            if (value === undefined || value === null || value === '') continue;
+            if (Array.isArray(value)) {
+              if (value.length) params.set(key, value.join(','));
+            } else {
+              params.set(key, String(value));
+            }
+          }
+          return params;
+        },
+        // Replace rather than push: typing in the filter box must not fill history.
+        { replace: true },
+      );
     },
     [setSearchParams],
   );

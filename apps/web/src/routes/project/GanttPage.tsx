@@ -250,6 +250,12 @@ export function GanttPage() {
       {/* Legend */}
       {range && (
         <div className="fd-eyebrow flex items-center gap-4 overflow-x-auto border-t-2 border-border-strong bg-surface px-3 py-2 whitespace-nowrap no-scrollbar">
+          {/* The today rule shares its red with overdue bars; without a key
+              entry it reads as one more overdue marker. */}
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-[3px] bg-danger" />
+            Сегодня
+          </span>
           <span className="flex items-center gap-1.5">
             <span className="size-2.5 border-2 border-border-strong bg-accent" />
             Критический путь

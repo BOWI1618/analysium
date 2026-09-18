@@ -63,7 +63,7 @@ export function DashboardPage() {
             {/* Totals */}
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard
-                label="В работе"
+                label="Открыто"
                 value={data.totals.open}
                 total={data.totals.total}
                 icon={<CircleDot className="size-4" />}

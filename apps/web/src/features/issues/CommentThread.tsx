@@ -18,11 +18,14 @@ export function CommentThread({
   members,
   canComment,
   currentUser,
+  onUploadImage,
 }: {
   issueId: string;
   members: UserSummaryDto[];
   canComment: boolean;
   currentUser: UserSummaryDto;
+  /** Stores a picture put into a comment; absent when the person may not upload. */
+  onUploadImage?: (file: File) => Promise<string | null>;
 }) {
   const { data: comments, isLoading, error } = useComments(issueId);
   const createComment = useCreateComment(issueId);
@@ -51,7 +54,13 @@ export function CommentThread({
       ) : comments && comments.length > 0 ? (
         <ul aria-label="Комментарии" className="space-y-4">
           {comments.map((comment) => (
-            <CommentItem key={comment.id} comment={comment} issueId={issueId} members={members} />
+            <CommentItem
+              key={comment.id}
+              comment={comment}
+              issueId={issueId}
+              members={members}
+              onUploadImage={onUploadImage}
+            />
           ))}
         </ul>
       ) : (
@@ -74,6 +83,7 @@ export function CommentThread({
               placeholder={`Оставьте комментарий… (@ — упоминание, ${comboText(SHORTCUTS.submit)} — отправить)`}
               minHeight="3.5rem"
               onSubmit={() => void submit()}
+              onUploadImage={onUploadImage}
               footer={
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1 text-2xs text-text-subtle">
@@ -102,10 +112,12 @@ function CommentItem({
   comment,
   issueId,
   members,
+  onUploadImage,
 }: {
   comment: CommentDto;
   issueId: string;
   members: UserSummaryDto[];
+  onUploadImage?: (file: File) => Promise<string | null>;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<unknown>(comment.body);
@@ -170,6 +182,7 @@ function CommentItem({
               autoFocus
               minHeight="3rem"
               onSubmit={() => void save()}
+              onUploadImage={onUploadImage}
               footer={
                 <div className="flex justify-end gap-2">
                   <Button

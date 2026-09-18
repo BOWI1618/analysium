@@ -5,7 +5,7 @@
  */
 import { createWriteStream, createReadStream } from 'node:fs';
 import { mkdir, unlink, stat } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
@@ -70,7 +70,10 @@ class LocalDiskStorage implements StorageAdapter {
 
   private pathFor(key: string): string {
     const full = resolve(this.root, key);
-    if (full !== this.root && !full.startsWith(this.root + '/')) {
+    // Compared through `relative`, not a '/' prefix: on Windows the resolved
+    // path uses backslashes, and the prefix test rejected every upload.
+    const inside = relative(this.root, full);
+    if (inside.startsWith('..') || isAbsolute(inside)) {
       throw new Error('Path traversal detected in storage key');
     }
     return full;

@@ -44,11 +44,11 @@ export async function sendVerificationEmail(user: { id: string; email: string; n
 
   await sendMail({
     to: user.email,
-    subject: 'Подтвердите почту — FlowDesk',
+    subject: 'Подтвердите почту — Analysium',
     text: [
       `${user.name}, здравствуйте.`,
       '',
-      'Чтобы закончить регистрацию в FlowDesk, откройте ссылку:',
+      'Чтобы закончить регистрацию в Analysium, откройте ссылку:',
       link,
       '',
       `Ссылка действует ${env.EMAIL_TOKEN_TTL_HOURS} ч.`,
@@ -87,9 +87,9 @@ export async function sendInviteEmail(args: {
   const url = `${origin}/accept-invite?token=${token}`;
   const emailSent = await sendMail({
     to: args.user.email,
-    subject: `Приглашение в «${args.workspaceName}» — FlowDesk`,
+    subject: `Приглашение в «${args.workspaceName}» — Analysium`,
     text: [
-      `${args.invitedByName} приглашает вас в пространство «${args.workspaceName}» в FlowDesk.`,
+      `${args.invitedByName} приглашает вас в пространство «${args.workspaceName}» в Analysium.`,
       '',
       'Чтобы принять приглашение и задать пароль, откройте ссылку:',
       url,

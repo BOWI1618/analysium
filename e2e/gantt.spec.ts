@@ -66,7 +66,7 @@ test.describe('диаграмма Ганта', () => {
 
     await test.step('задачи со сроками появляются на шкале', async () => {
       await page.goto(`/projects/${projectId}/gantt`);
-      await expect(page.getByText('Декомпозиция')).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText('Задачи', { exact: true })).toBeVisible({ timeout: 20_000 });
 
       // `data-bar-id` marks a drawn bar; the same title also appears in the
       // breakdown tree, so the attribute is what distinguishes them.

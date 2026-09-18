@@ -423,10 +423,10 @@ test.describe('подзадачи и спринты', () => {
 
     await test.step('спринты включаются в настройках проекта', async () => {
       await page.goto(`/projects/${projectId}/settings`);
-      await expect(page.getByRole('link', { name: 'Бэклог' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Спринты' })).toHaveCount(0);
       await page.getByLabel('Работать спринтами').check();
       await page.getByRole('button', { name: 'Сохранить' }).click();
-      await expect(page.getByRole('link', { name: 'Бэклог' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('link', { name: 'Спринты' })).toBeVisible({ timeout: 15_000 });
     });
   });
 });

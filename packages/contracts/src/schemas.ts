@@ -126,6 +126,7 @@ export const updateProfileSchema = z.object({
     .nullable()
     .optional(),
   timezone: z.string().max(60).optional(),
+  emailNotifications: z.boolean().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 

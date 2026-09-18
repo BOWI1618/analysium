@@ -37,6 +37,26 @@ export interface Mail {
 }
 
 /**
+ * Messages sent today, counted per calendar day.
+ *
+ * A mailbox provider blocks an account that sends past its daily limit (Yandex:
+ * 300 over SMTP for a personal box) and treats it as a spammer for a while
+ * after. Stopping a little short of the limit keeps sign-up and notifications
+ * working the next day instead of locking the mailbox. In memory on purpose: a
+ * restart forgetting the count costs at most one day's headroom.
+ */
+const sentToday = { day: '', count: 0 };
+
+function underDailyLimit(): boolean {
+  const day = new Date().toISOString().slice(0, 10);
+  if (sentToday.day !== day) {
+    sentToday.day = day;
+    sentToday.count = 0;
+  }
+  return sentToday.count < env.MAIL_DAILY_LIMIT;
+}
+
+/**
  * Sends a message, or logs it when mail is switched off.
  *
  * Never throws: a registration must not fail because the mail server is
@@ -49,6 +69,11 @@ export async function sendMail(mail: Mail): Promise<boolean> {
     return false;
   }
 
+  if (!underDailyLimit()) {
+    log.warn({ to: mail.to, subject: mail.subject, limit: env.MAIL_DAILY_LIMIT }, 'daily mail limit reached — not sent');
+    return false;
+  }
+
   try {
     await transport().sendMail({
       from: env.MAIL_FROM,
@@ -56,6 +81,7 @@ export async function sendMail(mail: Mail): Promise<boolean> {
       subject: mail.subject,
       text: mail.text,
     });
+    sentToday.count += 1;
     log.info({ to: mail.to, subject: mail.subject }, 'mail sent');
     return true;
   } catch (error) {

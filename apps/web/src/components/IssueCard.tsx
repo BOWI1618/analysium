@@ -125,7 +125,7 @@ export const IssueCard = memo(function IssueCard({
 
       {/* Footer */}
       <div className="mt-3 flex items-center gap-2">
-        {fields.dueDate && issue.dueDate && <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} />}
+        {fields.dueDate && issue.dueDate && <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} done={done} />}
 
         {hasFooterMeta && (
           <span className="fd-num flex items-center gap-2 text-2xs text-text-subtle">

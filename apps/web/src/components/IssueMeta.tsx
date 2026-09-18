@@ -204,16 +204,20 @@ export function DueDateChip({
   value,
   hasTime = false,
   carriedDays = 0,
+  done = false,
   className,
 }: {
   value: string | null;
   hasTime?: boolean;
   /** Days the task was carried over to the next day unfinished. */
   carriedDays?: number;
+  /** A closed task is never overdue — its date is history, not an alarm. */
+  done?: boolean;
   className?: string;
 }) {
-  const due = dueDateLabel(value, hasTime);
-  if (!due) return null;
+  const label = dueDateLabel(value, hasTime);
+  if (!label) return null;
+  const due = done ? { ...label, tone: 'normal' as const, overdueDays: 0 } : label;
   const carried =
     carriedDays > 0 ? ` · переносилась на следующий день ${pluralize(carriedDays, ['раз', 'раза', 'раз'])}` : '';
 

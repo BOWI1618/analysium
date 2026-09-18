@@ -49,7 +49,13 @@ const schema = z.object({
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
-  MAIL_FROM: z.string().default('FlowDesk <no-reply@localhost>'),
+  MAIL_FROM: z.string().default('Analysium <no-reply@localhost>'),
+  /**
+   * Messages per day the server allows itself. Kept under the mailbox's own
+   * limit — Yandex allows 300 a day over SMTP for a personal box, and one
+   * sent past it gets the mailbox blocked as a spammer.
+   */
+  MAIL_DAILY_LIMIT: z.coerce.number().int().min(1).default(250),
 
   /** Hours a verification link stays valid. */
   EMAIL_TOKEN_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(48),
@@ -117,6 +123,9 @@ export const trustProxy: boolean | number | string[] = (() => {
 const configuredOrigins = env.WEB_ORIGIN.split(',')
   .map((o) => o.trim())
   .filter(Boolean);
+
+/** Where the web app lives — the base of every link put into an e-mail. */
+export const appOrigin = configuredOrigins[0] ?? '';
 
 export const allowedOrigins: (string | RegExp)[] = isProd
   ? configuredOrigins

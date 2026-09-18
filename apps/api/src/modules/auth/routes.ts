@@ -34,7 +34,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // What the sign-in screens need to know before anyone is signed in: whether
   // to offer "create an account" at all, or only joining with a code.
-  app.get('/auth/config', async () => ({ registrationOpen: env.ALLOW_PUBLIC_REGISTRATION }));
+  app.get('/auth/config', async () => ({
+    registrationOpen: env.ALLOW_PUBLIC_REGISTRATION,
+    // Lets the settings page say plainly that letters are off on this server,
+    // instead of offering a switch that does nothing.
+    mailEnabled: env.MAIL_ENABLED,
+  }));
 
   app.post('/auth/register', strictLimit, async (req, reply) => {
     if (!env.ALLOW_PUBLIC_REGISTRATION) {

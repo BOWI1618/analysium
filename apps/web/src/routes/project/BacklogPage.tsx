@@ -111,10 +111,11 @@ export function BacklogPage() {
               />
             ))}
 
-            {/* Backlog */}
+            {/* Backlog — named «Без спринта», because «Бэклог» is also the
+                default name of a status and the two read as one thing. */}
             <section className="border-b border-border">
               <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface-sunken px-3 py-2">
-                <h2 className="text-sm font-semibold">Бэклог</h2>
+                <h2 className="text-sm font-semibold">Без спринта</h2>
                 <span className="fd-num text-2xs text-text-subtle">{backlogIssues.length}</span>
                 {canEdit && (
                   <Button
@@ -134,7 +135,7 @@ export function BacklogPage() {
               ) : backlogIssues.length === 0 ? (
                 <EmptyState
                   compact
-                  title="Бэклог пуст"
+                  title="Все задачи в спринтах"
 description="Всё уже запланировано — или задач ещё нет."
                 />
               ) : (
@@ -215,7 +216,7 @@ description="Всё уже запланировано — или задач ещ
           setDeleting(null);
         }}
         title={`Удалить спринт «${deleting?.name}»?`}
-message="Задачи спринта вернутся в бэклог. Ничего не потеряется."
+message="Задачи спринта перейдут в «Без спринта». Ничего не потеряется."
         confirmLabel="Удалить спринт"
         danger
       />
@@ -366,7 +367,7 @@ function SprintSection({
             <EmptyState
               compact
               title="В спринте нет задач"
-description="Перетащите задачи из бэклога или добавьте новую."
+description="Перетащите задачи из «Без спринта» или добавьте новую."
             />
           ) : (
             issues.map((issue) => (
@@ -522,7 +523,7 @@ function CompleteSprintDialog({
             value={target}
             onChange={(event) => setTarget((event.target as HTMLSelectElement).value)}
           >
-            <option value="backlog">Бэклог</option>
+            <option value="backlog">Без спринта</option>
             {others.map((other) => (
               <option key={other.id} value={other.id}>
                 {other.name}

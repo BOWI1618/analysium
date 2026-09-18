@@ -36,7 +36,7 @@ function FullScreenLoader() {
   return (
     <div className="flex h-dvh items-center justify-center bg-bg">
       <Spinner className="size-6 text-accent" />
-      <span className="sr-only">Loading</span>
+      <span className="sr-only">Загрузка</span>
     </div>
   );
 }

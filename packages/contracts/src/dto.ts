@@ -30,6 +30,12 @@ export interface UserDto {
 
 export type UserSummaryDto = Pick<UserDto, 'id' | 'name' | 'avatarUrl' | 'email'>;
 
+/** The signed-in person, with the settings only they can see. */
+export interface SessionUserDto extends UserDto {
+  /** Notifications left unread in the app are sent on by e-mail. */
+  emailNotifications: boolean;
+}
+
 export interface WorkspaceDto {
   id: string;
   name: string;
@@ -360,7 +366,7 @@ export interface Paginated<T> {
 }
 
 export interface SessionDto {
-  user: UserDto;
+  user: SessionUserDto;
   workspaces: WorkspaceDto[];
   activeWorkspaceId: string | null;
 }

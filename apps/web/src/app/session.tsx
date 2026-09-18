@@ -8,8 +8,8 @@ import type {
   PasswordResetRequired,
   RegisterInput,
   SessionDto,
+  SessionUserDto,
   SetNewPasswordInput,
-  UserDto,
   WorkspaceDto,
 } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
@@ -17,7 +17,7 @@ import { qk } from '~/lib/queryKeys';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 
 interface SessionContextValue {
-  user: UserDto | null;
+  user: SessionUserDto | null;
   workspaces: WorkspaceDto[];
   workspace: WorkspaceDto | null;
   isLoading: boolean;
@@ -165,7 +165,7 @@ export function useSession(): SessionContextValue {
 }
 
 /** Convenience for screens that are only reachable when signed in. */
-export function useCurrentUser(): UserDto {
+export function useCurrentUser(): SessionUserDto {
   const { user } = useSession();
   if (!user) throw new Error('useCurrentUser called outside an authenticated route');
   return user;
@@ -185,7 +185,7 @@ export function useWorkspace(): WorkspaceDto {
 export function useAuthConfig() {
   return useQuery({
     queryKey: ['auth-config'],
-    queryFn: () => api.get<{ registrationOpen: boolean }>('/auth/config'),
+    queryFn: () => api.get<{ registrationOpen: boolean; mailEnabled: boolean }>('/auth/config'),
     staleTime: 5 * 60_000,
   });
 }
