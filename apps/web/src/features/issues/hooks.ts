@@ -149,6 +149,26 @@ export function useTransferIssue(issueId: string) {
   });
 }
 
+/** Follow a task, or stop hearing about one you take part in. */
+export function useWatchIssue(issueId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (watching: boolean) => api.post<{ watching: boolean }>(`/issues/${issueId}/watch`, { watching }),
+    onSuccess: ({ watching }) => {
+      queryClient.setQueryData<IssueDetailDto>(qk.issue(issueId), (issue) => (issue ? { ...issue, watching } : issue));
+      toast.success(
+        watching ? 'Вы следите за задачей' : 'Вы больше не следите за задачей',
+        watching
+          ? 'Придут уведомления о статусе, сроке и комментариях.'
+          : 'Упоминания и назначения на вас по-прежнему придут.',
+      );
+    },
+    onError: (error) => toast.error(error, 'Не удалось изменить подписку'),
+  });
+}
+
 /** «Дублировать задачу»: a copy in the same project; opens once it exists. */
 export function useDuplicateIssue(issueId: string) {
   const queryClient = useQueryClient();

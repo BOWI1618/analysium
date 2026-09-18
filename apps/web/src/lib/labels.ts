@@ -5,7 +5,14 @@
  * only their presentation is localised. Keeping the maps here means a label is
  * written once and every screen — pickers, settings, toasts — agrees.
  */
-import type { ProjectRole, StatusCategory, WorkspaceRole } from '@flowdesk/contracts';
+import type { IssueRecurrence, ProjectRole, StatusCategory, WorkspaceRole } from '@flowdesk/contracts';
+
+export const RECURRENCE_LABEL: Record<IssueRecurrence, string> = {
+  DAILY: 'каждый день',
+  WEEKDAYS: 'по будням',
+  WEEKLY: 'каждую неделю',
+  MONTHLY: 'каждый месяц',
+};
 
 export const ROLE_LABEL: Record<WorkspaceRole, string> = {
   OWNER: 'владелец',

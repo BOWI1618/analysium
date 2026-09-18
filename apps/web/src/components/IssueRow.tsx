@@ -1,7 +1,8 @@
 import { createContext, memo, useCallback, useContext } from 'react';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import clsx from 'clsx';
-import { ChevronRight, Columns3, CornerDownRight, MessageSquare, UserPen } from 'lucide-react';
+import { ChevronRight, Columns3, CornerDownRight, MessageSquare, Repeat, UserPen } from 'lucide-react';
+import { RECURRENCE_LABEL } from '~/lib/labels';
 import type { IssueSummaryDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useIssue, usePatchIssue } from '~/features/issues/hooks';
@@ -322,7 +323,12 @@ export const IssueRow = memo(function IssueRow({
       )}
 
       {show('dueDate') && (
-        <span style={sized('dueDate')} className="hidden w-28 shrink-0 justify-end overflow-hidden sm:flex">
+        <span style={sized('dueDate')} className="hidden w-28 shrink-0 items-center justify-end gap-1 overflow-hidden sm:flex">
+          {issue.recurrence && (
+            <span className="shrink-0 text-text-subtle" title={`Повторяется ${RECURRENCE_LABEL[issue.recurrence]}`}>
+              <Repeat className="size-3" aria-label={`Повторяется ${RECURRENCE_LABEL[issue.recurrence]}`} />
+            </span>
+          )}
           <DueDateChip
             value={issue.dueDate}
             hasTime={issue.dueHasTime}

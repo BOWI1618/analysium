@@ -1,9 +1,10 @@
 import { memo } from 'react';
 import clsx from 'clsx';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
-import { MessageSquare, Paperclip, ListChecks } from 'lucide-react';
+import { MessageSquare, Paperclip, ListChecks, Repeat } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
 import { pluralize } from '~/lib/format';
+import { RECURRENCE_LABEL } from '~/lib/labels';
 import { DueDateChip, EpicChip, IssueTypeIcon, LabelChip, PriorityIcon } from './IssueMeta';
 import { DoneToggle, isClosedStatus } from './DoneToggle';
 
@@ -126,6 +127,11 @@ export const IssueCard = memo(function IssueCard({
       {/* Footer */}
       <div className="mt-3 flex items-center gap-2">
         {fields.dueDate && issue.dueDate && <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} done={done} />}
+        {issue.recurrence && (
+          <span className="text-text-subtle" title={`Повторяется ${RECURRENCE_LABEL[issue.recurrence]}`}>
+            <Repeat className="size-3" aria-label={`Повторяется ${RECURRENCE_LABEL[issue.recurrence]}`} />
+          </span>
+        )}
 
         {hasFooterMeta && (
           <span className="fd-num flex items-center gap-2 text-2xs text-text-subtle">

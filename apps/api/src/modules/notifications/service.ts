@@ -56,7 +56,12 @@ export async function notify(input: NotifyInput): Promise<void> {
   }
 }
 
-/** Everyone who should hear about activity on an issue. */
+/**
+ * Everyone who should hear about activity on an issue: its author, assignee
+ * and commenters, plus whoever subscribed — minus whoever asked not to hear.
+ * Only the fan-out follows this; a mention or an assignment is addressed to a
+ * person and reaches them either way.
+ */
 export async function issueWatchers(issueId: string): Promise<string[]> {
   const issue = await prisma.issue.findUnique({
     where: { id: issueId },
@@ -64,16 +69,27 @@ export async function issueWatchers(issueId: string): Promise<string[]> {
       assigneeId: true,
       reporterId: true,
       comments: { select: { authorId: true }, distinct: ['authorId'], take: 50 },
+      subscriptions: { select: { userId: true, subscribed: true } },
     },
   });
   if (!issue) return [];
-  return [
-    ...new Set(
-      [issue.assigneeId, issue.reporterId, ...issue.comments.map((c) => c.authorId)].filter(
-        (id): id is string => Boolean(id),
-      ),
-    ),
+  const muted = new Set(issue.subscriptions.filter((s) => !s.subscribed).map((s) => s.userId));
+  const participants = [
+    issue.assigneeId,
+    issue.reporterId,
+    ...issue.comments.map((c) => c.authorId),
+    ...issue.subscriptions.filter((s) => s.subscribed).map((s) => s.userId),
   ];
+  return [...new Set(participants.filter((id): id is string => Boolean(id) && !muted.has(id!)))];
+}
+
+/** Records someone's choice to hear, or not to hear, about an issue. */
+export async function setWatching(issueId: string, userId: string, watching: boolean): Promise<void> {
+  await prisma.issueSubscription.upsert({
+    where: { issueId_userId: { issueId, userId } },
+    create: { issueId, userId, subscribed: watching },
+    update: { subscribed: watching },
+  });
 }
 
 /** Restricts mention targets to users who are actually workspace members. */

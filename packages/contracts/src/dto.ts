@@ -7,6 +7,7 @@ import type {
   ActivityType,
   DependencyType,
   IssuePriority,
+  IssueRecurrence,
   IssueType,
   NotificationType,
   ProjectRole,
@@ -169,6 +170,8 @@ export interface IssueSummaryDto {
   /** Days the task was carried over to the next day unfinished. */
   carriedOverDays: number;
   isMilestone: boolean;
+  /** Set on a recurring task: closing it creates the next one. */
+  recurrence: IssueRecurrence | null;
   rank: string;
   commentCount: number;
   attachmentCount: number;
@@ -188,6 +191,8 @@ export interface IssueDetailDto extends IssueSummaryDto {
   subtasks: IssueSummaryDto[];
   attachments: AttachmentDto[];
   permissions: Permission[];
+  /** Whether the viewer hears about status, due date and comment changes. */
+  watching: boolean;
 }
 
 export interface CommentDto {

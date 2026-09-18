@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import type { IssueDetailDto, ProjectDto, UserSummaryDto } from '@flowdesk/contracts';
-import { Permission } from '@flowdesk/contracts';
+import type { IssueDetailDto, IssueRecurrence, ProjectDto, UserSummaryDto } from '@flowdesk/contracts';
+import { ISSUE_RECURRENCES, Permission } from '@flowdesk/contracts';
+import { RECURRENCE_LABEL } from '~/lib/labels';
 import {
   ArrowLeft,
   ChevronDown,
@@ -10,6 +11,8 @@ import {
   CopyPlus,
   CornerDownRight,
   CornerUpLeft,
+  Eye,
+  EyeOff,
   FileText,
   ExternalLink,
   Link2,
@@ -35,6 +38,7 @@ import {
   useTransferIssue,
   useUpdateIssue,
   useUploadAttachment,
+  useWatchIssue,
 } from './hooks';
 import { ActivityTimeline } from './ActivityTimeline';
 import { CommentThread } from './CommentThread';
@@ -124,6 +128,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   const deleteIssue = useDeleteIssue();
   const uploadAttachment = useUploadAttachment(issue.id);
   const deleteAttachment = useDeleteAttachment(issue.id);
+  const watchIssue = useWatchIssue(issue.id);
 
   const [tab, setTab] = useState<'comments' | 'activity'>('comments');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -238,6 +243,23 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
         </PriorityPicker>
 
         <div className="ml-auto flex items-center gap-0.5">
+          <Tooltip
+            content={
+              issue.watching
+                ? 'Вы следите за задачей — нажмите, чтобы перестать'
+                : 'Следить: уведомления о статусе, сроке и комментариях'
+            }
+          >
+            <IconButton
+              label={issue.watching ? 'Не следить за задачей' : 'Следить за задачей'}
+              size="sm"
+              aria-pressed={issue.watching}
+              onClick={() => watchIssue.mutate(!issue.watching)}
+            >
+              {issue.watching ? <Eye className="size-4 text-accent" /> : <EyeOff className="size-4" />}
+            </IconButton>
+          </Tooltip>
+
           <Tooltip content="Скопировать ссылку">
             <IconButton label="Скопировать ссылку" size="sm" onClick={() => void copyLink()}>
               <Link2 className="size-4" />
@@ -752,6 +774,27 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                 onChange={(dueDate, dueHasTime) => patch({ dueDate, dueHasTime })}
               />
             </Field>
+
+            {/* A subtask comes back together with its parent, never on its own. */}
+            {!issue.parent && (
+              <Field label="Повтор">
+                <select
+                  value={issue.recurrence ?? ''}
+                  aria-label="Повтор"
+                  disabled={!canEdit}
+                  onChange={(event) => patch({ recurrence: (event.target.value || null) as IssueRecurrence | null })}
+                  title={issue.recurrence ? 'Когда задачу закроют, появится следующая — со сдвинутым сроком' : undefined}
+                  className="h-7 w-full border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
+                >
+                  <option value="">Не повторять</option>
+                  {ISSUE_RECURRENCES.map((rule) => (
+                    <option key={rule} value={rule}>
+                      {RECURRENCE_LABEL[rule].charAt(0).toUpperCase() + RECURRENCE_LABEL[rule].slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
 
             <div className="fd-num space-y-1 bg-surface-sunken px-3.5 py-3 text-2xs text-text-subtle">
               <p title={fullDate(issue.createdAt)}>Создано {relativeTime(issue.createdAt)}</p>

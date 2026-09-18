@@ -38,6 +38,7 @@ import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
 import { audit } from '../../lib/audit';
 import { buildIssueWhere, orderByFor } from '../../domain/filters';
+import { nextOccurrenceDates } from '../../domain/recurrence';
 import {
   HIERARCHY_MESSAGES,
   diffIssue,
@@ -160,13 +161,16 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
   });
   if (!issue) throw notFound('Задача');
 
-  const subtasks = await prisma.issue.findMany({
-    where: { parentId: issueId, archivedAt: null },
-    // In the order they were added, oldest first — a checklist, not a board
-    // column where new cards land on top.
-    orderBy: [{ subNumber: 'asc' }],
-    select: issueSummarySelect,
-  });
+  const [subtasks, watchers] = await Promise.all([
+    prisma.issue.findMany({
+      where: { parentId: issueId, archivedAt: null },
+      // In the order they were added, oldest first — a checklist, not a board
+      // column where new cards land on top.
+      orderBy: [{ subNumber: 'asc' }],
+      select: issueSummarySelect,
+    }),
+    issueWatchers(issueId),
+  ]);
 
   return {
     ...toIssueSummary(issue),
@@ -176,6 +180,7 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
     subtasks: subtasks.map(toIssueSummary),
     attachments: issue.attachments.map(toAttachment),
     permissions: permissionsFor(actor),
+    watching: watchers.includes(actor.userId),
   };
 }
 
@@ -411,6 +416,8 @@ export async function createIssue(
         startHasTime: Boolean(input.startDate && input.startHasTime),
         dueHasTime: Boolean(input.dueDate && input.dueHasTime),
         isMilestone: input.isMilestone ?? false,
+        // A subtask comes back with its parent, never on its own.
+        recurrence: input.parentId ? null : ((input.recurrence ?? null) as never),
         rank,
         completedAt: nextCompletedAt(status.category as never, null),
         ...(input.labelIds?.length
@@ -454,6 +461,110 @@ export async function createIssue(
   }
 
   return getIssue(actor, issue.id);
+}
+
+/**
+ * Closing a recurring task brings the next one, as Weeek does: the same
+ * title, description, assignee, labels and subtasks, back in the project's
+ * first column, with its dates moved forward by the rule. The rule moves over
+ * to the new task and is claimed before anything is created, so closing the
+ * old one again — or two people closing it at once — never makes two copies.
+ */
+async function continueRecurrence(actor: ActorContext, issueId: string): Promise<void> {
+  const source = await prisma.issue.findUnique({
+    where: { id: issueId },
+    select: {
+      projectId: true,
+      parentId: true,
+      recurrence: true,
+      title: true,
+      description: true,
+      type: true,
+      priority: true,
+      assigneeId: true,
+      epicId: true,
+      storyPoints: true,
+      startDate: true,
+      dueDate: true,
+      startHasTime: true,
+      dueHasTime: true,
+      labels: { select: { labelId: true } },
+      project: { select: { key: true } },
+      subtasks: {
+        where: { archivedAt: null },
+        orderBy: { subNumber: 'asc' },
+        select: {
+          title: true,
+          description: true,
+          priority: true,
+          assigneeId: true,
+          labels: { select: { labelId: true } },
+        },
+      },
+    },
+  });
+  if (!source?.recurrence || source.parentId) return;
+
+  const claimed = await prisma.issue.updateMany({
+    where: { id: issueId, recurrence: { not: null } },
+    data: { recurrence: null },
+  });
+  if (claimed.count === 0) return;
+
+  const rule = source.recurrence;
+  const dates = nextOccurrenceDates(rule, { startDate: source.startDate, dueDate: source.dueDate }, new Date());
+  try {
+    const next = await createIssue(
+      actor,
+      {
+        projectId: source.projectId,
+        title: source.title,
+        description: (source.description as Record<string, unknown> | null) ?? null,
+        type: source.type,
+        priority: source.priority,
+        assigneeId: source.assigneeId,
+        epicId: source.epicId,
+        storyPoints: source.storyPoints,
+        startDate: dates.startDate?.toISOString() ?? null,
+        dueDate: dates.dueDate?.toISOString() ?? null,
+        startHasTime: source.startHasTime,
+        dueHasTime: source.dueHasTime,
+        recurrence: rule,
+        labelIds: source.labels.map((l) => l.labelId),
+      },
+      source.project.key,
+    );
+    for (const subtask of source.subtasks) {
+      await createIssue(
+        actor,
+        {
+          projectId: source.projectId,
+          title: subtask.title,
+          description: (subtask.description as Record<string, unknown> | null) ?? null,
+          type: 'SUBTASK',
+          priority: subtask.priority,
+          assigneeId: subtask.assigneeId,
+          parentId: next.id,
+          labelIds: subtask.labels.map((l) => l.labelId),
+        },
+        source.project.key,
+      );
+    }
+  } catch (error) {
+    // No copy was made (the assignee left the project, say): the rule goes
+    // back where it was, so closing the task again tries once more.
+    await prisma.issue.update({ where: { id: issueId }, data: { recurrence: rule } });
+    throw error;
+  }
+}
+
+/** Runs `continueRecurrence` without letting its failure fail the status change. */
+async function continueRecurrenceSafely(actor: ActorContext, issueId: string): Promise<void> {
+  try {
+    await continueRecurrence(actor, issueId);
+  } catch (error) {
+    log.warn(error, 'recurring task was not continued');
+  }
 }
 
 async function fanoutCreate(
@@ -597,6 +708,12 @@ export async function updateIssue(
   }
   if (patch.isMilestone !== undefined) {
     data.isMilestone = patch.isMilestone;
+  }
+  if (patch.recurrence !== undefined) {
+    if (patch.recurrence && (patch.parentId !== undefined ? patch.parentId : before.parentId)) {
+      throw badRequest('Подзадача повторяется вместе с родительской задачей');
+    }
+    data.recurrence = (patch.recurrence ?? null) as never;
   }
   if (patch.setBaseline) {
     // Freeze the plan as it stands right now, so the chart can show drift.
@@ -774,6 +891,10 @@ export async function updateIssue(
     // A failed notification must not fail the update — the client would retry
     // and repeat the change.
     log.warn(error, 'issue update fan-out failed');
+  }
+
+  if (newStatus?.category === 'COMPLETED' && before.status.category !== 'COMPLETED') {
+    await continueRecurrenceSafely(actor, issueId);
   }
 
   return getIssue(actor, issueId);
@@ -1015,6 +1136,10 @@ export async function moveIssue(
     }
   }
 
+  if (isEntering && status.category === 'COMPLETED' && issue.status.category !== 'COMPLETED') {
+    await continueRecurrenceSafely(actor, issueId);
+  }
+
   const updated = await prisma.issue.findUniqueOrThrow({ where: { id: issueId }, select: issueSummarySelect });
   return toIssueSummary(updated);
 }
@@ -1042,7 +1167,16 @@ export async function bulkUpdate(
       project: { workspaceId: actor.workspaceId },
       ...(allowed === 'ALL' ? {} : { projectId: { in: allowed } }),
     },
-    select: { id: true, projectId: true, statusId: true, issueKey: true, completedAt: true, type: true, parentId: true },
+    select: {
+      id: true,
+      projectId: true,
+      statusId: true,
+      issueKey: true,
+      completedAt: true,
+      type: true,
+      parentId: true,
+      status: { select: { category: true } },
+    },
   });
   if (!issues.length) return { updated: 0 };
 
@@ -1180,6 +1314,12 @@ export async function bulkUpdate(
       actorId: actor.userId,
       payload: { issueId: issue.id, issueKey: issue.issueKey, projectId: issue.projectId },
     });
+  }
+
+  if (status?.category === 'COMPLETED') {
+    for (const issue of issues) {
+      if (issue.status.category !== 'COMPLETED') await continueRecurrenceSafely(actor, issue.id);
+    }
   }
 
   return { updated: issues.length };

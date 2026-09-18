@@ -79,6 +79,7 @@ model User {
   savedViews         SavedView[]
   favorites          Favorite[]
   tokens             VerificationToken[]
+  issueSubscriptions IssueSubscription[]
 
   @@index([email])
   @@index([status])
@@ -415,6 +416,9 @@ model Issue {
   carriedOverDays   Int           @default(0)
   /// A milestone has no duration and renders as a diamond on the timeline.
   isMilestone       Boolean       @default(false)
+  /// A recurring task: closing it creates the next one with its dates moved
+  /// forward, and the rule moves over to that copy.
+  recurrence        IssueRecurrence?
   /// Snapshot of the original plan, kept so the chart can show plan vs actual.
   baselineStartDate DateTime?
   baselineDueDate   DateTime?
@@ -441,6 +445,7 @@ model Issue {
   attachments   Attachment[]
   activity      ActivityEvent[]
   notifications Notification[]
+  subscriptions IssueSubscription[]
 
   @@unique([projectId, number, subNumber])
   /// Not globally unique: two workspaces may each run a project keyed "WEB",
@@ -495,6 +500,31 @@ model IssueDependency {
   @@index([predecessorId])
   @@index([successorId])
   @@map("issue_dependencies")
+}
+
+enum IssueRecurrence {
+  DAILY
+  WEEKDAYS
+  WEEKLY
+  MONTHLY
+}
+
+/// Someone's own choice about hearing of a task. Author, assignee and
+/// commenters hear by default; a row with `subscribed = true` adds anyone
+/// else, and one with `false` silences a participant who asked not to hear.
+model IssueSubscription {
+  id         String   @id @default(cuid())
+  issueId    String
+  userId     String
+  subscribed Boolean
+  createdAt  DateTime @default(now())
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId])
+  @@index([userId])
+  @@map("issue_subscriptions")
 }
 
 model IssueLabel {

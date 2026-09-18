@@ -8,7 +8,9 @@ import {
   moveIssueSchema,
   transferIssueSchema,
   updateIssueSchema,
+  watchIssueSchema,
 } from '@flowdesk/contracts';
+import { setWatching } from '../notifications/service';
 import { parse } from '../../lib/validate';
 import { assertCan, issueContext, projectContext, workspaceContext } from '../../lib/context';
 import { ensureSystemProject } from '../projects/service';
@@ -115,6 +117,14 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const { actor } = await issueContext(currentUser(req).id, req.params.issueId);
     await service.deleteIssue(actor, req.params.issueId, req.ip);
     return reply.status(204).send();
+  });
+
+  /** Anyone who can open the task may follow it or stop hearing about it. */
+  app.post<{ Params: IssueParams }>('/issues/:issueId/watch', async (req) => {
+    const { actor } = await issueContext(currentUser(req).id, req.params.issueId);
+    const { watching } = parse(watchIssueSchema, req.body);
+    await setWatching(req.params.issueId, actor.userId, watching);
+    return { watching };
   });
 
   app.get<{ Params: IssueParams }>('/issues/:issueId/activity', async (req) => {

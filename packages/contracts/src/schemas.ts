@@ -44,6 +44,7 @@ z.setErrorMap(errorMap);
 import {
   DEPENDENCY_TYPES,
   ISSUE_PRIORITIES,
+  ISSUE_RECURRENCES,
   ISSUE_TYPES,
   PROJECT_ROLES,
   PROJECT_TYPES,
@@ -248,6 +249,7 @@ export const createIssueSchema = z.object({
   startHasTime: z.boolean().optional(),
   dueHasTime: z.boolean().optional(),
   isMilestone: z.boolean().optional(),
+  recurrence: z.enum(ISSUE_RECURRENCES as [string, ...string[]]).nullable().optional(),
   labelIds: z.array(cuidLike).max(20).optional(),
 });
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
@@ -285,6 +287,7 @@ export const updateIssueSchema = z
     startHasTime: z.boolean().optional(),
     dueHasTime: z.boolean().optional(),
     isMilestone: z.boolean().optional(),
+    recurrence: z.enum(ISSUE_RECURRENCES as [string, ...string[]]).nullable().optional(),
     /** Captures the current dates as the baseline the Gantt compares against. */
     setBaseline: z.boolean().optional(),
     labelIds: z.array(cuidLike).max(20).optional(),
@@ -313,6 +316,8 @@ export const transferIssueSchema = z.object({
   projectId: cuidLike,
 });
 export type TransferIssueInput = z.infer<typeof transferIssueSchema>;
+
+export const watchIssueSchema = z.object({ watching: z.boolean() });
 
 /** «Дублировать задачу»: a copy next to the original, with the parts chosen. */
 export const duplicateIssueSchema = z.object({

@@ -108,6 +108,29 @@ test.describe('работа с задачами', () => {
     await expect(page.getByText('Цифры')).toBeVisible();
   });
 
+  test('карточка: повтор и подписка — закрытая еженедельная задача возвращается', async ({ page }) => {
+    const projectId = await setup(page);
+    const source = await (await page.request.post('/api/v1/issues', { data: { projectId, title: 'Созвон по понедельникам' } })).json();
+
+    await page.goto(`/issue/${source.issueKey}`);
+    await page.getByLabel('Повтор').selectOption('WEEKLY');
+    await expect
+      .poll(async () => (await (await page.request.get(`/api/v1/issues/${source.id}`)).json()).recurrence)
+      .toBe('WEEKLY');
+
+    // The author follows their own task; the eye turns that off and back on.
+    await page.getByRole('button', { name: 'Не следить за задачей' }).click();
+    await expect(page.getByRole('button', { name: 'Следить за задачей' })).toBeVisible();
+
+    await page.getByRole('button', { name: `Отметить выполненной ${source.issueKey}` }).click();
+    await expect
+      .poll(async () => (await issues(page, projectId)).filter((i) => i.title === 'Созвон по понедельникам').length)
+      .toBe(2);
+    const next = (await issues(page, projectId)).find((i) => i.title === 'Созвон по понедельникам' && i.id !== source.id)!;
+    expect(next.status.category).not.toBe('COMPLETED');
+    expect(next.dueDate).not.toBeNull();
+  });
+
   test('мои задачи: состояние выбирается фильтром, ширина столбца меняется перетаскиванием', async ({ page }) => {
     const projectId = await setup(page);
     const me = (await (await page.request.get('/api/v1/auth/session')).json()).user.id;

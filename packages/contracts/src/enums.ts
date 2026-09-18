@@ -56,6 +56,16 @@ export const IssuePriority = {
 export type IssuePriority = (typeof IssuePriority)[keyof typeof IssuePriority];
 export const ISSUE_PRIORITIES = Object.values(IssuePriority);
 
+/** How often a recurring task comes back once it is closed. */
+export const IssueRecurrence = {
+  DAILY: 'DAILY',
+  WEEKDAYS: 'WEEKDAYS',
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+} as const;
+export type IssueRecurrence = (typeof IssueRecurrence)[keyof typeof IssueRecurrence];
+export const ISSUE_RECURRENCES = Object.values(IssueRecurrence);
+
 /** Sort weight for priority (higher = more urgent). */
 export const PRIORITY_WEIGHT: Record<IssuePriority, number> = {
   URGENT: 4,
