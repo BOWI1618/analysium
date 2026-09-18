@@ -177,6 +177,9 @@ export interface IssueSummaryDto {
   attachmentCount: number;
   subtaskCount: number;
   subtaskDoneCount: number;
+  /** Checklist items in the description: ticked and in all. */
+  checklistDone: number;
+  checklistTotal: number;
   /** Set for a subtask, so a list that shows it on its own can say whose part it is. */
   parent: { id: string; issueKey: string; title: string } | null;
   createdAt: string;

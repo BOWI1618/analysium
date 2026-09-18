@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Upload } from 'lucide-react';
 import { ApiError, api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useAuthConfig, useSession } from '~/app/session';
@@ -40,21 +41,41 @@ export function AccountSettingsPage() {
 
   const [profile, setProfile] = useState({
     name: user?.name ?? '',
-    avatarUrl: user?.avatarUrl ?? '',
     timezone: user?.timezone ?? 'UTC',
   });
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '' });
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const updateProfile = useMutation({
-    mutationFn: (input: { name: string; avatarUrl: string | null; timezone: string }) =>
-      api.patch('/me', input),
+    mutationFn: (input: { name: string; timezone: string }) => api.patch('/me', input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.session });
       await refresh();
       toast.success('Профиль обновлён');
     },
     onError: (error) => toast.error(error, 'Не удалось обновить профиль'),
+  });
+
+  const uploadPhoto = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.upload<{ avatarUrl: string }>('/me/avatar', form);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.session });
+      toast.success('Фото обновлено');
+    },
+    onError: (error) => toast.error(error, 'Не удалось загрузить фото'),
+  });
+  const removePhoto = useMutation({
+    mutationFn: () => api.delete<void>('/me/avatar'),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.session });
+      toast.success('Фото убрано', 'Вместо него показываются инициалы.');
+    },
+    onError: (error) => toast.error(error, 'Не удалось убрать фото'),
   });
 
   const { data: config } = useAuthConfig();
@@ -83,10 +104,7 @@ export function AccountSettingsPage() {
 
   if (!user) return null;
 
-  const profileDirty =
-    profile.name !== user.name ||
-    profile.avatarUrl !== (user.avatarUrl ?? '') ||
-    profile.timezone !== user.timezone;
+  const profileDirty = profile.name !== user.name || profile.timezone !== user.timezone;
 
   return (
     <>
@@ -109,16 +127,47 @@ export function AccountSettingsPage() {
             <div className="mt-3 space-y-3">
               <div className="flex items-center gap-3">
                 <Avatar
-                  user={{ id: user.id, name: profile.name || user.name, avatarUrl: profile.avatarUrl || null }}
+                  user={{ id: user.id, name: profile.name || user.name, avatarUrl: user.avatarUrl }}
                   size="xl"
                 />
                 <div className="flex-1">
-                  <Input
-                    label="Ссылка на аватар"
-                    value={profile.avatarUrl}
-                    onChange={(event) => setProfile((p) => ({ ...p, avatarUrl: event.target.value }))}
-                    placeholder="https://…"
-                    hint="Оставьте пустым — будут показаны инициалы."
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      iconLeft={<Upload className="size-3.5" />}
+                      loading={uploadPhoto.isPending}
+                      onClick={() => photoInputRef.current?.click()}
+                    >
+                      {user.avatarUrl ? 'Заменить фото' : 'Загрузить фото'}
+                    </Button>
+                    {user.avatarUrl && (
+                      <Button size="sm" variant="ghost" loading={removePhoto.isPending} onClick={() => removePhoto.mutate()}>
+                        Убрать
+                      </Button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-text-subtle">
+                    PNG, JPG, WebP или GIF до 2 МБ. Без фото показываются инициалы.
+                  </p>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-label="Фото профиля"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      if (!file) return;
+                      // Checked here too, so a big file is refused before it is sent.
+                      if (file.size > 2 * 1024 * 1024) {
+                        toast.toast({ tone: 'error', title: 'Фото больше 2 МБ', description: 'Выберите файл поменьше.' });
+                        return;
+                      }
+                      uploadPhoto.mutate(file);
+                    }}
                   />
                 </div>
               </div>
@@ -152,13 +201,7 @@ export function AccountSettingsPage() {
                 size="sm"
                 disabled={!profileDirty}
                 loading={updateProfile.isPending}
-                onClick={() =>
-                  updateProfile.mutate({
-                    name: profile.name,
-                    avatarUrl: profile.avatarUrl || null,
-                    timezone: profile.timezone,
-                  })
-                }
+                onClick={() => updateProfile.mutate({ name: profile.name, timezone: profile.timezone })}
               >
                 Сохранить профиль
               </Button>

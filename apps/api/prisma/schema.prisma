@@ -35,6 +35,10 @@ model User {
   name         String
   email        String     @unique
   avatarUrl    String?
+  /// An uploaded photo: its storage key and type. `avatarUrl` then points at
+  /// the API route that serves it.
+  avatarKey    String?
+  avatarMime   String?
   passwordHash String?
   authProvider String     @default("local")
   status       UserStatus @default(ACTIVE)

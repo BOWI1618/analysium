@@ -16,6 +16,7 @@ import type {
   StatusDto,
   UserSummaryDto,
 } from '@flowdesk/contracts';
+import { checklistProgress } from '@flowdesk/contracts';
 import { PREVIEWABLE_MIME } from './storage';
 
 export const userSummarySelect = {
@@ -53,6 +54,10 @@ export const issueSummarySelect = {
   carriedOverDays: true,
   isMilestone: true,
   recurrence: true,
+  // Read only to count checklist items for the card; the document itself is
+  // not part of the summary. Counting on read keeps the number right after
+  // any edit, with no stored copy to fall out of step.
+  description: true,
   rank: true,
   createdAt: true,
   updatedAt: true,
@@ -98,6 +103,7 @@ export function toLabel(l: { id: string; name: string; color: string }): LabelDt
 
 export function toIssueSummary(issue: IssueRow): IssueSummaryDto {
   const subtasks = issue.subtasks ?? [];
+  const checklist = checklistProgress(issue.description);
   return {
     id: issue.id,
     issueKey: issue.issueKey,
@@ -133,6 +139,8 @@ export function toIssueSummary(issue: IssueRow): IssueSummaryDto {
     attachmentCount: issue._count.attachments,
     subtaskCount: subtasks.length,
     subtaskDoneCount: subtasks.filter((s) => s.status.category === 'COMPLETED').length,
+    checklistDone: checklist.done,
+    checklistTotal: checklist.total,
     parent: issue.parent ?? null,
     createdAt: issue.createdAt.toISOString(),
     updatedAt: issue.updatedAt.toISOString(),

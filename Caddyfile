@@ -40,6 +40,10 @@
 		# The entry document must not be cached, or a deploy would leave browsers
 		# pointing at asset names that no longer exist.
 		header /index.html Cache-Control "no-cache"
+		# Same for the installed app's worker and manifest: a browser checks them
+		# for updates, and a cached copy would pin the old one.
+		header /sw.js Cache-Control "no-cache"
+		header /manifest.json Cache-Control "no-cache"
 
 		header {
 			X-Content-Type-Options nosniff

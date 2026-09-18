@@ -18,6 +18,7 @@ import { currentUser, requireAuth } from '../../plugins/auth';
 import * as service from './service';
 import { transferIssue } from './transfer';
 import { duplicateIssue } from './duplicate';
+import { exportIssuesCsv } from './exportCsv';
 
 type IssueParams = { issueId: string };
 
@@ -41,6 +42,19 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const { actor } = await projectContext(currentUser(req).id, req.params.projectId);
     const filter = parse(issueFilterSchema, { ...(req.query as object), projectId: req.params.projectId });
     return service.listIssues(actor, filter);
+  });
+
+  /** The list as a table file: every task matching the filters, subtasks included. */
+  app.get<{ Params: { projectId: string } }>('/projects/:projectId/issues/export', async (req, reply) => {
+    const user = currentUser(req);
+    const { actor, project } = await projectContext(user.id, req.params.projectId);
+    const filter = parse(issueFilterSchema, { ...(req.query as object), projectId: req.params.projectId });
+    const csv = await exportIssuesCsv(actor, filter, user.timezone);
+    const filename = `${project.key}-задачи-${new Date().toISOString().slice(0, 10)}.csv`;
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+      .send(csv);
   });
 
   app.get<{ Params: { projectId: string } }>('/projects/:projectId/board', async (req) => {

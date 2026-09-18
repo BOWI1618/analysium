@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_DOC, collectMentions, docToText, isDocEmpty, sanitizeDoc } from '@flowdesk/contracts';
+import { EMPTY_DOC, checklistProgress, collectMentions, docToText, isDocEmpty, sanitizeDoc } from '@flowdesk/contracts';
 
 describe('sanitizeDoc', () => {
   it('keeps allowed nodes and marks', () => {
@@ -131,5 +131,37 @@ describe('isDocEmpty', () => {
     expect(isDocEmpty(EMPTY_DOC)).toBe(true);
     expect(isDocEmpty({ type: 'doc', content: [{ type: 'paragraph' }] })).toBe(true);
     expect(isDocEmpty({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x' }] }] })).toBe(false);
+  });
+
+  it('комментарий из одной картинки не пустой', () => {
+    const picture = { type: 'image', attrs: { src: '/api/v1/attachments/a1/content', alt: '' } };
+    expect(isDocEmpty({ type: 'doc', content: [picture] })).toBe(false);
+    expect(isDocEmpty({ type: 'doc', content: [{ ...picture, attrs: { src: '' } }] })).toBe(true);
+  });
+});
+
+describe('чек-лист в описании', () => {
+  const item = (checked: boolean, nested?: unknown) => ({
+    type: 'taskItem',
+    attrs: { checked },
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'пункт' }] },
+      ...(nested ? [nested] : []),
+    ],
+  });
+
+  it('считает отмеченные и все пункты, вложенные тоже', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'taskList', content: [item(true), item(false, { type: 'taskList', content: [item(true)] })] },
+      ],
+    };
+    expect(checklistProgress(doc)).toEqual({ done: 2, total: 3 });
+  });
+
+  it('без чек-листа — ноль', () => {
+    expect(checklistProgress(EMPTY_DOC)).toEqual({ done: 0, total: 0 });
+    expect(checklistProgress(null)).toEqual({ done: 0, total: 0 });
   });
 });

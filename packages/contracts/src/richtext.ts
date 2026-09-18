@@ -153,6 +153,25 @@ export function collectMentions(doc: unknown): string[] {
   return [...ids];
 }
 
+/**
+ * Ticked and total checklist items in a description, nested ones included —
+ * what a board card shows as «1/3» without opening the task.
+ */
+export function checklistProgress(doc: unknown): { done: number; total: number } {
+  let done = 0;
+  let total = 0;
+  const walk = (node: RichNode | undefined) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'taskItem') {
+      total += 1;
+      if (node.attrs?.checked === true) done += 1;
+    }
+    if (Array.isArray(node.content)) node.content.forEach(walk);
+  };
+  walk(doc as RichNode);
+  return { done, total };
+}
+
 /** No text and no picture: a comment that is just a screenshot is not empty. */
 export function isDocEmpty(doc: unknown): boolean {
   return docToText(doc).length === 0 && !hasImage(doc as RichNode | undefined);

@@ -3,7 +3,9 @@ import { useParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ISSUE_PRIORITIES, Permission, type IssuePriority, type IssueSummaryDto, type StatusDto } from '@flowdesk/contracts';
 import clsx from 'clsx';
-import { ChevronRight, Layers, Plus } from 'lucide-react';
+import { ChevronRight, Download, Layers, Plus } from 'lucide-react';
+import { API_BASE, buildQuery } from '~/lib/api';
+import { filtersToQuery } from '~/features/issues/types';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useProject } from '~/features/projects/hooks';
@@ -185,6 +187,20 @@ export function ListPage() {
               </MenuContent>
             </Menu>
             <ColumnsMenu columns={columns} onChange={setColumns} />
+            {/* The server answers with a file, so the browser downloads it and stays on the page. */}
+            <Button
+              size="xs"
+              variant="ghost"
+              iconLeft={<Download className="size-3" />}
+              title="Выгрузить задачи с этими фильтрами в таблицу для Excel"
+              onClick={() =>
+                window.location.assign(
+                  `${API_BASE}/projects/${projectId}/issues/export${buildQuery(filtersToQuery(filters))}`,
+                )
+              }
+            >
+              Выгрузить
+            </Button>
           </>
         }
       />

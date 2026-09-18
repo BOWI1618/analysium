@@ -1,7 +1,7 @@
 import { createContext, memo, useCallback, useContext } from 'react';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import clsx from 'clsx';
-import { ChevronRight, Columns3, CornerDownRight, MessageSquare, Repeat, UserPen } from 'lucide-react';
+import { ChevronRight, Columns3, CornerDownRight, MessageSquare, Repeat, SquareCheck, UserPen } from 'lucide-react';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import type { IssueSummaryDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
@@ -275,8 +275,17 @@ export const IssueRow = memo(function IssueRow({
         )}
         {issue.title}
         {issue.subtaskCount > 0 && (
-          <span className="fd-num ml-2 text-2xs font-normal text-text-subtle">
+          <span className="fd-num ml-2 text-2xs font-normal text-text-subtle" title="Подзадачи: готово из всех">
             {issue.subtaskDoneCount}/{issue.subtaskCount}
+          </span>
+        )}
+        {issue.checklistTotal > 0 && (
+          <span
+            className="fd-num ml-2 inline-flex items-center gap-0.5 text-2xs font-normal text-text-subtle"
+            title={`Чек-лист: отмечено ${issue.checklistDone} из ${issue.checklistTotal}`}
+          >
+            <SquareCheck className="size-3" />
+            {issue.checklistDone}/{issue.checklistTotal}
           </span>
         )}
       </span>

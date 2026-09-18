@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import clsx from 'clsx';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
-import { MessageSquare, Paperclip, ListChecks, Repeat } from 'lucide-react';
+import { MessageSquare, Paperclip, ListChecks, Repeat, SquareCheck } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
 import { pluralize } from '~/lib/format';
 import { RECURRENCE_LABEL } from '~/lib/labels';
@@ -60,7 +60,8 @@ export const IssueCard = memo(function IssueCard({
   onToggleDone,
 }: IssueCardProps) {
   const hasFooterMeta =
-    fields.counters && (issue.commentCount > 0 || issue.attachmentCount > 0 || issue.subtaskCount > 0);
+    fields.counters &&
+    (issue.commentCount > 0 || issue.attachmentCount > 0 || issue.subtaskCount > 0 || issue.checklistTotal > 0);
   const done = isClosedStatus(issue.status);
   const epic = fields.epic ? issue.epic : null;
   const labels = fields.labels ? issue.labels : [];
@@ -142,6 +143,15 @@ export const IssueCard = memo(function IssueCard({
               >
                 <ListChecks className="size-3" />
                 {issue.subtaskDoneCount}/{issue.subtaskCount}
+              </span>
+            )}
+            {issue.checklistTotal > 0 && (
+              <span
+                className="flex items-center gap-0.5"
+                title={`Чек-лист: отмечено ${issue.checklistDone} из ${issue.checklistTotal}`}
+              >
+                <SquareCheck className="size-3" />
+                {issue.checklistDone}/{issue.checklistTotal}
               </span>
             )}
             {issue.commentCount > 0 && (

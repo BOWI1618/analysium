@@ -131,6 +131,35 @@ test.describe('работа с задачами', () => {
     expect(next.dueDate).not.toBeNull();
   });
 
+  test('список: кнопка «Выгрузить» скачивает таблицу с задачами', async ({ page }) => {
+    const projectId = await setup(page);
+    await page.request.post('/api/v1/issues', { data: { projectId, title: 'Попадёт в таблицу' } });
+    await page.goto(`/projects/${projectId}/list`);
+    await expect(page.getByText('Попадёт в таблицу')).toBeVisible({ timeout: 15_000 });
+
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Выгрузить' }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/-задачи-\d{4}-\d{2}-\d{2}\.csv$/);
+  });
+
+  test('настройки: фото профиля загружается с компьютера и убирается', async ({ page }) => {
+    await setup(page);
+    await page.goto('/settings/account');
+    await page.getByLabel('Фото профиля').setInputFiles({
+      name: 'me.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('фото для проверки'),
+    });
+    await expect(page.getByRole('button', { name: 'Заменить фото' })).toBeVisible({ timeout: 15_000 });
+    const session = async () => (await (await page.request.get('/api/v1/auth/session')).json()).user.avatarUrl;
+    expect(await session()).toMatch(/^\/api\/v1\/users\/.+\/avatar\?v=/);
+
+    await page.getByRole('button', { name: 'Убрать' }).click();
+    await expect(page.getByRole('button', { name: 'Загрузить фото' })).toBeVisible();
+    expect(await session()).toBeNull();
+  });
+
   test('мои задачи: состояние выбирается фильтром, ширина столбца меняется перетаскиванием', async ({ page }) => {
     const projectId = await setup(page);
     const me = (await (await page.request.get('/api/v1/auth/session')).json()).user.id;

@@ -12,3 +12,11 @@ createRoot(container).render(
     <App />
   </StrictMode>,
 );
+
+// Only in the built app: in development a worker would sit between the page and
+// Vite's hot reload for no gain.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+  });
+}
