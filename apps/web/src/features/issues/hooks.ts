@@ -6,6 +6,7 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query';
 import type {
+  AssigneeStatsDto,
   CreateIssueRequest,
   DuplicateIssueInput,
   IssueDetailDto,
@@ -59,6 +60,39 @@ export function useIssueList(
     staleTime: 10_000,
     refetchInterval: options.refetchInterval,
     placeholderData: (prev) => prev,
+  });
+}
+
+/**
+ * Active, overdue, due-soon and done figures per person, counted by the server
+ * over everything the viewer may read. The filters are those of the list next
+ * to the figures, minus whatever the figures themselves split by.
+ */
+export function useAssigneeStats(workspaceId: string, userIds: string[], filters: IssueFilters = {}) {
+  return useQuery({
+    queryKey: qk.assigneeStats(workspaceId, userIds, filters),
+    queryFn: () =>
+      api.get<{ items: AssigneeStatsDto[] }>(`/workspaces/${workspaceId}/issues/stats`, {
+        query: { ...filtersToQuery(filters), assigneeId: userIds },
+      }),
+    enabled: Boolean(workspaceId) && userIds.length > 0,
+    staleTime: 10_000,
+    placeholderData: (prev) => prev,
+    select: (data) => new Map(data.items.map((item) => [item.userId, item])),
+  });
+}
+
+/** How many tasks match the filters in all — a list shows only the pages loaded so far. */
+export function useIssueCount(workspaceId: string, filters: IssueFilters, enabled = true) {
+  return useQuery({
+    // Under the `issues` root, so it moves together with the list it counts.
+    queryKey: ['issues', workspaceId, 'count', filters],
+    queryFn: () =>
+      api.get<{ count: number }>(`/workspaces/${workspaceId}/issues/count`, { query: filtersToQuery(filters) }),
+    enabled: enabled && Boolean(workspaceId),
+    staleTime: 10_000,
+    placeholderData: (prev) => prev,
+    select: (data) => data.count,
   });
 }
 
@@ -158,6 +192,10 @@ export function useWatchIssue(issueId: string) {
     mutationFn: (watching: boolean) => api.post<{ watching: boolean }>(`/issues/${issueId}/watch`, { watching }),
     onSuccess: ({ watching }) => {
       queryClient.setQueryData<IssueDetailDto>(qk.issue(issueId), (issue) => (issue ? { ...issue, watching } : issue));
+      // The count next to the eye and the list behind it both changed.
+      void queryClient.invalidateQueries({ queryKey: qk.issue(issueId), exact: true });
+      void queryClient.invalidateQueries({ queryKey: qk.issuesByKey });
+      void queryClient.invalidateQueries({ queryKey: qk.issueWatchers(issueId) });
       toast.success(
         watching ? 'Вы следите за задачей' : 'Вы больше не следите за задачей',
         watching

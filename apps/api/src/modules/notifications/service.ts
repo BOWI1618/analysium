@@ -4,11 +4,13 @@
  * Kept as a service (not inline in the issue code) so that adding an email or
  * push transport later is a change in exactly one place: `deliver`.
  */
-import type { ActorContext, NotificationType } from '@flowdesk/contracts';
-import { RealtimeEventType } from '@flowdesk/contracts';
+import type { ActorContext, NotificationType, WatcherDto, WatcherReason } from '@flowdesk/contracts';
+import { Permission, RealtimeEventType } from '@flowdesk/contracts';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { usersWithProjectAccess, visibleProjectIds } from '../../lib/context';
+import { assertCan, usersWithProjectAccess, visibleProjectIds } from '../../lib/context';
+import { badRequest, conflict } from '../../lib/errors';
+import { toUserSummary, userSummarySelect } from '../../lib/serialize';
 import { log } from '../../lib/logger';
 import { telegram, telegramEnabled } from '../../lib/telegram';
 import { emit } from '../../realtime/eventBus';
@@ -152,6 +154,85 @@ export async function setWatching(issueId: string, userId: string, watching: boo
     create: { issueId, userId, subscribed: watching },
     update: { subscribed: watching },
   });
+}
+
+/**
+ * The audience of a task as a list of people with the reason each is in it —
+ * the readable form of `issueWatchers`, and narrower by one rule: someone
+ * who can no longer open the task is not shown, exactly as they are no longer
+ * told anything.
+ */
+export async function listWatchers(issueId: string, workspaceId: string): Promise<WatcherDto[]> {
+  const issue = await prisma.issue.findUnique({
+    where: { id: issueId },
+    select: {
+      projectId: true,
+      assigneeId: true,
+      reporterId: true,
+      comments: { select: { authorId: true }, distinct: ['authorId'], take: 50 },
+      subscriptions: { select: { userId: true, subscribed: true } },
+    },
+  });
+  if (!issue) return [];
+
+  const muted = new Set(issue.subscriptions.filter((s) => !s.subscribed).map((s) => s.userId));
+  const reasons = new Map<string, WatcherReason[]>();
+  const add = (userId: string | null, reason: WatcherReason) => {
+    if (!userId || muted.has(userId)) return;
+    const list = reasons.get(userId) ?? [];
+    if (!list.includes(reason)) reasons.set(userId, [...list, reason]);
+  };
+  add(issue.assigneeId, 'ASSIGNEE');
+  add(issue.reporterId, 'REPORTER');
+  for (const comment of issue.comments) add(comment.authorId, 'COMMENTER');
+  for (const subscription of issue.subscriptions) if (subscription.subscribed) add(subscription.userId, 'SUBSCRIBED');
+
+  const readable = await usersWithProjectAccess(workspaceId, issue.projectId, [...reasons.keys()]);
+  const users = await prisma.user.findMany({
+    where: { id: { in: readable } },
+    orderBy: { name: 'asc' },
+    select: userSummarySelect,
+  });
+  return users.map((user) => ({ user: toUserSummary(user)!, reasons: reasons.get(user.id)! }));
+}
+
+/**
+ * Subscribes someone to a task or takes their subscription away.
+ *
+ * For oneself this is the eye in the card, open to anyone who can see the
+ * task. For another person it takes the right to edit the task, and three
+ * things hold: only someone who can already open the task may be added — a
+ * subscription never grants access; a person who chose not to hear about the
+ * task is not signed up again behind their back; and only a subscription can
+ * be removed — an assignee or author keeps hearing about their own task.
+ */
+export async function setWatcher(
+  actor: ActorContext,
+  issue: { id: string; projectId: string },
+  userId: string,
+  watching: boolean,
+): Promise<void> {
+  if (userId === actor.userId) {
+    await setWatching(issue.id, userId, watching);
+    return;
+  }
+  assertCan(actor, Permission.ISSUE_UPDATE, 'Добавлять и убирать наблюдателей может тот, кто вправе изменять задачу');
+
+  if (!watching) {
+    await prisma.issueSubscription.deleteMany({ where: { issueId: issue.id, userId, subscribed: true } });
+    return;
+  }
+
+  const readable = await usersWithProjectAccess(actor.workspaceId, issue.projectId, [userId]);
+  if (readable.length === 0) {
+    throw badRequest('У этого человека нет доступа к задаче. Сначала добавьте его в проект.');
+  }
+  const existing = await prisma.issueSubscription.findUnique({
+    where: { issueId_userId: { issueId: issue.id, userId } },
+    select: { subscribed: true },
+  });
+  if (existing && !existing.subscribed) throw conflict('Этот человек сам отключил уведомления по этой задаче');
+  await setWatching(issue.id, userId, true);
 }
 
 /** Restricts mention targets to users who are actually workspace members. */

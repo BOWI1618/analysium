@@ -254,6 +254,8 @@ export const createIssueSchema = z.object({
   isMilestone: z.boolean().optional(),
   recurrence: z.enum(ISSUE_RECURRENCES as [string, ...string[]]).nullable().optional(),
   labelIds: z.array(cuidLike).max(20).optional(),
+  /** People subscribed to the task from the start; each must be able to open it. */
+  watcherIds: z.array(cuidLike).max(20).optional(),
 });
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 
@@ -321,6 +323,8 @@ export const transferIssueSchema = z.object({
 export type TransferIssueInput = z.infer<typeof transferIssueSchema>;
 
 export const watchIssueSchema = z.object({ watching: z.boolean() });
+/** Subscribing someone to a task, or taking their subscription away. */
+export const setWatcherSchema = z.object({ userId: cuidLike, watching: z.boolean() });
 
 /** «Дублировать задачу»: a copy next to the original, with the parts chosen. */
 export const duplicateIssueSchema = z.object({
@@ -396,6 +400,8 @@ export const issueFilterSchema = z.object({
   overlapsTo: z.string().datetime().optional(),
   /** Only issues with neither a start nor a due date. */
   noDates: queryBoolean.optional(),
+  /** Only issues without a deadline, whatever their start — what planning has not reached yet. */
+  noDueDate: queryBoolean.optional(),
   /** `true` → only issues with no sprint; used by the backlog view. */
   noSprint: queryBoolean.optional(),
   includeSubtasks: queryBoolean.optional(),

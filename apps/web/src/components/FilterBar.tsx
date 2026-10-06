@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
+import { addDays, format } from 'date-fns';
 import {
   ISSUE_PRIORITIES,
   ISSUE_TYPES,
   type IssuePriority,
   type IssueType,
   type LabelDto,
+  type ProjectDto,
   type SprintDto,
   type StatusDto,
   type UserSummaryDto,
@@ -16,6 +18,7 @@ import { activeFilterCount } from '~/features/issues/types';
 import { MultiSelect } from './Pickers';
 import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 import { Avatar } from '~/ui/Avatar';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Button } from '~/ui/Button';
 import { Badge } from '~/ui/Badge';
@@ -39,7 +42,26 @@ export interface FilterBarProps {
   hideDoneOption?: boolean;
   /** «Состояние»: open, in progress, finished — for lists across projects, which share no statuses. */
   stateFacet?: boolean;
+  /** «Проект» — for lists that span projects. */
+  projects?: Pick<ProjectDto, 'id' | 'name' | 'icon' | 'color'>[];
+  /** «Срок»: a window of due dates, by preset or by hand. */
+  dueRange?: boolean;
+  /** Where the page itself decides whose tasks are shown, a second choice of person would silently fight it. */
+  hideAssignee?: boolean;
 }
+
+/**
+ * The edges of a calendar day as the person at the screen sees it. A due date
+ * without a time is stored at noon UTC, which falls inside its own local day
+ * anywhere from UTC−11 to UTC+11, so one pair of edges serves both kinds.
+ */
+const dayStart = (day: string) => new Date(`${day}T00:00:00`).toISOString();
+const dayEnd = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
+const asDay = (iso: string | undefined) => (iso ? format(new Date(iso), 'yyyy-MM-dd') : '');
+const dueWindow = (days: number) => {
+  const today = new Date();
+  return { dueAfter: dayStart(format(today, 'yyyy-MM-dd')), dueBefore: dayEnd(format(addDays(today, days - 1), 'yyyy-MM-dd')) };
+};
 
 /** The state a task is in, whatever its project calls the status. */
 const STATE_OPTIONS = [
@@ -81,6 +103,9 @@ export function FilterBar({
   sortOptions = true,
   hideDoneOption = true,
   stateFacet = false,
+  projects = [],
+  dueRange = false,
+  hideAssignee = false,
 }: FilterBarProps) {
   const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
   const [facetsOpen, setFacetsOpen] = useState(false);
@@ -156,6 +181,22 @@ export function FilterBar({
 
       <div className={clsx('flex-wrap items-center gap-1.5 @4xl:flex', facetsOpen ? 'flex w-full' : 'hidden')}>
         {/* Facets */}
+        {projects.length > 0 && (
+          <MultiSelect
+            title="Проект"
+            options={projects.map((p) => ({
+              value: p.id,
+              label: p.name,
+              icon: <ProjectIcon icon={p.icon} color={p.color} size="sm" />,
+            }))}
+            value={filters.projectId ?? []}
+            // A status belongs to one project: it cannot outlive the choice of projects.
+            onChange={(projectId) => patch({ projectId: projectId.length ? projectId : undefined, statusId: undefined })}
+          >
+            <FacetButton label="Проект" count={filters.projectId?.length} />
+          </MultiSelect>
+        )}
+
         {statuses.length > 0 && (
           <MultiSelect
             title="Статус"
@@ -178,14 +219,16 @@ export function FilterBar({
           </MultiSelect>
         )}
 
-        <MultiSelect
-          title="Исполнитель"
-          options={memberOptions}
-          value={filters.assigneeId ?? []}
-          onChange={(assigneeId) => patch({ assigneeId: assigneeId.length ? assigneeId : undefined })}
-        >
-          <FacetButton label="Исполнитель" count={filters.assigneeId?.length} />
-        </MultiSelect>
+        {!hideAssignee && (
+          <MultiSelect
+            title="Исполнитель"
+            options={memberOptions}
+            value={filters.assigneeId ?? []}
+            onChange={(assigneeId) => patch({ assigneeId: assigneeId.length ? assigneeId : undefined })}
+          >
+            <FacetButton label="Исполнитель" count={filters.assigneeId?.length} />
+          </MultiSelect>
+        )}
 
         <MultiSelect
           title="Приоритет"
@@ -251,6 +294,63 @@ export function FilterBar({
           >
             <FacetButton label="Эпик" count={filters.epicId?.length} />
           </MultiSelect>
+        )}
+
+        {dueRange && (
+          <Menu>
+            <MenuTrigger>
+              <FacetButton label="Срок" count={filters.dueAfter || filters.dueBefore || filters.noDueDate ? 1 : undefined} />
+            </MenuTrigger>
+            <MenuContent width={250} label="Срок выполнения">
+              <MenuLabel>Срок</MenuLabel>
+              <MenuItem onSelect={() => patch({ ...dueWindow(1), noDueDate: undefined })}>Сегодня</MenuItem>
+              <MenuItem onSelect={() => patch({ ...dueWindow(7), noDueDate: undefined })}>Ближайшие 7 дней</MenuItem>
+              <MenuItem onSelect={() => patch({ ...dueWindow(30), noDueDate: undefined })}>Ближайшие 30 дней</MenuItem>
+              {/* Tasks nobody has put a date on yet: a window of dates would hide exactly them. */}
+              <MenuItem
+                selected={filters.noDueDate === true}
+                onSelect={() =>
+                  patch({ noDueDate: filters.noDueDate ? undefined : true, dueAfter: undefined, dueBefore: undefined })
+                }
+              >
+                Без срока
+              </MenuItem>
+              <MenuSeparator />
+              <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 px-2 py-1.5 text-xs">
+                <label htmlFor="filter-due-from" className="text-text-subtle">
+                  с
+                </label>
+                <input
+                  id="filter-due-from"
+                  type="date"
+                  value={asDay(filters.dueAfter)}
+                  max={asDay(filters.dueBefore) || undefined}
+                  onChange={(event) =>
+                    patch({ dueAfter: event.target.value ? dayStart(event.target.value) : undefined, noDueDate: undefined })
+                  }
+                  className="h-7 border-2 border-border-strong bg-surface-sunken px-1.5 text-xs outline-none focus:border-accent"
+                />
+                <label htmlFor="filter-due-to" className="text-text-subtle">
+                  по
+                </label>
+                <input
+                  id="filter-due-to"
+                  type="date"
+                  value={asDay(filters.dueBefore)}
+                  min={asDay(filters.dueAfter) || undefined}
+                  onChange={(event) =>
+                    patch({ dueBefore: event.target.value ? dayEnd(event.target.value) : undefined, noDueDate: undefined })
+                  }
+                  className="h-7 border-2 border-border-strong bg-surface-sunken px-1.5 text-xs outline-none focus:border-accent"
+                />
+              </div>
+              {(filters.dueAfter || filters.dueBefore || filters.noDueDate) && (
+                <MenuItem onSelect={() => patch({ dueAfter: undefined, dueBefore: undefined, noDueDate: undefined })}>
+                  Любой срок
+                </MenuItem>
+              )}
+            </MenuContent>
+          </Menu>
         )}
 
         {/* More */}

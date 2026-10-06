@@ -33,6 +33,7 @@ export type ListColumn =
   | 'epic'
   | 'startDate'
   | 'dueDate'
+  | 'storyPoints'
   | 'comments'
   | 'created'
   | 'updated'
@@ -49,6 +50,7 @@ export const ALL_COLUMNS: { key: ListColumn; label: string; width: string }[] = 
   { key: 'project', label: 'Проект', width: 'w-24' },
   { key: 'startDate', label: 'Начало', width: 'w-20' },
   { key: 'dueDate', label: 'Срок', width: 'w-24' },
+  { key: 'storyPoints', label: 'Оценка', width: 'w-14' },
   { key: 'comments', label: 'Комментарии', width: 'w-10' },
   { key: 'created', label: 'Создано', width: 'w-20' },
   { key: 'updated', label: 'Обновлено', width: 'w-20' },
@@ -66,6 +68,7 @@ const COLUMN_PX: Record<ListColumn, number> = {
   project: 96,
   startDate: 96,
   dueDate: 112,
+  storyPoints: 56,
   comments: 40,
   created: 80,
   updated: 80,
@@ -265,27 +268,51 @@ export const IssueRow = memo(function IssueRow({
         {issue.issueKey}
       </span>
 
-      {/* Two lines on a phone rather than a few truncated words; one line from sm up. */}
-      <span className="line-clamp-2 min-w-0 flex-1 text-sm font-bold break-words text-text group-hover:text-accent sm:line-clamp-none sm:min-w-24 sm:truncate xl:min-w-40">
-        {/* A subtask listed on its own (in «Мои задачи») says whose part it is. */}
-        {depth === 0 && issue.parent && (
-          <span className="fd-key mr-1.5 font-normal text-text-subtle" title={issue.parent.title}>
-            {issue.parent.issueKey} ›
-          </span>
-        )}
-        {issue.title}
-        {issue.subtaskCount > 0 && (
-          <span className="fd-num ml-2 text-2xs font-normal text-text-subtle" title="Подзадачи: готово из всех">
-            {issue.subtaskDoneCount}/{issue.subtaskCount}
-          </span>
-        )}
-        {issue.checklistTotal > 0 && (
-          <span
-            className="fd-num ml-2 inline-flex items-center gap-0.5 text-2xs font-normal text-text-subtle"
-            title={`Чек-лист: отмечено ${issue.checklistDone} из ${issue.checklistTotal}`}
-          >
-            <SquareCheck className="size-3" />
-            {issue.checklistDone}/{issue.checklistTotal}
+      <span className="flex min-w-0 flex-1 flex-col sm:min-w-24 xl:min-w-40">
+        {/* Two lines on a phone rather than a few truncated words; one line from sm up. */}
+        <span className="line-clamp-2 text-sm font-bold break-words text-text group-hover:text-accent sm:line-clamp-none sm:truncate">
+          {/* A subtask listed on its own (in «Мои задачи») says whose part it is. */}
+          {depth === 0 && issue.parent && (
+            <span className="fd-key mr-1.5 font-normal text-text-subtle" title={issue.parent.title}>
+              {issue.parent.issueKey} ›
+            </span>
+          )}
+          {issue.title}
+          {issue.subtaskCount > 0 && (
+            <span className="fd-num ml-2 text-2xs font-normal text-text-subtle" title="Подзадачи: готово из всех">
+              {issue.subtaskDoneCount}/{issue.subtaskCount}
+            </span>
+          )}
+          {issue.checklistTotal > 0 && (
+            <span
+              className="fd-num ml-2 inline-flex items-center gap-0.5 text-2xs font-normal text-text-subtle"
+              title={`Чек-лист: отмечено ${issue.checklistDone} из ${issue.checklistTotal}`}
+            >
+              <SquareCheck className="size-3" />
+              {issue.checklistDone}/{issue.checklistTotal}
+            </span>
+          )}
+        </span>
+        {/* On a phone the status, project and due columns do not fit, and a row
+            of bare titles cannot be scanned for what is late or whose it is:
+            the same facts go on a second line under the title instead. */}
+        {(show('status') || show('project') || (show('dueDate') && issue.dueDate)) && (
+          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+            {show('status') && <StatusPill status={issue.status} size="sm" />}
+            {show('project') && (
+              <span className="inline-flex items-center gap-1 text-2xs text-text-subtle" title={issue.project.name}>
+                <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
+                <span className="fd-key">{issue.project.key}</span>
+              </span>
+            )}
+            {show('dueDate') && issue.dueDate && (
+              <DueDateChip
+                value={issue.dueDate}
+                hasTime={issue.dueHasTime}
+                carriedDays={issue.carriedOverDays}
+                done={isClosedStatus(issue.status)}
+              />
+            )}
           </span>
         )}
       </span>
@@ -344,6 +371,16 @@ export const IssueRow = memo(function IssueRow({
             carriedDays={issue.carriedOverDays}
             done={isClosedStatus(issue.status)}
           />
+        </span>
+      )}
+
+      {/* Story points are a relative estimate, not hours — the hint says so. */}
+      {show('storyPoints') && (
+        <span
+          className="fd-num hidden w-14 shrink-0 text-right text-2xs text-text-subtle sm:block"
+          title={issue.storyPoints !== null ? 'Оценка в баллах, не в часах' : undefined}
+        >
+          {issue.storyPoints ?? ''}
         </span>
       )}
 
@@ -538,6 +575,11 @@ export function IssueRowHeader({
       {show('project') && cell('project', 'hidden w-24 sm:block', 'Проект')}
       {show('startDate') && cell('startDate', 'hidden w-24 text-right sm:block', 'Начало')}
       {show('dueDate') && cell('dueDate', 'hidden w-28 text-right sm:block', 'Срок')}
+      {show('storyPoints') && (
+        <span className="hidden w-14 shrink-0 text-right sm:block" title="Оценка в баллах, не в часах">
+          Оценка
+        </span>
+      )}
       {show('comments') && (
         <span className="hidden w-10 shrink-0 justify-end sm:flex" aria-label="Комментарии" title="Комментарии">
           <MessageSquare className="size-3" />

@@ -26,6 +26,9 @@ export const qk = {
   gantt: (projectId: string, filters: unknown) => ['project', projectId, 'gantt', filters] as const,
 
   issues: (scope: string, filters: unknown) => ['issues', scope, filters] as const,
+  /** Under the `issues` root on purpose: whatever refreshes the lists refreshes their figures. */
+  assigneeStats: (workspaceId: string, userIds: string[], filters: unknown) =>
+    ['issues', workspaceId, 'stats', userIds, filters] as const,
   issue: (issueId: string) => ['issue', issueId] as const,
   /**
    * The standalone /issue/:key page resolves by human key, not id, so it reads
@@ -39,6 +42,7 @@ export const qk = {
   issueComments: (issueId: string) => ['issue', issueId, 'comments'] as const,
   issueActivity: (issueId: string) => ['issue', issueId, 'activity'] as const,
   issueLinks: (issueId: string) => ['issue', issueId, 'links'] as const,
+  issueWatchers: (issueId: string) => ['issue', issueId, 'watchers'] as const,
 
   notifications: (workspaceId: string, unreadOnly: boolean) =>
     ['workspace', workspaceId, 'notifications', unreadOnly] as const,

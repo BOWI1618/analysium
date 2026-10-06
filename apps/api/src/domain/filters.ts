@@ -152,6 +152,7 @@ export function buildIssueWhere(
     and.push({ OR: [{ startDate: { lte: to } }, { startDate: null, dueDate: { lte: to } }] });
   }
   if (filter.noDates) and.push({ startDate: null, dueDate: null });
+  if (filter.noDueDate) and.push({ dueDate: null });
 
   if (filter.isOverdue) {
     and.push(overdueWhere());
@@ -203,6 +204,23 @@ export function overdueWhere(now = new Date()): Prisma.IssueWhereInput {
       { dueHasTime: false, dueDate: { lt: new Date(now.getTime() - HALF_DAY_MS) } },
     ],
   };
+}
+
+/**
+ * The last moment of «the next seven days, today included» for someone in
+ * `timezone`. Whole-day dates sit at noon UTC, so they fall inside exactly
+ * when their calendar day does; a timed date is compared with the end of that
+ * day in UTC, which is close enough for a count and never drops a whole day.
+ */
+export function dueSoonUntil(timezone: string, now = new Date(), days = 7): Date {
+  let local: string;
+  try {
+    local = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  } catch {
+    local = now.toISOString().slice(0, 10);
+  }
+  const [year, month, day] = local.split('-').map(Number);
+  return new Date(Date.UTC(year!, month! - 1, day! + days - 1, 23, 59, 59, 999));
 }
 
 /** The same rule for one issue already in memory. */

@@ -220,7 +220,7 @@ test.describe('первый запуск без демо-данных', () => {
     await page.goto('/');
     await page.getByRole('button', { name: /Создать задачу/ }).first().click();
     const create = page.getByRole('dialog', { name: 'Новая задача' });
-    await expect(create.getByLabel('Проект')).toHaveValue('');
+    await expect(create.getByRole('button', { name: 'Проект: без проекта' })).toBeVisible();
     await create.getByLabel('Название задачи').fill('Задача для коллеги');
     await create.getByRole('button', { name: 'Исполнитель' }).click();
     await page.getByRole('menuitem', { name: /Коллега Второй/ }).click();
@@ -587,8 +587,101 @@ test.describe('несохранённые данные', () => {
   });
 });
 
+test.describe('задачи сотрудника', () => {
+  test('руководитель выбирает коллегу и видит его задачи с точными счётчиками', async ({ page, browser }) => {
+    await register(page, 'Руководитель Группы');
+
+    // A colleague joins by code from their own browser.
+    await page.goto('/settings/workspace');
+    await page.getByRole('button', { name: 'Участники' }).click();
+    await page.getByRole('button', { name: 'Создать код' }).click();
+    const code = (await page.getByLabel('Код приглашения').textContent())!.trim();
+    const mateContext = await browser.newContext();
+    const mate = await mateContext.newPage();
+    await mate.goto('/join');
+    await mate.getByLabel('Код приглашения').fill(code);
+    await mate.getByLabel('Ваше имя').fill('Коллега Занятой');
+    await mate.getByLabel('Почта для входа').fill(`mate-${unique()}@test.local`);
+    await mate.getByLabel('Пароль').fill(password);
+    await mate.getByRole('button', { name: 'Присоединиться' }).click();
+    await expect(mate.getByRole('heading', { level: 1 })).toContainText('Коллега', { timeout: 20_000 });
+    await mateContext.close();
+
+    const session = await (await page.request.get('/api/v1/auth/session')).json();
+    const workspaceId = session.workspaces[0].id;
+    const members = await (await page.request.get(`/api/v1/workspaces/${workspaceId}/members`)).json();
+    const mateId = members.find((m: { user: { name: string } }) => m.user.name === 'Коллега Занятой').user.id;
+    const create = (data: Record<string, unknown>) => page.request.post('/api/v1/issues', { data: { workspaceId, ...data } });
+    await create({ title: 'Просроченный отчёт', assigneeId: mateId, dueDate: '2020-01-10T12:00:00.000Z' });
+    await create({ title: 'Обычная задача коллеги', assigneeId: mateId });
+    await create({ title: 'Моя собственная', assigneeId: session.user.id });
+
+    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Сотрудники/ }).click();
+    await expect(page).toHaveURL(/\/employee-work$/);
+    // Without a choice it is the viewer's own list — and the heading says whose it is.
+    const heading = page.getByRole('heading', { level: 1 });
+    await expect(heading).toContainText('Руководитель Группы');
+    await expect(page.getByText('Моя собственная')).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Выбрать сотрудника' }).click();
+    await page.getByPlaceholder('Поиск сотрудника…').fill('Занят');
+    await page.getByRole('menuitem', { name: /Коллега Занятой/ }).click();
+    await expect(heading).toContainText('Коллега Занятой');
+    await expect(page.getByText('Просроченный отчёт')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Моя собственная')).toHaveCount(0);
+
+    // The figures are the server's, and the switch narrows the list to them.
+    await expect(page.getByRole('button', { name: /^Активные\s*2$/ })).toBeVisible();
+    await page.getByRole('button', { name: /^Просроченные\s*1$/ }).click();
+    await expect(page).toHaveURL(/view=overdue/);
+    await expect(page.getByText('Обычная задача коллеги')).toHaveCount(0);
+    await expect(page.getByText('Просроченный отчёт')).toBeVisible();
+
+    // A reload keeps both the person and the view: they live in the address.
+    await page.reload();
+    await expect(heading).toContainText('Коллега Занятой', { timeout: 15_000 });
+    await expect(page.getByText('Просроченный отчёт')).toBeVisible({ timeout: 15_000 });
+
+    // The profile shows a preview and leads to the full list.
+    await page.goto(`/people/${mateId}`);
+    await expect(page.getByRole('row').first().getByText('Статус')).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('link', { name: /Все задачи сотрудника/ }).click();
+    await expect(page).toHaveURL(/\/employee-work\?user=/);
+    await expect(heading).toContainText('Коллега Занятой');
+
+    // On «Мои задачи» the personal tabs no longer offer to swap the person.
+    await page.goto('/my-work');
+    await expect(page.getByText('Моя собственная')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Исполнитель' })).toHaveCount(0);
+  });
+});
+
 test.describe('мобильная версия', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('форма новой задачи помещается в экран, проект выбирается поиском', async ({ page }) => {
+    await register(page, 'Мобильный Автор');
+    await createProject(page, 'Система фиксации нарушений');
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /Создать задачу/ }).first().tap();
+    const create = page.getByRole('dialog', { name: 'Новая задача' });
+    await create.getByRole('button', { name: 'Проект: без проекта' }).tap();
+    await page.getByPlaceholder('Поиск проекта…').fill('фикс');
+    await page.getByRole('menuitem', { name: /Система фиксации нарушений/ }).tap();
+    await expect(create.getByRole('button', { name: 'Проект: Система фиксации нарушений' })).toBeVisible();
+    await create.getByLabel('Название задачи').fill('Проверка формы на телефоне');
+
+    // The case from the review: «Создать» ran 35px past the right edge of the screen.
+    for (const name of ['Отмена', 'Создать и открыть', 'Создать']) {
+      const box = (await create.getByRole('button', { name, exact: true }).boundingBox())!;
+      expect(box.x, name).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, name).toBeLessThanOrEqual(390);
+    }
+
+    await create.getByRole('button', { name: 'Создать', exact: true }).tap();
+    await expect(create).toBeHidden({ timeout: 15_000 });
+  });
 
   test('боковое меню закрывается после перехода', async ({ page }) => {
     await register(page, 'Мобильный Пользователь');

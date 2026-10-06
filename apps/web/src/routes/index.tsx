@@ -10,6 +10,8 @@ import { AcceptInvitePage } from './AcceptInvitePage';
 import { JoinPage } from './JoinPage';
 import { HomePage } from './HomePage';
 import { MyWorkPage } from './MyWorkPage';
+import { EmployeeWorkPage } from './EmployeeWorkPage';
+import { PlanningPage } from './PlanningPage';
 import { InboxPage } from './InboxPage';
 import { ProjectsPage } from './ProjectsPage';
 import { NewProjectPage } from './NewProjectPage';
@@ -112,6 +114,8 @@ export function AppRoutes() {
         >
           <Route index element={<HomePage />} />
           <Route path="my-work" element={<MyWorkPage />} />
+          <Route path="employee-work" element={<EmployeeWorkPage />} />
+          <Route path="planning" element={<PlanningPage />} />
           <Route path="inbox" element={<InboxPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/new" element={<NewProjectPage />} />

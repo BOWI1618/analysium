@@ -51,7 +51,10 @@ export function CommandPalette() {
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const { data: results, isFetching } = useSearch(workspace?.id ?? '', term, open);
+  const { data: results, isFetching, isTyping } = useSearch(workspace?.id ?? '', term, open);
+  // Until the answer for what is typed now arrives, an empty list means «still
+  // looking», not «nothing there» — it used to say the latter mid-request.
+  const searching = Boolean(term.trim()) && (isFetching || isTyping);
 
   useEffect(() => {
     if (!open) {
@@ -306,8 +309,8 @@ export function CommandPalette() {
 
         <div ref={listRef} className="max-h-[52vh] overflow-y-auto p-1.5 scrollbar-thin">
           {commands.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-text-subtle">
-              Ничего не найдено по запросу «{term}»
+            <p className="px-3 py-8 text-center text-sm text-text-subtle" role="status">
+              {searching ? 'Ищем…' : `Ничего не найдено по запросу «${term}»`}
             </p>
           ) : (
             Object.entries(grouped).map(([group, entries]) => (

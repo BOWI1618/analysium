@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AttachmentDto, CreateIssueRequest, IssuePriority, IssueType } from '@flowdesk/contracts';
 import { EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
-import { ChevronDown, CornerDownLeft } from 'lucide-react';
+import { ChevronDown, CornerDownLeft, Eye } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
@@ -25,7 +25,17 @@ import { Checkbox } from '~/ui/Input';
 import { Kbd } from '~/ui/Tooltip';
 import { Avatar } from '~/ui/Avatar';
 import { RichTextEditor, replaceImageSources } from './RichText';
-import { LabelPicker, PriorityPicker, StatusPicker, TypePicker, UserPicker, DateField } from './Pickers';
+import {
+  LabelPicker,
+  MultiSelect,
+  PriorityPicker,
+  ProjectPicker,
+  StatusPicker,
+  TypePicker,
+  UserPicker,
+  DateField,
+} from './Pickers';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { IssueTypeIcon, LabelChip, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 
 /**
@@ -53,6 +63,7 @@ export function CreateIssueDialog() {
   const [epicId, setEpicId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [dueHasTime, setDueHasTime] = useState(false);
+  const [watcherIds, setWatcherIds] = useState<string[]>([]);
   const [createAnother, setCreateAnother] = useState(false);
 
   // An empty choice means "without a project". Such tasks live in the
@@ -60,6 +71,7 @@ export function CreateIssueDialog() {
   // statuses and labels are offered like any project's. Until the first such
   // task creates it, there is nothing project-scoped to pick yet.
   const regularProjects = useMemo(() => (projects ?? []).filter((p) => !p.isSystem), [projects]);
+  const selectedProject = regularProjects.find((p) => p.id === projectId);
   const systemProjectId = projects?.find((p) => p.isSystem)?.id;
   const effectiveProjectId = projectId || systemProjectId || '';
 
@@ -148,6 +160,7 @@ export function CreateIssueDialog() {
     setPriority('MEDIUM');
     setAssigneeId(null);
     setLabelIds([]);
+    setWatcherIds([]);
     setDueDate(seed?.dueDate ?? null);
     setDueHasTime(seed?.dueHasTime ?? false);
   }, [open]);
@@ -161,6 +174,10 @@ export function CreateIssueDialog() {
     : (workspaceMembers ?? []).filter((m) => m.role !== 'GUEST').map((m) => m.user);
   const statuses = project?.statuses ?? [];
   const selectedStatus = statuses.find((s) => s.id === statusId) ?? statuses[0];
+  // Another project has another circle of people: someone picked for the old
+  // one may not be able to open the new one, so they are dropped, not sent.
+  const allowedWatcherIds = watcherIds.filter((id) => members.some((member) => member.id === id));
+  const assignee = members.find((member) => member.id === assigneeId) ?? null;
   // A new label is added to the same list the task goes to and picked at once.
   const addLabel = async (name: string) => {
     const input = { name, color: nextLabelColor(project?.labels ?? []) };
@@ -180,6 +197,7 @@ export function CreateIssueDialog() {
     !isDocEmpty(description) ||
     Boolean(assigneeId) ||
     labelIds.length > 0 ||
+    watcherIds.length > 0 ||
     // A date that came with the form (a calendar day's «+») is not the person's input.
     (dueDate ?? null) !== (defaults?.dueDate ?? null);
 
@@ -197,8 +215,9 @@ export function CreateIssueDialog() {
       type,
       priority,
       ...(statusId ? { statusId } : {}),
-      ...(assigneeId ? { assigneeId } : {}),
+      ...(assignee ? { assigneeId: assignee.id } : {}),
       ...(labelIds.length ? { labelIds } : {}),
+      ...(allowedWatcherIds.length ? { watcherIds: allowedWatcherIds } : {}),
       ...(sprintId ? { sprintId } : {}),
       ...(epicId ? { epicId } : {}),
       ...(defaults?.parentId ? { parentId: defaults.parentId } : {}),
@@ -243,13 +262,15 @@ export function CreateIssueDialog() {
       title="Новая задача"
       size="lg"
       footer={
-        <div className="flex w-full items-center gap-3">
+        // Wraps on a phone: the three buttons and the checkbox are wider than a
+        // 390px screen, and in one row «Создать» ran off its edge.
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
           <Checkbox
             checked={createAnother}
             onChange={(event) => setCreateAnother(event.target.checked)}
             label={<span className="text-xs text-text-muted">Создать ещё</span>}
           />
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <DialogCloseButton size="sm" variant="ghost">
               Отмена
             </DialogCloseButton>
@@ -267,7 +288,12 @@ export function CreateIssueDialog() {
               loading={createIssue.isPending}
               disabled={!canSubmit}
               onClick={() => void submit(false)}
-              iconRight={<Kbd className="border-white/30 bg-white/10 text-white/80">↵</Kbd>}
+              iconRight={
+                // The Enter hint means nothing on a touch screen and costs the width the button needs there.
+                <span className="hidden sm:inline-flex">
+                  <Kbd className="border-white/30 bg-white/10 text-white/80">↵</Kbd>
+                </span>
+              }
             >
               Создать
             </Button>
@@ -278,29 +304,31 @@ export function CreateIssueDialog() {
       <div className="space-y-3">
         {/* Project + type */}
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <ProjectPicker
+            projects={regularProjects}
             value={projectId}
-            onChange={(event) => {
+            onChange={(next) => {
               // Statuses, labels, epics and sprints belong to a project: a
               // choice made for one means nothing in another.
-              if (event.target.value !== projectId) {
+              if (next !== projectId) {
                 setStatusId(undefined);
                 setLabelIds([]);
                 setEpicId(null);
                 setSprintId(null);
               }
-              setProjectId(event.target.value);
+              setProjectId(next);
             }}
-            aria-label="Проект"
-            className="h-7 rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
           >
-            <option value="">Без проекта</option>
-            {regularProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            <button
+              type="button"
+              aria-label={`Проект: ${selectedProject?.name ?? 'без проекта'}`}
+              className="inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover hover:shadow-xs"
+            >
+              {selectedProject && <ProjectIcon icon={selectedProject.icon} color={selectedProject.color} size="sm" />}
+              <span className="truncate">{selectedProject?.name ?? 'Без проекта'}</span>
+              <ChevronDown className="size-3 shrink-0 text-text-subtle" />
+            </button>
+          </ProjectPicker>
 
           <TypePicker value={type} onChange={setType}>
             <button
@@ -372,10 +400,30 @@ export function CreateIssueDialog() {
               type="button"
               className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs"
             >
-              <Avatar user={members.find((m) => m.id === assigneeId) ?? null} size="sm" />
-              {members.find((m) => m.id === assigneeId)?.name ?? 'Исполнитель'}
+              <Avatar user={assignee} size="sm" />
+              {assignee?.name ?? 'Исполнитель'}
             </button>
           </UserPicker>
+
+          <MultiSelect
+            title="Наблюдатели"
+            options={members.map((member) => ({
+              value: member.id,
+              label: member.name,
+              icon: <Avatar user={member} size="sm" />,
+            }))}
+            value={allowedWatcherIds}
+            onChange={setWatcherIds}
+          >
+            <button
+              type="button"
+              aria-label={`Наблюдатели: ${allowedWatcherIds.length || 'нет'}`}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs"
+            >
+              <Eye className="size-3.5 text-text-subtle" />
+              {allowedWatcherIds.length ? `Наблюдатели: ${allowedWatcherIds.length}` : 'Наблюдатели'}
+            </button>
+          </MultiSelect>
 
           <LabelPicker
             labels={project?.labels ?? []}

@@ -19,6 +19,7 @@ import {
   type IssuePriority,
   type IssueType,
   type LabelDto,
+  type ProjectDto,
   type StatusDto,
   type UserSummaryDto,
 } from '@flowdesk/contracts';
@@ -26,6 +27,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide
 import { Popover } from '~/ui/Popover';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Avatar } from '~/ui/Avatar';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 
 /**
@@ -201,6 +203,77 @@ export function UserPicker({
           )}
         </MenuContent>
       )}
+    </Menu>
+  );
+}
+
+/* ----------------------------------------------------------- projects */
+
+/**
+ * A project, found by typing part of its name or key — a plain list stops
+ * being usable somewhere past a dozen projects. The empty value means
+ * «without a project».
+ */
+export function ProjectPicker({
+  projects,
+  value,
+  onChange,
+  children,
+  align = 'start',
+  noneLabel = 'Без проекта',
+}: {
+  projects: Pick<ProjectDto, 'id' | 'name' | 'key' | 'icon' | 'color'>[];
+  value: string;
+  onChange: (projectId: string) => void;
+  children: ReactNode;
+  align?: 'start' | 'end';
+  /** Shown as the first choice; `null` leaves the choice out. */
+  noneLabel?: string | null;
+}) {
+  const [term, setTerm] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = term.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter((p) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().startsWith(q));
+  }, [projects, term]);
+
+  return (
+    <Menu onOpenChange={(open) => !open && setTerm('')}>
+      <MenuTrigger>{children}</MenuTrigger>
+      <MenuContent align={align} label="Выбрать проект" width={280}>
+        <div className="mb-1 flex items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface-sunken px-2 py-1">
+          <Search className="size-3.5 shrink-0 text-text-subtle" />
+          <input
+            autoFocus
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+            placeholder="Поиск проекта…"
+            aria-label="Поиск проекта"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-text-subtle"
+          />
+        </div>
+        {noneLabel !== null && !term.trim() && (
+          <MenuItem selected={value === ''} onSelect={() => onChange('')}>
+            {noneLabel}
+          </MenuItem>
+        )}
+        {filtered.length === 0 ? (
+          <p className="px-2 py-3 text-center text-xs text-text-subtle">Проектов не найдено</p>
+        ) : (
+          filtered.map((project) => (
+            <MenuItem
+              key={project.id}
+              icon={<ProjectIcon icon={project.icon} color={project.color} size="sm" />}
+              selected={project.id === value}
+              onSelect={() => onChange(project.id)}
+              shortcut={<span className="fd-key">{project.key}</span>}
+            >
+              {project.name}
+            </MenuItem>
+          ))
+        )}
+      </MenuContent>
     </Menu>
   );
 }

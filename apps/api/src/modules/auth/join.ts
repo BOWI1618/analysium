@@ -6,7 +6,8 @@
  * admin is the way in, and it must not depend on that flag.
  */
 import type { JoinWithCodeInput } from '@flowdesk/contracts';
-import { AuditAction } from '@flowdesk/contracts';
+import { AuditAction, RealtimeEventType } from '@flowdesk/contracts';
+import { emit } from '../../realtime/eventBus';
 import { prisma } from '../../lib/prisma';
 import { hashPassword } from '../../lib/password';
 import { badRequest, conflict } from '../../lib/errors';
@@ -57,12 +58,22 @@ export async function joinWithCode(input: JoinWithCodeInput, ip?: string) {
       },
     });
 
-    await tx.workspaceMember.create({
+    const member = await tx.workspaceMember.create({
       data: { workspaceId: invitation.workspaceId, userId: created.id, role: invitation.role },
+      select: { id: true },
     });
     await tx.invitation.update({ where: { id: invitation.id }, data: { acceptedById: created.id } });
 
-    return created;
+    return { ...created, memberId: member.id };
+  });
+
+  // Open sessions keep the list of people for their pickers. Without a word
+  // from here a colleague who has just joined could not be chosen or given a
+  // task until everyone reloaded the page.
+  emit(RealtimeEventType.MEMBER_UPDATED, {
+    workspaceId: invitation.workspaceId,
+    actorId: user.id,
+    payload: { memberId: user.memberId, userId: user.id },
   });
 
   audit({

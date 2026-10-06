@@ -15,8 +15,8 @@ const ARRAY_KEYS = new Set([
   'projectId',
 ]);
 
-const BOOL_KEYS = new Set(['includeDone', 'includeSubtasks', 'isOverdue', 'noSprint']);
-const SCALAR_KEYS = new Set(['sort', 'order', 'search']);
+const BOOL_KEYS = new Set(['includeDone', 'includeSubtasks', 'isOverdue', 'noSprint', 'noDueDate']);
+const SCALAR_KEYS = new Set(['sort', 'order', 'search', 'dueAfter', 'dueBefore']);
 
 const isFilterKey = (key: string) => ARRAY_KEYS.has(key) || BOOL_KEYS.has(key) || SCALAR_KEYS.has(key);
 

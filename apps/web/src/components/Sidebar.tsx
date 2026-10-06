@@ -12,6 +12,8 @@ import {
   Settings,
   Star,
   UserRound,
+  Users,
+  ListTodo,
   ChevronDown,
   LogOut,
   Keyboard,
@@ -101,6 +103,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
   const { user, workspace, workspaces, switchWorkspace, logout } = useSession();
   const { state: connection } = useRealtime();
   const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
+  const canAssign = useWorkspaceCan(Permission.ISSUE_ASSIGN);
   const navigate = useNavigate();
   const toast = useToast();
   // The phone drawer is never the narrow rail: collapsing is a desktop
@@ -258,6 +261,25 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           collapsed={collapsed}
           onClick={onNavigate}
         />
+        <NavItem
+          to="/employee-work"
+          icon={<Users className="size-4" />}
+          label="Сотрудники"
+          index="05"
+          collapsed={collapsed}
+          onClick={onNavigate}
+        />
+        {/* Handing out work is for those who may assign it; a guest has nothing to do there. */}
+        {canAssign && (
+          <NavItem
+            to="/planning"
+            icon={<ListTodo className="size-4" />}
+            label="Распределение"
+            index="06"
+            collapsed={collapsed}
+            onClick={onNavigate}
+          />
+        )}
       </nav>
 
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 scrollbar-thin">

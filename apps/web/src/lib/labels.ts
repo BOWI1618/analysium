@@ -97,3 +97,29 @@ export function describeAuditDetails(action: string, metadata: Record<string, un
   if (typeof m.movedCount === 'number' && m.movedCount > 0) parts.push(`незавершённых перенесено: ${m.movedCount}`);
   return parts.join(' · ');
 }
+
+/** What a person did, as a short phrase after their name — for activity lists. */
+export const ACTIVITY_LABEL: Record<string, string> = {
+  ISSUE_CREATED: 'создал(а) задачу',
+  STATUS_CHANGED: 'сменил(а) статус',
+  ASSIGNEE_CHANGED: 'сменил(а) исполнителя',
+  PRIORITY_CHANGED: 'сменил(а) приоритет',
+  TITLE_CHANGED: 'переименовал(а)',
+  DESCRIPTION_CHANGED: 'изменил(а) описание',
+  TYPE_CHANGED: 'сменил(а) тип',
+  LABEL_ADDED: 'добавил(а) метку',
+  LABEL_REMOVED: 'убрал(а) метку',
+  DUE_DATE_CHANGED: 'изменил(а) срок',
+  STORY_POINTS_CHANGED: 'изменил(а) оценку',
+  EPIC_CHANGED: 'сменил(а) эпик',
+  SPRINT_CHANGED: 'сменил(а) спринт',
+  PARENT_CHANGED: 'сменил(а) родительскую задачу',
+  SUBTASK_CREATED: 'добавил(а) подзадачу',
+  COMMENT_ADDED: 'прокомментировал(а)',
+  COMMENT_DELETED: 'удалил(а) комментарий',
+  ATTACHMENT_ADDED: 'приложил(а) файл',
+  ATTACHMENT_REMOVED: 'удалил(а) файл',
+  ISSUE_ARCHIVED: 'убрал(а) в архив',
+  PROJECT_CHANGED: 'перенёс(ла) в другой проект',
+  KEY_CHANGED: 'сменил(а) номер задачи',
+};

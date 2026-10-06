@@ -198,6 +198,8 @@ export interface IssueDetailDto extends IssueSummaryDto {
   permissions: Permission[];
   /** Whether the viewer hears about status, due date and comment changes. */
   watching: boolean;
+  /** How many people hear about them in all — those who can open the task. */
+  watcherCount: number;
 }
 
 export interface CommentDto {
@@ -390,6 +392,36 @@ export interface DashboardDto {
   activity: { date: string; created: number; completed: number }[];
   sprint: (SprintDto & { burndown: { date: string; remaining: number | null; ideal: number }[] }) | null;
   velocity: { sprintId: string; name: string; committed: number; completed: number }[];
+}
+
+/** Why someone hears about a task: by their part in it, or because they subscribed. */
+export type WatcherReason = 'ASSIGNEE' | 'REPORTER' | 'COMMENTER' | 'SUBSCRIBED';
+
+export interface WatcherDto {
+  user: UserSummaryDto;
+  reasons: WatcherReason[];
+}
+
+export interface IssueWatchersDto {
+  items: WatcherDto[];
+  /** Whether the viewer may subscribe other people and take their subscriptions away. */
+  canManage: boolean;
+}
+
+/**
+ * One person's tasks in figures, counted by the server over everything the
+ * viewer may read — never over the rows a page happened to load.
+ * Active: not completed and not cancelled. Due soon: active, not overdue, due
+ * within the next seven days including today, in the viewer's time zone.
+ */
+export interface AssigneeStatsDto {
+  userId: string;
+  active: number;
+  overdue: number;
+  dueSoon: number;
+  done: number;
+  /** Story points of the active tasks: a relative estimate, never hours or a share of someone's time. */
+  activePoints: number;
 }
 
 export interface SearchResultsDto {

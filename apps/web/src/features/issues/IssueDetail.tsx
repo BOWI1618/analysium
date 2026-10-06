@@ -43,6 +43,7 @@ import {
 import { ActivityTimeline } from './ActivityTimeline';
 import { CommentThread } from './CommentThread';
 import { IssueLinks } from './IssueLinks';
+import { WatchersButton } from './Watchers';
 import { AttachToParentDialog, DuplicateIssueDialog } from './IssueActionDialogs';
 import { DoneToggle, doneStatusId, isClosedStatus, reopenStatusId } from '~/components/DoneToggle';
 import { RichTextEditor } from '~/components/RichText';
@@ -260,6 +261,8 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
             </IconButton>
           </Tooltip>
 
+          <WatchersButton issueId={issue.id} count={issue.watcherCount} candidates={project?.assignees ?? []} />
+
           <Tooltip content="Скопировать ссылку">
             <IconButton label="Скопировать ссылку" size="sm" onClick={() => void copyLink()}>
               <Link2 className="size-4" />
@@ -470,7 +473,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                       </span>
                     </a>
                     <IconButton
-                      label={`Remove ${attachment.filename}`}
+                      label={`Удалить файл ${attachment.filename}`}
                       size="xs"
                       className="opacity-0 group-hover:opacity-100 focus:opacity-100"
                       onClick={() => deleteAttachment.mutate(attachment.id)}

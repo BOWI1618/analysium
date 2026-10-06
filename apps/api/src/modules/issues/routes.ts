@@ -8,9 +8,11 @@ import {
   moveIssueSchema,
   transferIssueSchema,
   updateIssueSchema,
+  setWatcherSchema,
   watchIssueSchema,
+  can,
 } from '@flowdesk/contracts';
-import { setWatching } from '../notifications/service';
+import { listWatchers, setWatcher, setWatching } from '../notifications/service';
 import { parse } from '../../lib/validate';
 import { assertCan, issueContext, projectContext, workspaceContext } from '../../lib/context';
 import { ensureSystemProject } from '../projects/service';
@@ -19,6 +21,7 @@ import * as service from './service';
 import { transferIssue } from './transfer';
 import { duplicateIssue } from './duplicate';
 import { exportIssuesCsv } from './exportCsv';
+import { badRequest } from '../../lib/errors';
 
 type IssueParams = { issueId: string };
 
@@ -36,6 +39,16 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
     const filter = parse(issueFilterSchema, req.query);
     return { count: await service.countIssues(actor, filter) };
+  });
+
+  /** Figures per person over the same filters: «Задачи сотрудника», planning, a department. */
+  app.get<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/issues/stats', async (req) => {
+    const user = currentUser(req);
+    const actor = await workspaceContext(user.id, req.params.workspaceId);
+    const filter = parse(issueFilterSchema, req.query);
+    if (!filter.assigneeId?.length) throw badRequest('Укажите, по кому считать задачи');
+    if (filter.assigneeId.length > 200) throw badRequest('Слишком много людей в одном запросе');
+    return { items: await service.assigneeStats(actor, filter, user.timezone) };
   });
 
   app.get<{ Params: { projectId: string } }>('/projects/:projectId/issues', async (req) => {
@@ -139,6 +152,19 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const { watching } = parse(watchIssueSchema, req.body);
     await setWatching(req.params.issueId, actor.userId, watching);
     return { watching };
+  });
+
+  /** Who hears about the task, and whether the viewer may change that list. */
+  app.get<{ Params: IssueParams }>('/issues/:issueId/watchers', async (req) => {
+    const { actor, issue } = await issueContext(currentUser(req).id, req.params.issueId);
+    return { items: await listWatchers(issue.id, actor.workspaceId), canManage: can(actor, Permission.ISSUE_UPDATE) };
+  });
+
+  app.post<{ Params: IssueParams }>('/issues/:issueId/watchers', async (req) => {
+    const { actor, issue } = await issueContext(currentUser(req).id, req.params.issueId);
+    const { userId, watching } = parse(setWatcherSchema, req.body);
+    await setWatcher(actor, issue, userId, watching);
+    return { items: await listWatchers(issue.id, actor.workspaceId), canManage: can(actor, Permission.ISSUE_UPDATE) };
   });
 
   app.get<{ Params: IssueParams }>('/issues/:issueId/activity', async (req) => {

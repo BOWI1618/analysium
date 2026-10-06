@@ -33,6 +33,8 @@ export interface IssueFilters {
   overlapsFrom?: string;
   overlapsTo?: string;
   noDates?: boolean;
+  /** Only tasks without a deadline — the ones planning has not reached yet. */
+  noDueDate?: boolean;
   sort?: IssueFilterInput['sort'];
   order?: IssueFilterInput['order'];
 }

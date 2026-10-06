@@ -9,6 +9,7 @@
  */
 import type {
   ActorContext,
+  AssigneeStatsDto,
   BulkUpdateInput,
   CreateIssueInput,
   IssueDetailDto,
@@ -33,12 +34,12 @@ import {
 } from '@flowdesk/contracts';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { assertCan, visibleProjectIds } from '../../lib/context';
+import { assertCan, usersWithProjectAccess, visibleProjectIds } from '../../lib/context';
 import { badRequest, conflict, notFound, AppError } from '../../lib/errors';
 import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
 import { audit } from '../../lib/audit';
-import { buildIssueWhere, orderByFor } from '../../domain/filters';
+import { buildIssueWhere, dueSoonUntil, orderByFor, overdueWhere } from '../../domain/filters';
 import { nextOccurrenceDates } from '../../domain/recurrence';
 import {
   HIERARCHY_MESSAGES,
@@ -92,6 +93,65 @@ export async function countIssues(actor: ActorContext, filter: IssueFilterInput)
     currentUserId: actor.userId,
   }, { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES });
   return prisma.issue.count({ where });
+}
+
+const ACTIVE_CATEGORIES = ['BACKLOG', 'UNSTARTED', 'STARTED'];
+
+/**
+ * Per person: active, overdue, due soon and done — the figures a lead looks
+ * at first. Every other filter applies as given; the view switches themselves
+ * (status categories by «активные/завершённые», overdue) are what is being
+ * counted, so the caller leaves them out. Subtasks count: they are assigned
+ * to people on their own, often to someone other than the parent's assignee.
+ */
+export async function assigneeStats(
+  actor: ActorContext,
+  filter: IssueFilterInput,
+  timezone: string,
+  now = new Date(),
+): Promise<AssigneeStatsDto[]> {
+  const ids = [
+    ...new Set((filter.assigneeId ?? []).map((id) => (id === '@me' ? actor.userId : id))),
+  ].filter((id) => id !== 'none' && id !== 'unassigned');
+  if (ids.length === 0) return [];
+
+  const allowedProjectIds = await visibleProjectIds(actor);
+  const base = buildIssueWhere(
+    { ...filter, assigneeId: ids, includeSubtasks: true, isOverdue: undefined, includeDone: undefined },
+    { workspaceId: actor.workspaceId, allowedProjectIds, currentUserId: actor.userId },
+    { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES },
+  );
+  const active: Prisma.IssueWhereInput = { status: { category: { in: ACTIVE_CATEGORIES as never } } };
+  const overdue = overdueWhere(now);
+  const wheres: Record<'active' | 'overdue' | 'dueSoon' | 'done', Prisma.IssueWhereInput> = {
+    active: { AND: [base, active] },
+    overdue: { AND: [base, active, overdue] },
+    dueSoon: { AND: [base, active, { dueDate: { lte: dueSoonUntil(timezone, now) } }, { NOT: overdue }] },
+    done: { AND: [base, { status: { category: 'COMPLETED' } }] },
+  };
+
+  const points = new Map<string | null, number>();
+  const counted = await Promise.all(
+    Object.entries(wheres).map(async ([key, where]) => {
+      const rows = await prisma.issue.groupBy({
+        by: ['assigneeId'],
+        where,
+        _count: { _all: true },
+        _sum: { storyPoints: true },
+      });
+      if (key === 'active') for (const row of rows) points.set(row.assigneeId, row._sum.storyPoints ?? 0);
+      return [key, new Map(rows.map((row) => [row.assigneeId, row._count._all]))] as const;
+    }),
+  );
+  const byKey = Object.fromEntries(counted) as Record<keyof typeof wheres, Map<string | null, number>>;
+  return ids.map((userId) => ({
+    userId,
+    active: byKey.active.get(userId) ?? 0,
+    overdue: byKey.overdue.get(userId) ?? 0,
+    dueSoon: byKey.dueSoon.get(userId) ?? 0,
+    done: byKey.done.get(userId) ?? 0,
+    activePoints: points.get(userId) ?? 0,
+  }));
 }
 
 export interface BoardColumn {
@@ -172,6 +232,8 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
     }),
     issueWatchers(issueId),
   ]);
+  // Counted the way they are notified: only those who can still open the task.
+  const audience = await usersWithProjectAccess(actor.workspaceId, issue.projectId, watchers);
 
   return {
     ...toIssueSummary(issue),
@@ -182,6 +244,7 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
     attachments: issue.attachments.map(toAttachment),
     permissions: permissionsFor(actor),
     watching: watchers.includes(actor.userId),
+    watcherCount: audience.length,
   };
 }
 
@@ -356,6 +419,21 @@ export async function createIssue(
     validateSprint(input.projectId, input.sprintId),
   ]);
 
+  // Watchers named in the form. Checked before anything is written, and saved
+  // in the same transaction as the task: a task never appears with half of them.
+  const watcherIds = [...new Set(input.watcherIds ?? [])];
+  if (watcherIds.some((id) => id !== actor.userId)) {
+    assertCan(actor, Permission.ISSUE_UPDATE, 'Добавлять наблюдателей может тот, кто вправе изменять задачи');
+  }
+  if (watcherIds.length) {
+    const readable = await usersWithProjectAccess(actor.workspaceId, input.projectId, watcherIds);
+    if (readable.length !== watcherIds.length) {
+      throw badRequest('Не у всех выбранных наблюдателей есть доступ к этому проекту', {
+        watcherIds: 'Уберите людей, у которых нет доступа к проекту',
+      });
+    }
+  }
+
   const description = input.description ? sanitizeDoc(input.description) : null;
   const descriptionText = description ? docToText(description) : null;
 
@@ -431,6 +509,12 @@ export async function createIssue(
     await tx.activityEvent.create({
       data: { issueId: created.id, actorId: actor.userId, type: ActivityType.ISSUE_CREATED },
     });
+
+    if (watcherIds.length) {
+      await tx.issueSubscription.createMany({
+        data: watcherIds.map((userId) => ({ issueId: created.id, userId, subscribed: true })),
+      });
+    }
 
     if (created.parentId) {
       await tx.activityEvent.create({

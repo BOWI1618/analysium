@@ -118,13 +118,20 @@ export function MyWorkPage() {
 
   const [widths, resizeColumn] = useColumnWidths('flowdesk.my-work-widths');
 
+  // On the tabs that are about the viewer's own tasks the assignee is not a
+  // filter: picking a colleague there showed their tasks under «Назначено мне».
+  // Someone else's tasks have a screen of their own — «Задачи сотрудника».
+  const personal = tab !== 'created' && tab !== 'recent';
+
   const filters = useMemo<IssueFilters>(() => {
     const preset = presetFor(tab);
     // Chosen states replace the tab's «open only»: asking for finished work
     // shows finished work, not everything.
     if (extraFilters.statusCategory?.length) delete preset.includeDone;
-    return { ...preset, ...extraFilters };
-  }, [tab, extraFilters]);
+    const extra = { ...extraFilters };
+    if (personal) delete extra.assigneeId;
+    return { ...preset, ...extra };
+  }, [tab, extraFilters, personal]);
 
   // The "upcoming" preset filters on dueAfter = now — refetch on a timer so
   // the window does not freeze at the moment the tab was opened.
@@ -172,6 +179,7 @@ export function MyWorkPage() {
         // Across projects there are no shared statuses, so work is picked by
         // its state; an overdue task is open and a done one closed by definition.
         stateFacet={tab !== 'overdue' && tab !== 'done'}
+        hideAssignee={personal}
         hideDoneOption={false}
         trailing={
           <div className="flex items-center gap-2">

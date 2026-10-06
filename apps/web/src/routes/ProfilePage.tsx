@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { ActivityDto, IssueSummaryDto, UserDto, WorkspaceRole } from '@flowdesk/contracts';
@@ -8,12 +8,12 @@ import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { Topbar } from '~/components/Topbar';
-import { IssueRow, DEFAULT_COLUMNS } from '~/components/IssueRow';
+import { IssueRow, IssueRowHeader, listMinWidth, type ListColumn } from '~/components/IssueRow';
 import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
 import { EmptyState, ErrorState, Skeleton } from '~/ui/Feedback';
 import { fullDate, relativeTime } from '~/lib/format';
-import { ROLE_LABEL } from '~/lib/labels';
+import { ACTIVITY_LABEL, ROLE_LABEL } from '~/lib/labels';
 
 interface ProfileResponse {
   user: UserDto & { createdAt: string };
@@ -35,6 +35,15 @@ const TAB_LABEL: Record<(typeof TABS)[number], string> = {
   activity: 'История',
 };
 type Tab = (typeof TABS)[number];
+
+/**
+ * A short table: what the task is, where, in what state and when it is due.
+ * On «Назначено» the assignee is this very person, so that column is left out.
+ */
+const PROFILE_COLUMNS: Record<'assigned' | 'created', ListColumn[]> = {
+  assigned: ['status', 'priority', 'project', 'dueDate'],
+  created: ['status', 'priority', 'assignee', 'project', 'dueDate'],
+};
 
 export function ProfilePage() {
   const { userId = '' } = useParams();
@@ -102,7 +111,7 @@ export function ProfilePage() {
                 </dl>
               </header>
 
-              <div className="flex items-center gap-1 border-b-2 border-border-strong">
+              <div className="flex flex-wrap items-center gap-1 border-b-2 border-border-strong">
                 {TABS.map((item) => (
                   <button
                     key={item}
@@ -118,9 +127,17 @@ export function ProfilePage() {
                     {TAB_LABEL[item]}
                   </button>
                 ))}
+                {/* The tabs show the latest twenty; the full, filterable list is one click away. */}
+                <Link
+                  to={`/employee-work?user=${userId}`}
+                  className="mb-1 ml-auto text-xs font-bold text-accent hover:underline"
+                >
+                  Все задачи {isMe ? 'мои' : 'сотрудника'} →
+                </Link>
               </div>
 
-              <div className="border-2 border-border-strong bg-surface shadow-sm">
+              {/* Scrolls sideways inside its own frame: the columns used to run out past it. */}
+              <div className="overflow-x-auto border-2 border-border-strong bg-surface shadow-sm scrollbar-thin">
                 {tab === 'activity' ? (
                   data.activity.length === 0 ? (
                     <EmptyState compact title="Истории пока нет" />
@@ -138,7 +155,7 @@ export function ProfilePage() {
                             </span>
                             <span className="min-w-0 flex-1 truncate text-sm">{event.issue.title}</span>
                             <span className="hidden text-2xs text-text-subtle sm:inline">
-                              {event.type.replace(/_/g, ' ').toLowerCase()}
+                              {ACTIVITY_LABEL[event.type] ?? 'изменил(а) задачу'}
                             </span>
                             <span className="fd-num shrink-0 text-2xs text-text-subtle">
                               {relativeTime(event.createdAt)}
@@ -164,17 +181,26 @@ export function ProfilePage() {
                         />
                       );
                     }
-                    return issues.map((issue) => (
-                      <IssueRow
-                        key={issue.id}
-                        issue={issue}
-                        columns={[...DEFAULT_COLUMNS, 'project']}
-                        selected={false}
-                        onToggleSelect={() => undefined}
-                selectable={false}
-                        onOpen={() => openIssue(issue.id)}
-                      />
-                    ));
+                    const columns = PROFILE_COLUMNS[tab];
+                    return (
+                      <div
+                        className="sm:min-w-[var(--list-min)]"
+                        style={{ '--list-min': `${listMinWidth(columns, false)}px` } as React.CSSProperties}
+                      >
+                        <IssueRowHeader columns={columns} selectable={false} />
+                        {issues.map((issue) => (
+                          <IssueRow
+                            key={issue.id}
+                            issue={issue}
+                            columns={columns}
+                            selected={false}
+                            onToggleSelect={() => undefined}
+                            selectable={false}
+                            onOpen={() => openIssue(issue.id)}
+                          />
+                        ))}
+                      </div>
+                    );
                   })()
                 )}
               </div>
