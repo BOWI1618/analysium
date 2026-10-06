@@ -394,6 +394,24 @@ export interface DashboardDto {
   velocity: { sprintId: string; name: string; committed: number; completed: number }[];
 }
 
+/**
+ * A department of the workspace: who leads it and who is in it. The list is
+ * kept by administrators; it says nothing about access to projects or tasks.
+ */
+export interface DepartmentDto {
+  id: string;
+  name: string;
+  lead: UserSummaryDto | null;
+  members: UserSummaryDto[];
+}
+
+export interface DepartmentListDto {
+  /** Every department for an administrator; for anyone else, those they lead. */
+  items: DepartmentDto[];
+  /** Whether the viewer may create, change and delete departments. */
+  canManage: boolean;
+}
+
 /** Why someone hears about a task: by their part in it, or because they subscribed. */
 export type WatcherReason = 'ASSIGNEE' | 'REPORTER' | 'COMMENTER' | 'SUBSCRIBED';
 

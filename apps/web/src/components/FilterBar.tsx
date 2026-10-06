@@ -48,6 +48,11 @@ export interface FilterBarProps {
   dueRange?: boolean;
   /** Where the page itself decides whose tasks are shown, a second choice of person would silently fight it. */
   hideAssignee?: boolean;
+  /**
+   * Offer exactly the people passed in — no «Я», no «Без исполнителя». For a
+   * list that is about a fixed circle of people, such as a department.
+   */
+  onlyListedMembers?: boolean;
 }
 
 /**
@@ -106,6 +111,7 @@ export function FilterBar({
   projects = [],
   dueRange = false,
   hideAssignee = false,
+  onlyListedMembers = false,
 }: FilterBarProps) {
   const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
   const [facetsOpen, setFacetsOpen] = useState(false);
@@ -117,7 +123,10 @@ export function FilterBar({
   const patch = (next: Partial<IssueFilters>) => onChange({ ...filters, ...next });
 
   const memberOptions = useMemo(
-    () => [
+    () =>
+      onlyListedMembers
+        ? members.map((m) => ({ value: m.id, label: m.name, icon: <Avatar user={m} size="sm" /> }))
+        : [
       { value: '@me', label: 'Я', icon: <Avatar user={members.find((m) => m.id === currentUserId)} size="sm" /> },
       { value: 'none', label: 'Без исполнителя', icon: <Avatar user={null} size="sm" /> },
       // «Я» above already stands for the current user.
@@ -125,7 +134,7 @@ export function FilterBar({
         .filter((m) => m.id !== currentUserId)
         .map((m) => ({ value: m.id, label: m.name, icon: <Avatar user={m} size="sm" /> })),
     ],
-    [members, currentUserId],
+    [members, currentUserId, onlyListedMembers],
   );
 
   return (
@@ -221,12 +230,12 @@ export function FilterBar({
 
         {!hideAssignee && (
           <MultiSelect
-            title="Исполнитель"
+            title={onlyListedMembers ? 'Сотрудник' : 'Исполнитель'}
             options={memberOptions}
             value={filters.assigneeId ?? []}
             onChange={(assigneeId) => patch({ assigneeId: assigneeId.length ? assigneeId : undefined })}
           >
-            <FacetButton label="Исполнитель" count={filters.assigneeId?.length} />
+            <FacetButton label={onlyListedMembers ? 'Сотрудник' : 'Исполнитель'} count={filters.assigneeId?.length} />
           </MultiSelect>
         )}
 

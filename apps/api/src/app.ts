@@ -21,6 +21,7 @@ import { dashboardRoutes } from './modules/dashboard/routes';
 import { attachmentRoutes } from './modules/attachments/routes';
 import { savedViewRoutes } from './modules/views/routes';
 import { userRoutes } from './modules/users/routes';
+import { departmentRoutes } from './modules/departments/routes';
 import { realtimeRoutes } from './realtime/routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -108,6 +109,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(attachmentRoutes);
       await api.register(savedViewRoutes);
       await api.register(userRoutes);
+      await api.register(departmentRoutes);
       await api.register(realtimeRoutes);
     },
     { prefix: '/api/v1' },

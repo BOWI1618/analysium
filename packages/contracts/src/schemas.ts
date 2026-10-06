@@ -170,6 +170,24 @@ export const updateMemberSchema = z.object({
   role: z.enum(WORKSPACE_ROLES as [string, ...string[]]),
 });
 
+/* ----------------------------------------------------------- departments */
+
+/**
+ * A department is described by people, as everywhere else in the API: the ids
+ * are user ids, and each must be a member of the workspace.
+ */
+export const createDepartmentSchema = z.object({
+  name: z.string().trim().min(1, 'Укажите название отдела').max(80),
+  leadId: cuidLike.nullable().optional(),
+  memberIds: z.array(cuidLike).max(500).optional(),
+});
+export type CreateDepartmentInput = z.infer<typeof createDepartmentSchema>;
+
+export const updateDepartmentSchema = createDepartmentSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Нет полей для обновления');
+export type UpdateDepartmentInput = z.infer<typeof updateDepartmentSchema>;
+
 /* --------------------------------------------------------------- project */
 
 /** An icon name such as "message-square" (older projects store an emoji). */

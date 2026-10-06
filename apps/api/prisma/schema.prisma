@@ -168,6 +168,7 @@ model Workspace {
   notifications Notification[]
   auditLogs     AuditLog[]
   savedViews    SavedView[]
+  departments   Department[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -190,10 +191,52 @@ model WorkspaceMember {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  ledDepartments Department[]      @relation("DepartmentLead")
+  department     DepartmentMember?
+
   @@unique([workspaceId, userId])
   @@index([userId])
   @@index([workspaceId, role])
   @@map("workspace_members")
+}
+
+/// A unit of the organisation inside a workspace, kept by its administrators.
+/// Who belongs to it is recorded here and nowhere else — it is never derived
+/// from who happens to work in which project.
+///
+/// Lead and members point at workspace memberships rather than users, so
+/// leaving the workspace takes a person out of the department by itself.
+model Department {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  /// The membership of the person who leads it. Null once that person has left
+  /// the workspace, until an administrator names someone else.
+  leadId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      WorkspaceMember?   @relation("DepartmentLead", fields: [leadId], references: [id], onDelete: SetNull)
+  members   DepartmentMember[]
+
+  @@unique([workspaceId, name])
+  @@index([leadId])
+  @@map("departments")
+}
+
+model DepartmentMember {
+  id           String   @id @default(cuid())
+  departmentId String
+  /// One department per person: a workspace membership appears here at most once.
+  memberId     String   @unique
+  addedAt      DateTime @default(now())
+
+  department Department      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  member     WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([departmentId])
+  @@map("department_members")
 }
 
 /// A join code for a workspace.

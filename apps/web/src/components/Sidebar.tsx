@@ -14,6 +14,7 @@ import {
   UserRound,
   Users,
   ListTodo,
+  Network,
   ChevronDown,
   LogOut,
   Keyboard,
@@ -24,6 +25,7 @@ import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useProjects } from '~/features/projects/hooks';
 import { useUnreadCount } from '~/features/notifications/hooks';
+import { useDepartments } from '~/features/departments/hooks';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Avatar } from '~/ui/Avatar';
 import { CountBadge } from '~/ui/Badge';
@@ -104,6 +106,10 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
   const { state: connection } = useRealtime();
   const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
   const canAssign = useWorkspaceCan(Permission.ISSUE_ASSIGN);
+  // Shown to those it is for: someone who leads a department, and the
+  // administrators who keep the register of departments.
+  const { data: departments } = useDepartments(workspace?.id);
+  const showDepartment = Boolean(departments && (departments.items.length > 0 || departments.canManage));
   const navigate = useNavigate();
   const toast = useToast();
   // The phone drawer is never the narrow rail: collapsing is a desktop
@@ -276,6 +282,16 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
             icon={<ListTodo className="size-4" />}
             label="Распределение"
             index="06"
+            collapsed={collapsed}
+            onClick={onNavigate}
+          />
+        )}
+        {showDepartment && (
+          <NavItem
+            to="/department-work"
+            icon={<Network className="size-4" />}
+            label="Отдел"
+            index={canAssign ? '07' : '06'}
             collapsed={collapsed}
             onClick={onNavigate}
           />

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { AuditLogDto, CreatedInviteCodeDto, WorkspaceRole } from '@flowdesk/contracts';
@@ -30,13 +31,15 @@ import { EmptyState, Skeleton } from '~/ui/Feedback';
 import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
 import { AUDIT_ACTION_LABEL, ROLE_LABEL, describeAuditDetails } from '~/lib/labels';
+import { DepartmentsSection } from './DepartmentsSection';
 
-const SECTIONS = ['general', 'members', 'roles', 'projects', 'audit'] as const;
+const SECTIONS = ['general', 'members', 'departments', 'roles', 'projects', 'audit'] as const;
 type Section = (typeof SECTIONS)[number];
 
 const SECTION_LABELS: Record<Section, string> = {
   general: 'Основное',
   members: 'Участники',
+  departments: 'Отделы',
   roles: 'Роли и права',
   projects: 'Проекты',
   audit: 'Журнал аудита',
@@ -44,14 +47,24 @@ const SECTION_LABELS: Record<Section, string> = {
 
 export function WorkspaceSettingsPage() {
   const { workspace, user } = useSession();
-  const [section, setSection] = useState<Section>('general');
+  // A link from elsewhere can open a particular section: «Состав» on the
+  // department screen leads straight to the departments.
+  const [searchParams] = useSearchParams();
+  const requested = searchParams.get('section') as Section | null;
+  const [section, setSection] = useState<Section>(requested && SECTIONS.includes(requested) ? requested : 'general');
 
   if (!workspace || !user) return null;
 
   const actor = { userId: user.id, workspaceId: workspace.id, workspaceRole: workspace.role };
   const visible = SECTIONS.filter((s) =>
-    s === 'audit' ? can(actor, Permission.WORKSPACE_VIEW_AUDIT) : true,
+    s === 'audit'
+      ? can(actor, Permission.WORKSPACE_VIEW_AUDIT)
+      : s === 'departments'
+        ? can(actor, Permission.WORKSPACE_MANAGE_MEMBERS)
+        : true,
   );
+  // An address naming a section the viewer may not see falls back to the first one.
+  const current: Section = visible.includes(section) ? section : 'general';
 
   return (
     <>
@@ -68,7 +81,7 @@ export function WorkspaceSettingsPage() {
                     onClick={() => setSection(item)}
                     className={clsx(
                       'w-full border-2 px-2 py-1.5 text-left text-sm font-bold transition-colors',
-                      section === item
+                      current === item
                         ? 'border-border-strong bg-marker-subtle text-text'
                         : 'border-transparent text-text-muted hover:bg-surface-hover hover:text-text',
                     )}
@@ -84,7 +97,7 @@ export function WorkspaceSettingsPage() {
             <div className="sm:hidden">
               <Select
                 label="Раздел"
-                value={section}
+                value={current}
                 onChange={(event) => setSection((event.target as HTMLSelectElement).value as Section)}
               >
                 {visible.map((item) => (
@@ -95,11 +108,12 @@ export function WorkspaceSettingsPage() {
               </Select>
             </div>
 
-            {section === 'general' && <GeneralSection />}
-            {section === 'members' && <MembersSection />}
-            {section === 'roles' && <RolesSection />}
-            {section === 'projects' && <ProjectsSection />}
-            {section === 'audit' && <AuditSection />}
+            {current === 'general' && <GeneralSection />}
+            {current === 'members' && <MembersSection />}
+            {current === 'departments' && <DepartmentsSection />}
+            {current === 'roles' && <RolesSection />}
+            {current === 'projects' && <ProjectsSection />}
+            {current === 'audit' && <AuditSection />}
           </div>
         </div>
       </div>

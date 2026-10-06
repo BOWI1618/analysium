@@ -143,6 +143,8 @@ export interface UserPickerProps {
   align?: 'start' | 'end';
   allowUnassigned?: boolean;
   label?: string;
+  /** What choosing nobody is called — an assignee is «без исполнителя», a lead is «не назначен». */
+  noneLabel?: string;
 }
 
 export function UserPicker({
@@ -154,6 +156,7 @@ export function UserPicker({
   align = 'start',
   allowUnassigned = true,
   label = 'Исполнитель',
+  noneLabel = 'Без исполнителя',
 }: UserPickerProps) {
   const [term, setTerm] = useState('');
 
@@ -184,7 +187,7 @@ export function UserPicker({
               selected={value === null}
               onSelect={() => onChange(null)}
             >
-              Без исполнителя
+              {noneLabel}
             </MenuItem>
           )}
           {filtered.length === 0 ? (

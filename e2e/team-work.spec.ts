@@ -6,6 +6,10 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
  * way a real colleague would.
  */
 
+// Two people sign up in each scenario before it even starts; on a cold start of the
+// servers that alone has used up the default minute.
+test.describe.configure({ timeout: 120_000 });
+
 const password = 'password123';
 const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -134,5 +138,51 @@ test.describe('наблюдатели', () => {
     await page.getByLabel('Добавить наблюдателя').fill('Следящ');
     await page.getByRole('menuitem').filter({ hasText: 'Коллега Следящий' }).click();
     await expect(list).toContainText('Коллега Следящий', { timeout: 15_000 });
+  });
+});
+
+test.describe('отделы', () => {
+  test('администратор собирает отдел, руководитель видит задачи его сотрудников', async ({ page, browser }) => {
+    await register(page, 'Глава Отдела');
+    const mateId = await addColleague(page, browser, 'Сотрудник Отдельный');
+    const session = await (await page.request.get('/api/v1/auth/session')).json();
+    const workspaceId = session.workspaces[0].id;
+    const create = (data: Record<string, unknown>) => page.request.post('/api/v1/issues', { data: { workspaceId, ...data } });
+    await create({ title: 'Задача сотрудника отдела', assigneeId: mateId, dueDate: '2020-02-02T12:00:00.000Z' });
+    // The lead's own task: they run the department but are not listed in it.
+    await create({ title: 'Задача вне отдела', assigneeId: session.user.id });
+
+    // The register of departments is kept in the workspace settings.
+    await page.goto('/settings/workspace');
+    await page.getByRole('button', { name: 'Отделы' }).click();
+    await page.getByRole('button', { name: 'Новый отдел' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Новый отдел' });
+    await dialog.getByLabel('Название').fill('Аналитика');
+    await dialog.getByRole('button', { name: 'Руководитель: не назначен' }).click();
+    await page.getByRole('menuitem', { name: /Глава Отдела/ }).click();
+    await dialog.getByRole('button', { name: 'Сотрудники отдела: 0' }).click();
+    await page.getByRole('menuitem').filter({ hasText: 'Сотрудник Отдельный' }).click();
+    await page.keyboard.press('Escape');
+    await expect(dialog.getByRole('button', { name: 'Сотрудники отдела: 1' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Создать отдел' }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Аналитика' })).toBeVisible();
+    await expect(page.getByText('Руководитель: Глава Отдела')).toBeVisible();
+
+    // The lead's screen: the department's people with their figures, and their tasks only.
+    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Отдел/ }).click();
+    await expect(page).toHaveURL(/\/department-work$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Аналитика');
+    const people = page.getByRole('list', { name: 'Сотрудники отдела' });
+    await expect(people).toContainText('Сотрудник Отдельный');
+    await expect(people).toContainText('активных 1', { timeout: 15_000 });
+    await expect(people).toContainText('просрочено 1');
+    await expect(page.getByText('Задача сотрудника отдела')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Задача вне отдела')).toHaveCount(0);
+
+    // From a person in the department to everything that person has.
+    await people.getByRole('link', { name: 'Все задачи: Сотрудник Отдельный' }).click();
+    await expect(page).toHaveURL(/\/employee-work\?user=/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Сотрудник Отдельный');
   });
 });
