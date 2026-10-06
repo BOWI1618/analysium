@@ -117,6 +117,9 @@ export const setNewPasswordSchema = z.object({
 });
 export type SetNewPasswordInput = z.infer<typeof setNewPasswordSchema>;
 
+/** Launch data a Telegram Mini App receives; the server checks its signature. */
+export const telegramLoginSchema = z.object({ initData: z.string().min(1).max(4096) });
+
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   avatarUrl: z

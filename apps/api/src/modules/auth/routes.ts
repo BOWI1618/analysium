@@ -6,12 +6,15 @@ import {
   registerSchema,
   resendVerificationSchema,
   setNewPasswordSchema,
+  telegramLoginSchema,
   verifyEmailSchema,
   AuditAction,
 } from '@flowdesk/contracts';
 import { env } from '../../config/env';
+import { telegramEnabled } from '../../lib/telegram';
+import { verifyInitData } from '../../domain/telegramAuth';
 import { parse } from '../../lib/validate';
-import { forbidden } from '../../lib/errors';
+import { forbidden, unauthorized } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import {
   clearSessionCookie,
@@ -39,6 +42,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     // Lets the settings page say plainly that letters are off on this server,
     // instead of offering a switch that does nothing.
     mailEnabled: env.MAIL_ENABLED,
+    telegramEnabled,
   }));
 
   app.post('/auth/register', strictLimit, async (req, reply) => {
@@ -124,6 +128,34 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     // A reset is pending: no session until a new password is chosen.
     if (result.reset) return reply.send(result.reset);
     const { user } = result;
+    const { token, expiresAt } = await createSession(user.id, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+    });
+    setSessionCookie(reply, token, expiresAt);
+    return reply.send(await buildSession(user.id));
+  });
+
+  /**
+   * Sign-in for Analysium opened inside Telegram. The launch data is signed by
+   * Telegram, so it proves which Telegram account opened the app; the account
+   * that connected that Telegram in its settings is let in without a password.
+   */
+  app.post('/auth/telegram', strictLimit, async (req, reply) => {
+    const { initData } = parse(telegramLoginSchema, req.body);
+    const telegramId = telegramEnabled ? verifyInitData(initData, env.TELEGRAM_BOT_TOKEN ?? '') : null;
+    if (!telegramId) throw unauthorized('Не удалось подтвердить вход через Telegram');
+
+    const user = await prisma.user.findUnique({
+      where: { telegramChatId: telegramId },
+      select: { id: true, status: true },
+    });
+    if (!user) {
+      throw unauthorized('Этот Telegram не подключён к аккаунту. Войдите по почте и подключите его в настройках.');
+    }
+    if (user.status === 'DEACTIVATED') throw unauthorized('Этот аккаунт отключён');
+
+    audit({ actorId: user.id, action: AuditAction.USER_LOGIN, entityType: 'User', entityId: user.id, ip: req.ip });
     const { token, expiresAt } = await createSession(user.id, {
       userAgent: req.headers['user-agent'],
       ip: req.ip,

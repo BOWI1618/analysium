@@ -7,9 +7,12 @@
  * unique-index race. The test database is dropped and recreated at the start
  * of every run, and the app's connection to it is closed at the end.
  */
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import type { FastifyInstance } from 'fastify';
+
+const require = createRequire(import.meta.url);
 
 const TEST_DATABASE = process.env.TEST_DATABASE_NAME ?? 'flowdesk_test';
 
@@ -39,6 +42,9 @@ process.env.SESSION_SECRET ??= 'test-secret-value-at-least-24-chars-long';
 // Rate limits would make the suite flaky; the limiter has its own test.
 process.env.RATE_LIMIT_MAX = '100000';
 process.env.AUTH_RATE_LIMIT_MAX = '100000';
+// A developer's .env may hold a real bot token; a test run must never message
+// real people. Tests that cover Telegram hand in a stand-in instead.
+process.env.TELEGRAM_BOT_TOKEN = '';
 
 export async function migrateTestSchema(): Promise<void> {
   const { PrismaClient } = await import('@prisma/client');
@@ -64,7 +70,15 @@ export async function migrateTestSchema(): Promise<void> {
     await target.$disconnect();
   }
 
-  execSync('npx prisma db push --skip-generate', { stdio: 'inherit', env: { ...process.env } });
+  // Prisma's own entry point, run by this very Node — not `npx prisma`. npx
+  // costs several seconds per call on Windows, and once a day it checks the
+  // registry for a newer npm: on a network where that request hangs, one test
+  // file's setup overran any reasonable limit. The update check Prisma makes
+  // itself is switched off for the same reason.
+  execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate'], {
+    stdio: 'inherit',
+    env: { ...process.env, CHECKPOINT_DISABLE: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+  });
 }
 
 /** Closes the app's Prisma connection so the test process can exit cleanly. */

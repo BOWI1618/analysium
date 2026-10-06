@@ -52,7 +52,7 @@ export const unauthorized = (m = 'Требуется вход') => new AppError(
 export const forbidden = (m = 'Недостаточно прав для этого действия') => new AppError('FORBIDDEN', m);
 /** Russian agrees the participle with the noun: «задача не найдена», «пространство не найдено». */
 const FEMININE = new Set(['Задача', 'Метка', 'Связь']);
-const NEUTER = new Set(['Пространство', 'Уведомление']);
+const NEUTER = new Set(['Пространство', 'Уведомление', 'Фото']);
 export const notFound = (entity = 'Объект') =>
   new AppError(
     'NOT_FOUND',

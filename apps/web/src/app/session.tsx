@@ -13,6 +13,7 @@ import type {
   WorkspaceDto,
 } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
+import { telegramInitData } from '~/lib/telegramApp';
 import { qk } from '~/lib/queryKeys';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 
@@ -57,7 +58,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const { data, isLoading } = useQuery({
     queryKey: qk.session,
-    queryFn: () => api.get<SessionResponse>('/auth/session'),
+    queryFn: async () => {
+      const session = await api.get<SessionResponse>('/auth/session');
+      const initData = telegramInitData();
+      if (session.user || !initData) return session;
+      // Opened inside Telegram by someone who connected it in their settings:
+      // Telegram vouches for who they are, so no password is asked. A refusal
+      // — Telegram not connected yet — just leaves the usual sign-in form.
+      try {
+        return await api.post<SessionDto>('/auth/telegram', { initData });
+      } catch {
+        return session;
+      }
+    },
     // The session is the app's root dependency — never garbage collect it.
     staleTime: 60_000,
     gcTime: Infinity,
@@ -185,7 +198,8 @@ export function useWorkspace(): WorkspaceDto {
 export function useAuthConfig() {
   return useQuery({
     queryKey: ['auth-config'],
-    queryFn: () => api.get<{ registrationOpen: boolean; mailEnabled: boolean }>('/auth/config'),
+    queryFn: () =>
+      api.get<{ registrationOpen: boolean; mailEnabled: boolean; telegramEnabled: boolean }>('/auth/config'),
     staleTime: 5 * 60_000,
   });
 }

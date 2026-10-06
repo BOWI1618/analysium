@@ -57,6 +57,14 @@ const schema = z.object({
    */
   MAIL_DAILY_LIMIT: z.coerce.number().int().min(1).default(250),
 
+  /**
+   * Token of the Telegram bot, from @BotFather. With it set, people can connect
+   * Telegram in their account settings and notifications reach them there;
+   * without it the feature is simply absent. One bot is polled by one server:
+   * use a separate bot for development, or leave this empty locally.
+   */
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+
   /** Hours a verification link stays valid. */
   EMAIL_TOKEN_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(48),
 

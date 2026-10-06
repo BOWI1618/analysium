@@ -127,6 +127,7 @@ export async function buildSession(userId: string): Promise<SessionDto> {
       timezone: true,
       lastActiveAt: true,
       emailNotifications: true,
+      telegramChatId: true,
     },
   });
 
@@ -173,6 +174,7 @@ export async function buildSession(userId: string): Promise<SessionDto> {
       timezone: user.timezone,
       lastActiveAt: user.lastActiveAt?.toISOString() ?? null,
       emailNotifications: user.emailNotifications,
+      telegramLinked: Boolean(user.telegramChatId),
     },
     workspaces,
     activeWorkspaceId: workspaces[0]?.id ?? null,

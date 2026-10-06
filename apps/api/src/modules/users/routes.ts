@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { changePasswordSchema, updateProfileSchema } from '@flowdesk/contracts';
+import { changePasswordSchema, telegramLoginSchema, updateProfileSchema } from '@flowdesk/contracts';
+import { env } from '../../config/env';
 import { parse } from '../../lib/validate';
 import { prisma } from '../../lib/prisma';
 import { workspaceContext, visibleProjectIds } from '../../lib/context';
@@ -8,6 +9,8 @@ import { hashPassword, verifyPassword } from '../../lib/password';
 import { badRequest, notFound } from '../../lib/errors';
 import { issueSummarySelect, toIssueSummary } from '../../lib/serialize';
 import { storage } from '../../lib/storage';
+import { telegram, telegramEnabled } from '../../lib/telegram';
+import { createLinkUrl, linkFromApp, unlinkTelegram } from '../telegram/service';
 
 /** Photos only, and never SVG — it can carry script. */
 const AVATAR_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -93,6 +96,25 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       // The address carries a version, so a long cache is safe.
       .header('Cache-Control', 'private, max-age=31536000, immutable')
       .send(storage.read(owner.avatarKey));
+  });
+
+  /** A one-time link that opens the bot and connects this account to the chat. */
+  app.post('/me/telegram/link', async (req) => {
+    if (!telegramEnabled) throw badRequest('Telegram на этом сервере не подключён');
+    return createLinkUrl(currentUser(req).id, telegram);
+  });
+
+  /** One-tap connect from Analysium opened inside Telegram: its launch data says whose Telegram this is. */
+  app.post('/me/telegram/link-app', async (req, reply) => {
+    const { initData } = parse(telegramLoginSchema, req.body);
+    const linked = telegramEnabled && (await linkFromApp(currentUser(req).id, initData, env.TELEGRAM_BOT_TOKEN ?? ''));
+    if (!linked) throw badRequest('Не удалось подтвердить Telegram. Откройте Analysium из бота ещё раз.');
+    return reply.status(204).send();
+  });
+
+  app.delete('/me/telegram', async (req, reply) => {
+    await unlinkTelegram(currentUser(req).id);
+    return reply.status(204).send();
   });
 
   app.post('/me/password', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {

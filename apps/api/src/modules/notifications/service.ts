@@ -7,7 +7,10 @@
 import type { NotificationType } from '@flowdesk/contracts';
 import { RealtimeEventType } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
+import { log } from '../../lib/logger';
+import { telegram, telegramEnabled } from '../../lib/telegram';
 import { emit } from '../../realtime/eventBus';
+import { deliverToTelegram } from '../telegram/service';
 
 export interface NotifyInput {
   userIds: string[];
@@ -54,6 +57,30 @@ export async function notify(input: NotifyInput): Promise<void> {
       payload: { notificationId: n.id, recipientId: n.userId },
     });
   }
+
+  // Telegram goes out at once but in the background: a slow or unreachable
+  // messenger must not hold up — let alone fail — the change that caused it.
+  if (telegramEnabled) {
+    void sendToTelegram(created, input).catch((error) => log.warn({ err: error }, 'telegram fan-out failed'));
+  }
+}
+
+async function sendToTelegram(created: { id: string; userId: string }[], input: NotifyInput): Promise<void> {
+  const [actor, issue] = await Promise.all([
+    input.actorId ? prisma.user.findUnique({ where: { id: input.actorId }, select: { name: true } }) : null,
+    input.issueId ? prisma.issue.findUnique({ where: { id: input.issueId }, select: { issueKey: true } }) : null,
+  ]);
+  await deliverToTelegram(
+    created.map((n) => ({
+      id: n.id,
+      userId: n.userId,
+      title: input.title,
+      body: input.body ?? null,
+      actorName: actor?.name ?? null,
+      issueKey: issue?.issueKey ?? null,
+    })),
+    telegram,
+  );
 }
 
 /**

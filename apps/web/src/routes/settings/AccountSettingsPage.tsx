@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Upload } from 'lucide-react';
+import { Send, Upload } from 'lucide-react';
 import { ApiError, api } from '~/lib/api';
+import { isTelegramApp, telegramInitData } from '~/lib/telegramApp';
 import { qk } from '~/lib/queryKeys';
 import { useAuthConfig, useSession } from '~/app/session';
 import { useToast } from '~/app/toast';
@@ -86,6 +87,47 @@ export function AccountSettingsPage() {
       toast.success(emailNotifications ? 'Письма включены' : 'Письма выключены');
     },
     onError: (error) => toast.error(error, 'Не удалось сохранить настройку'),
+  });
+
+  // Connecting Telegram happens in the bot, outside this page: the link opens
+  // it, and the page keeps asking the server until the account shows as connected.
+  const [telegramLink, setTelegramLink] = useState<string | null>(null);
+  const telegramLinked = user?.telegramLinked ?? false;
+  useEffect(() => {
+    if (!telegramLink || telegramLinked) return;
+    const poll = window.setInterval(() => void refresh(), 3_000);
+    // The link itself stops working after fifteen minutes.
+    const giveUp = window.setTimeout(() => setTelegramLink(null), 15 * 60_000);
+    return () => {
+      window.clearInterval(poll);
+      window.clearTimeout(giveUp);
+    };
+  }, [telegramLink, telegramLinked, refresh]);
+  useEffect(() => {
+    if (telegramLinked) setTelegramLink(null);
+  }, [telegramLinked]);
+
+  const connectTelegram = useMutation({
+    mutationFn: () => api.post<{ url: string }>('/me/telegram/link'),
+    onError: (error) => toast.error(error, 'Не удалось получить ссылку на бота'),
+  });
+  // Opened inside Telegram, the page already holds Telegram's signed word on
+  // who is looking at it — connecting takes one tap and no trip to the bot.
+  const connectThisTelegram = useMutation({
+    mutationFn: () => api.post<void>('/me/telegram/link-app', { initData: telegramInitData() }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.session });
+      toast.success('Telegram подключён', 'Уведомления придут сюда, а Analysium откроется без пароля.');
+    },
+    onError: (error) => toast.error(error, 'Не удалось подключить Telegram'),
+  });
+  const disconnectTelegram = useMutation({
+    mutationFn: () => api.delete<void>('/me/telegram'),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.session });
+      toast.success('Telegram отключён', 'Уведомления снова будут приходить на почту.');
+    },
+    onError: (error) => toast.error(error, 'Не удалось отключить Telegram'),
   });
 
   const changePassword = useMutation({
@@ -223,6 +265,88 @@ export function AccountSettingsPage() {
                   : `Письмо на ${user.email} приходит, только если уведомление пролежало непрочитанным 10 минут. Несколько уведомлений собираются в одно письмо — не чаще раза в полчаса.`}
               </p>
             </div>
+
+            {config?.telegramEnabled && (
+              <div className="mt-4 border-t-2 border-border-strong pt-3">
+                <p className="text-sm font-bold">Telegram</p>
+                {telegramLinked ? (
+                  <>
+                    <p className="mt-1 text-xs text-text-subtle">
+                      Подключён. Уведомления приходят в Telegram сразу, со ссылкой на задачу; письма их не повторяют.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="mt-2"
+                      loading={disconnectTelegram.isPending}
+                      onClick={() => disconnectTelegram.mutate()}
+                    >
+                      Отключить Telegram
+                    </Button>
+                  </>
+                ) : isTelegramApp() ? (
+                  <>
+                    <p className="mt-1 text-xs text-text-subtle">
+                      Вы открыли Analysium из Telegram. Подключите его к аккаунту — уведомления будут приходить сюда
+                      сразу, а трекер открываться без пароля.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-2"
+                      iconLeft={<Send className="size-3.5" />}
+                      loading={connectThisTelegram.isPending}
+                      onClick={() => connectThisTelegram.mutate()}
+                    >
+                      Подключить этот Telegram
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 text-xs text-text-subtle">
+                      Уведомления будут приходить в Telegram сразу. Откроется бот — нажмите в нём «Запустить».
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        iconLeft={<Send className="size-3.5" />}
+                        loading={connectTelegram.isPending}
+                        onClick={() => {
+                          // Opened right in the click, before the link is known: a
+                          // tab opened after the answer arrives is treated as a pop-up.
+                          const tab = window.open('', '_blank');
+                          connectTelegram.mutate(undefined, {
+                            onSuccess: ({ url }) => {
+                              setTelegramLink(url);
+                              if (tab) tab.location.href = url;
+                            },
+                            onError: () => tab?.close(),
+                          });
+                        }}
+                      >
+                        Подключить Telegram
+                      </Button>
+                      {telegramLink && (
+                        <a
+                          href={telegramLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-accent underline hover:no-underline"
+                        >
+                          Бот не открылся? Открыть по ссылке
+                        </a>
+                      )}
+                    </div>
+                    {telegramLink && (
+                      <p className="mt-2 text-xs text-text-subtle">
+                        Ждём, пока вы нажмёте «Запустить» в боте… Ссылка действует 15 минут.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="border-2 border-border-strong bg-surface p-4 shadow-md">

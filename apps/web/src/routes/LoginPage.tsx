@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '~/lib/api';
+import { isTelegramApp } from '~/lib/telegramApp';
 import { useAuthConfig, useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
@@ -171,6 +172,15 @@ export function LoginPage() {
           void submit({ email, password });
         }}
       >
+        {/* Inside Telegram this form shows only when the Telegram account is
+            not connected to anyone yet — say how to make it the last time. */}
+        {isTelegramApp() && (
+          <div className="border-2 border-border-strong bg-marker-subtle px-3 py-2 text-sm">
+            Вы открыли Analysium из Telegram. Войдите по почте один раз и нажмите «Подключить этот Telegram» в
+            настройках аккаунта — дальше здесь будет открываться без пароля.
+          </div>
+        )}
+
         {error && (
           <div role="alert" className="rounded-md border-2 border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger font-medium">
             {error}

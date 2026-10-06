@@ -4,6 +4,7 @@ import { prisma } from './lib/prisma';
 import { startDueDateScanner } from './jobs/dueDateScanner';
 import { startCarryOver } from './jobs/carryOver';
 import { startNotificationMailer } from './jobs/notificationMailer';
+import { startTelegramBot } from './jobs/telegramBot';
 
 async function main(): Promise<void> {
   const app = await buildApp();
@@ -11,12 +12,14 @@ async function main(): Promise<void> {
   const stopScanner = startDueDateScanner();
   const stopCarryOver = startCarryOver();
   const stopMailer = startNotificationMailer();
+  const stopTelegram = startTelegramBot();
 
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, 'shutting down');
     stopScanner();
     stopCarryOver();
     stopMailer();
+    stopTelegram();
     await app.close();
     await prisma.$disconnect();
     process.exit(0);

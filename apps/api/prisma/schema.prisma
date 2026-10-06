@@ -67,6 +67,10 @@ model User {
   /// provider's daily limit.
   lastNotificationEmailAt DateTime?
 
+  /// The Telegram chat notifications are sent to, once the person has started
+  /// the bot with a link code. Null means Telegram is not connected.
+  telegramChatId String? @unique
+
   sessions           Session[]
   ownedWorkspaces    Workspace[]         @relation("WorkspaceOwner")
   memberships        WorkspaceMember[]
@@ -120,6 +124,9 @@ enum TokenPurpose {
   /// link is what lets them set a password and get in.
   INVITE
   PASSWORD_RESET
+  /// Carried in the link that opens the bot: starting the bot with it ties
+  /// that Telegram chat to the account.
+  TELEGRAM_LINK
 }
 
 model Session {

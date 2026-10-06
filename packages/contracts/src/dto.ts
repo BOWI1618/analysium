@@ -35,6 +35,8 @@ export type UserSummaryDto = Pick<UserDto, 'id' | 'name' | 'avatarUrl' | 'email'
 export interface SessionUserDto extends UserDto {
   /** Notifications left unread in the app are sent on by e-mail. */
   emailNotifications: boolean;
+  /** The account is connected to the Telegram bot; notifications go there at once. */
+  telegramLinked: boolean;
 }
 
 export interface WorkspaceDto {
