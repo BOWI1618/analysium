@@ -4,9 +4,11 @@
  * Kept as a service (not inline in the issue code) so that adding an email or
  * push transport later is a change in exactly one place: `deliver`.
  */
-import type { NotificationType } from '@flowdesk/contracts';
+import type { ActorContext, NotificationType } from '@flowdesk/contracts';
 import { RealtimeEventType } from '@flowdesk/contracts';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { usersWithProjectAccess, visibleProjectIds } from '../../lib/context';
 import { log } from '../../lib/logger';
 import { telegram, telegramEnabled } from '../../lib/telegram';
 import { emit } from '../../realtime/eventBus';
@@ -29,8 +31,20 @@ export interface NotifyInput {
  * told about their own action) and pushes them over the realtime channel.
  */
 export async function notify(input: NotifyInput): Promise<void> {
-  const recipients = [...new Set(input.userIds)].filter((id) => id && id !== input.actorId);
+  let recipients = [...new Set(input.userIds)].filter((id) => id && id !== input.actorId);
   if (recipients.length === 0) return;
+
+  // Whoever is on the list was put there earlier: a subscriber, a commenter, a
+  // mention typed by hand. None of that proves they may still open the task —
+  // a guest taken off the project used to keep receiving its comments, text
+  // included. The check sits here, in the one door every notification about a
+  // task goes through, so no caller can forget it.
+  if (input.issueId) {
+    const issue = await prisma.issue.findUnique({ where: { id: input.issueId }, select: { projectId: true } });
+    if (!issue) return;
+    recipients = await usersWithProjectAccess(input.workspaceId, issue.projectId, recipients);
+    if (recipients.length === 0) return;
+  }
 
   const created = await prisma.$transaction(
     recipients.map((userId) =>
@@ -88,8 +102,12 @@ async function sendToTelegram(created: { id: string; userId: string }[], input: 
  * and commenters, plus whoever subscribed — minus whoever asked not to hear.
  * Only the fan-out follows this; a mention or an assignment is addressed to a
  * person and reaches them either way.
+ *
+ * `also` adds people tied to one particular event — the assignee a task has
+ * just been taken from is no longer on the issue, but should hear about it —
+ * and they are still subject to their own choice not to hear.
  */
-export async function issueWatchers(issueId: string): Promise<string[]> {
+export async function issueWatchers(issueId: string, also: (string | null | undefined)[] = []): Promise<string[]> {
   const issue = await prisma.issue.findUnique({
     where: { id: issueId },
     select: {
@@ -106,8 +124,25 @@ export async function issueWatchers(issueId: string): Promise<string[]> {
     issue.reporterId,
     ...issue.comments.map((c) => c.authorId),
     ...issue.subscriptions.filter((s) => s.subscribed).map((s) => s.userId),
+    ...also,
   ];
   return [...new Set(participants.filter((id): id is string => Boolean(id) && !muted.has(id!)))];
+}
+
+/**
+ * What a person's inbox may show: their notifications in this workspace, minus
+ * those about tasks in projects they can no longer open. A notification keeps
+ * the task's key, title and often a comment's text, so one written while the
+ * reader had access must disappear together with that access — and come back
+ * if access is returned.
+ */
+export async function readableNotificationsWhere(actor: ActorContext): Promise<Prisma.NotificationWhereInput> {
+  const allowed = await visibleProjectIds(actor);
+  return {
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    ...(allowed === 'ALL' ? {} : { OR: [{ issueId: null }, { issue: { projectId: { in: allowed } } }] }),
+  };
 }
 
 /** Records someone's choice to hear, or not to hear, about an issue. */

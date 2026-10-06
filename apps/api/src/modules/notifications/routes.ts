@@ -6,6 +6,7 @@ import { prisma } from '../../lib/prisma';
 import { workspaceContext } from '../../lib/context';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import { notFound } from '../../lib/errors';
+import { readableNotificationsWhere } from './service';
 
 const notificationSelect = {
   id: true,
@@ -25,13 +26,10 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/notifications', async (req) => {
     const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
     const { unreadOnly, limit, cursor } = parse(notificationQuerySchema, req.query);
+    const readable = await readableNotificationsWhere(actor);
 
     const rows = await prisma.notification.findMany({
-      where: {
-        userId: actor.userId,
-        workspaceId: actor.workspaceId,
-        ...(unreadOnly ? { readAt: null } : {}),
-      },
+      where: { ...readable, ...(unreadOnly ? { readAt: null } : {}) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -41,9 +39,8 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
     const hasMore = rows.length > limit;
     const items = hasMore ? rows.slice(0, limit) : rows;
 
-    const unreadCount = await prisma.notification.count({
-      where: { userId: actor.userId, workspaceId: actor.workspaceId, readAt: null },
-    });
+    // The badge counts what the list can show, or it would announce tasks the reader may not open.
+    const unreadCount = await prisma.notification.count({ where: { ...readable, readAt: null } });
 
     const mapped: NotificationDto[] = items.map((n) => ({
       id: n.id,
@@ -81,8 +78,9 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
     '/workspaces/:workspaceId/notifications/read-all',
     async (req) => {
       const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
+      const readable = await readableNotificationsWhere(actor);
       const result = await prisma.notification.updateMany({
-        where: { userId: actor.userId, workspaceId: actor.workspaceId, readAt: null },
+        where: { ...readable, readAt: null },
         data: { readAt: new Date() },
       });
       return { updated: result.count };

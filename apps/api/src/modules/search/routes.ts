@@ -17,7 +17,12 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/search', async (req) => {
     const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
-    const { q, limit } = parse(searchQuerySchema, req.query);
+    const parsed = parse(searchQuerySchema, req.query);
+    const { limit } = parsed;
+    // «@имя» looks for people only — the hint in the header promises it. The
+    // rest of the query goes to the name and address search as typed.
+    const peopleOnly = parsed.q.startsWith('@');
+    const q = peopleOnly ? parsed.q.slice(1).trim() : parsed.q;
     const allowed = await visibleProjectIds(actor);
     const projectScope = allowed === 'ALL' ? {} : { projectId: { in: allowed } };
 
@@ -25,7 +30,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     const keyMatch = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/.exec(q.trim());
 
     const [issues, projects, users, epics] = await Promise.all([
-      prisma.issue.findMany({
+      peopleOnly ? [] : prisma.issue.findMany({
         where: {
           project: { workspaceId: actor.workspaceId },
           ...projectScope,
@@ -40,7 +45,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         take: limit,
         select: issueSummarySelect,
       }),
-      prisma.project.findMany({
+      peopleOnly ? [] : prisma.project.findMany({
         where: {
           workspaceId: actor.workspaceId,
           isArchived: false,
@@ -53,12 +58,16 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       prisma.user.findMany({
         where: {
           memberships: { some: { workspaceId: actor.workspaceId } },
-          OR: [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }],
+          // A bare «@» lists people, the start of choosing someone.
+          ...(q
+            ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }] }
+            : {}),
         },
-        take: 5,
+        orderBy: { name: 'asc' },
+        take: peopleOnly ? limit : 5,
         select: { id: true, name: true, email: true, avatarUrl: true },
       }),
-      prisma.issue.findMany({
+      peopleOnly ? [] : prisma.issue.findMany({
         where: {
           project: { workspaceId: actor.workspaceId },
           ...projectScope,

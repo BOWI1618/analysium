@@ -167,19 +167,21 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         archivedAt: null,
         ...(allowed === 'ALL' ? {} : { projectId: { in: allowed } }),
       };
-      const [assigned, created, completedCount, recentActivity] = await Promise.all([
-        prisma.issue.findMany({
-          where: { ...scope, assigneeId: req.params.userId, status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
-          orderBy: { updatedAt: 'desc' },
-          take: 20,
-          select: issueSummarySelect,
-        }),
-        prisma.issue.findMany({
-          where: { ...scope, reporterId: req.params.userId },
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-          select: issueSummarySelect,
-        }),
+      const assignedWhere = {
+        ...scope,
+        assigneeId: req.params.userId,
+        status: { category: { notIn: ['COMPLETED', 'CANCELED'] as never } },
+      };
+      const createdWhere = { ...scope, reporterId: req.params.userId };
+      // The lists are a preview of the latest twenty; the figures are counted
+      // over everything the viewer may read. They used to be the lengths of
+      // the previews, so anyone with more than twenty tasks showed exactly 20.
+      // Subtasks count like any task: they are assigned to people on their own.
+      const [assigned, created, assignedCount, createdCount, completedCount, recentActivity] = await Promise.all([
+        prisma.issue.findMany({ where: assignedWhere, orderBy: { updatedAt: 'desc' }, take: 20, select: issueSummarySelect }),
+        prisma.issue.findMany({ where: createdWhere, orderBy: { createdAt: 'desc' }, take: 20, select: issueSummarySelect }),
+        prisma.issue.count({ where: assignedWhere }),
+        prisma.issue.count({ where: createdWhere }),
         prisma.issue.count({ where: { ...scope, assigneeId: req.params.userId, completedAt: { not: null } } }),
         prisma.activityEvent.findMany({
           where: {
@@ -213,7 +215,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         },
         role: member.role,
         joinedAt: member.joinedAt.toISOString(),
-        stats: { assigned: assigned.length, created: created.length, completed: completedCount },
+        stats: { assigned: assignedCount, created: createdCount, completed: completedCount },
         assignedIssues: assigned.map(toIssueSummary),
         createdIssues: created.map(toIssueSummary),
         activity: recentActivity.map((a) => ({ ...a, createdAt: a.createdAt.toISOString() })),

@@ -12,6 +12,7 @@ import { prisma } from '../lib/prisma';
 import { sendMail, type Mail } from '../lib/mailer';
 import { appOrigin, env } from '../config/env';
 import { log } from '../lib/logger';
+import { projectAccessChecker } from '../lib/context';
 
 const INTERVAL_MS = 2 * 60 * 1000;
 /** How long a notification may stay unread in the app before it is mailed. */
@@ -59,20 +60,35 @@ export async function sendNotificationDigests(
     select: {
       id: true,
       userId: true,
+      workspaceId: true,
       title: true,
       body: true,
       createdAt: true,
       actor: { select: { name: true } },
-      issue: { select: { issueKey: true } },
+      issue: { select: { issueKey: true, projectId: true } },
       user: { select: { name: true, email: true, timezone: true } },
     },
   });
 
+  // A letter waits at least ten minutes, and in that time the reader may have
+  // been taken off the project or out of the workspace. Asked again at sending
+  // time; what may no longer be read is marked as handled so it never goes out
+  // and does not crowd the next cycles.
+  const canRead = await projectAccessChecker(
+    pending.map((n) => ({ userId: n.userId, workspaceId: n.workspaceId, projectId: n.issue?.projectId ?? null })),
+  );
+  const withheld = pending.filter((n) => !canRead(n.userId, n.workspaceId, n.issue?.projectId ?? null));
+  if (withheld.length) {
+    await prisma.notification.updateMany({ where: { id: { in: withheld.map((n) => n.id) } }, data: { emailedAt: now } });
+  }
+  const withheldIds = new Set(withheld.map((n) => n.id));
+
   const byUser = new Map<string, { user: (typeof pending)[number]['user']; items: PendingNotification[] }>();
-  for (const { userId, user, ...item } of pending) {
-    const entry = byUser.get(userId) ?? { user, items: [] };
-    entry.items.push(item);
-    byUser.set(userId, entry);
+  for (const n of pending) {
+    if (withheldIds.has(n.id)) continue;
+    const entry = byUser.get(n.userId) ?? { user: n.user, items: [] };
+    entry.items.push({ id: n.id, title: n.title, body: n.body, createdAt: n.createdAt, actor: n.actor, issue: n.issue });
+    byUser.set(n.userId, entry);
   }
 
   let sent = 0;

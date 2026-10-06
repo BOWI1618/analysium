@@ -343,7 +343,16 @@ export const bulkUpdateSchema = z.object({
     epicId: cuidLike.nullable().optional(),
     addLabelIds: z.array(cuidLike).max(20).optional(),
     removeLabelIds: z.array(cuidLike).max(20).optional(),
+    /** One deadline for every selected task; `null` removes it. */
+    dueDate: z.string().datetime().nullable().optional(),
+    dueHasTime: z.boolean().optional(),
   }),
+  /**
+   * Handing out work from the pool of unassigned tasks: if any of them was
+   * meanwhile given to someone else, the whole batch is refused rather than
+   * taking that task away from them.
+   */
+  onlyUnassigned: z.boolean().optional(),
 });
 export type BulkUpdateInput = z.infer<typeof bulkUpdateSchema>;
 

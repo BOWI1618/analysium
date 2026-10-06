@@ -105,3 +105,67 @@ export async function visibleProjectIds(actor: ActorContext): Promise<string[] |
   });
   return rows.map((r) => r.projectId);
 }
+
+/**
+ * Of the given people, those who may open a project right now.
+ *
+ * Asked wherever something about an issue is about to reach people who were
+ * picked earlier — watchers, mentions, a chosen assignee. Access can be taken
+ * away between the moment someone subscribed and the moment the next change
+ * happens, and a subscription must never work as a way to keep reading.
+ */
+export async function usersWithProjectAccess(
+  workspaceId: string,
+  projectId: string,
+  userIds: string[],
+): Promise<string[]> {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (ids.length === 0) return [];
+  const members = await prisma.workspaceMember.findMany({
+    where: { workspaceId, userId: { in: ids } },
+    select: {
+      userId: true,
+      role: true,
+      user: { select: { projectRoles: { where: { projectId }, select: { id: true } } } },
+    },
+  });
+  return members
+    .filter((member) => canAccessProject({ workspaceRole: member.role, projectRole: member.user.projectRoles.length ? 'VIEWER' : null }))
+    .map((member) => member.userId);
+}
+
+/**
+ * The same question for many (person, project) pairs in two queries — for a
+ * batch job that looks at notifications of the whole installation at once.
+ * A pair without a project asks only about membership in the workspace.
+ */
+export async function projectAccessChecker(
+  pairs: { userId: string; workspaceId: string; projectId: string | null }[],
+): Promise<(userId: string, workspaceId: string, projectId: string | null) => boolean> {
+  const userIds = [...new Set(pairs.map((pair) => pair.userId))];
+  const workspaceIds = [...new Set(pairs.map((pair) => pair.workspaceId))];
+  const projectIds = [...new Set(pairs.map((pair) => pair.projectId).filter((id): id is string => Boolean(id)))];
+  if (userIds.length === 0) return () => false;
+
+  const [members, projectMembers] = await Promise.all([
+    prisma.workspaceMember.findMany({
+      where: { userId: { in: userIds }, workspaceId: { in: workspaceIds } },
+      select: { userId: true, workspaceId: true, role: true },
+    }),
+    projectIds.length
+      ? prisma.projectMember.findMany({
+          where: { userId: { in: userIds }, projectId: { in: projectIds } },
+          select: { userId: true, projectId: true },
+        })
+      : [],
+  ]);
+  const roles = new Map(members.map((member) => [`${member.workspaceId}:${member.userId}`, member.role]));
+  const inProject = new Set(projectMembers.map((member) => `${member.projectId}:${member.userId}`));
+
+  return (userId, workspaceId, projectId) => {
+    const workspaceRole = roles.get(`${workspaceId}:${userId}`);
+    if (!workspaceRole) return false;
+    if (!projectId) return true;
+    return canAccessProject({ workspaceRole, projectRole: inProject.has(`${projectId}:${userId}`) ? 'VIEWER' : null });
+  };
+}

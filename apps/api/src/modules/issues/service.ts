@@ -9,6 +9,7 @@
  */
 import type {
   ActorContext,
+  BulkUpdateInput,
   CreateIssueInput,
   IssueDetailDto,
   IssueFilterInput,
@@ -900,6 +901,91 @@ export async function updateIssue(
   return getIssue(actor, issueId);
 }
 
+/** What actually changed on one issue, as far as the people following it care. */
+interface IssueChanges {
+  /** Only when the assignee really changed; `to: null` means the task was left without one. */
+  assignee?: { from: string | null; to: string | null };
+  /** The status the issue has just entered. */
+  status?: { name: string };
+  /** Only when the deadline really moved; `to: null` means it was removed. */
+  dueDate?: { to: Date | null };
+}
+
+const sameInstant = (a: Date | null | undefined, b: Date | null | undefined): boolean =>
+  (a?.getTime() ?? null) === (b?.getTime() ?? null);
+
+/**
+ * One notice per event and per person. Shared by the card and the selection
+ * bar, so a change made to twenty tasks at once is heard exactly like the
+ * same change made to each of them.
+ */
+async function announceChanges(
+  actor: ActorContext,
+  issue: { id: string; issueKey: string; title: string },
+  changes: IssueChanges,
+): Promise<void> {
+  const common = { workspaceId: actor.workspaceId, actorId: actor.userId, body: issue.title, issueId: issue.id };
+  const jobs: Promise<void>[] = [];
+
+  if (changes.assignee) {
+    const { from, to } = changes.assignee;
+    if (to) {
+      jobs.push(
+        notify({ ...common, userIds: [to], type: NotificationType.ISSUE_ASSIGNED, title: `${issue.issueKey} назначена на вас` }),
+      );
+    }
+    // Everyone following the task — and the person it was just taken from —
+    // hears who has it now. The new assignee got the personal notice above
+    // and is left out here, so being both assignee and watcher is one ping.
+    jobs.push(
+      Promise.all([
+        issueWatchers(issue.id, [from]),
+        to ? prisma.user.findUnique({ where: { id: to }, select: { name: true } }) : null,
+      ]).then(([watchers, assignee]) =>
+        notify({
+          ...common,
+          userIds: watchers.filter((id) => id !== to),
+          type: to ? NotificationType.ISSUE_ASSIGNED : NotificationType.ISSUE_UNASSIGNED,
+          title: to
+            ? `${issue.issueKey}: исполнитель — ${assignee?.name ?? 'другой участник'}`
+            : `${issue.issueKey}: исполнитель снят`,
+        }),
+      ),
+    );
+  }
+
+  if (changes.status || changes.dueDate) {
+    jobs.push(
+      issueWatchers(issue.id).then(async (watchers) => {
+        if (changes.status) {
+          await notify({
+            ...common,
+            userIds: watchers,
+            type: NotificationType.ISSUE_STATUS_CHANGED,
+            title: `${issue.issueKey} → ${changes.status.name}`,
+          });
+        }
+        if (changes.dueDate) {
+          const due = changes.dueDate.to;
+          await notify({
+            ...common,
+            userIds: watchers,
+            type: NotificationType.ISSUE_DUE_DATE_CHANGED,
+            title: `Изменился срок у ${issue.issueKey}`,
+            // The product is Russian throughout, so the date in a notification
+            // is written the way the rest of the interface writes dates.
+            body: due
+              ? `${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(due)} — ${issue.title}`
+              : `Срок снят — ${issue.title}`,
+          });
+        }
+      }),
+    );
+  }
+
+  await Promise.all(jobs);
+}
+
 async function fanoutUpdate(
   actor: ActorContext,
   before: {
@@ -907,64 +993,30 @@ async function fanoutUpdate(
     issueKey: string;
     title: string;
     assigneeId: string | null;
+    dueDate: Date | null;
     status: { name: string };
     newStatus: { name: string } | null;
   },
   patch: UpdateIssueInput,
 ): Promise<void> {
   const jobs: Promise<void>[] = [];
+  const nextDue = patch.dueDate ? new Date(patch.dueDate) : null;
 
-  if (patch.assigneeId !== undefined && patch.assigneeId && patch.assigneeId !== before.assigneeId) {
-    jobs.push(
-      notify({
-        userIds: [patch.assigneeId],
-        workspaceId: actor.workspaceId,
-        actorId: actor.userId,
-        type: NotificationType.ISSUE_ASSIGNED,
-        title: `${before.issueKey} назначена на вас`,
-        body: patch.title ?? before.title,
-        issueId: before.id,
-      }),
-    );
-  }
-
-  if (before.newStatus) {
-    jobs.push(
-      issueWatchers(before.id).then((watchers) =>
-        notify({
-          userIds: watchers,
-          workspaceId: actor.workspaceId,
-          actorId: actor.userId,
-          type: NotificationType.ISSUE_STATUS_CHANGED,
-          title: `${before.issueKey} → ${before.newStatus!.name}`,
-          body: patch.title ?? before.title,
-          issueId: before.id,
-        }),
-      ),
-    );
-  }
-
-  if (patch.dueDate !== undefined) {
-    jobs.push(
-      issueWatchers(before.id).then((watchers) =>
-        notify({
-          userIds: watchers,
-          workspaceId: actor.workspaceId,
-          actorId: actor.userId,
-          type: NotificationType.ISSUE_DUE_DATE_CHANGED,
-          title: `Изменился срок у ${before.issueKey}`,
-          // The product is Russian throughout, so the date in a notification
-          // is written the way the rest of the interface writes dates.
-          body: patch.dueDate
-            ? new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(
-                new Date(patch.dueDate),
-              )
-            : 'Срок снят',
-          issueId: before.id,
-        }),
-      ),
-    );
-  }
+  // Saving the same value is not news: only real changes are announced.
+  jobs.push(
+    announceChanges(
+      actor,
+      { id: before.id, issueKey: before.issueKey, title: patch.title ?? before.title },
+      {
+        assignee:
+          patch.assigneeId !== undefined && (patch.assigneeId ?? null) !== before.assigneeId
+            ? { from: before.assigneeId, to: patch.assigneeId ?? null }
+            : undefined,
+        status: before.newStatus ?? undefined,
+        dueDate: patch.dueDate !== undefined && !sameInstant(before.dueDate, nextDue) ? { to: nextDue } : undefined,
+      },
+    ),
+  );
 
   if (patch.description !== undefined) {
     const mentions = collectMentions(patch.description);
@@ -1120,16 +1172,7 @@ export async function moveIssue(
 
   if (isEntering) {
     try {
-      const watchers = await issueWatchers(issueId);
-      await notify({
-        userIds: watchers,
-        workspaceId: actor.workspaceId,
-        actorId: actor.userId,
-        type: NotificationType.ISSUE_STATUS_CHANGED,
-        title: `${issue.issueKey} → ${status.name}`,
-        body: issue.title,
-        issueId,
-      });
+      await announceChanges(actor, { id: issueId, issueKey: issue.issueKey, title: issue.title }, { status: { name: status.name } });
     } catch (error) {
       // A failed notification must not fail the move.
       log.warn(error, 'move notification failed');
@@ -1147,23 +1190,16 @@ export async function moveIssue(
 export async function bulkUpdate(
   actor: ActorContext,
   issueIds: string[],
-  patch: {
-    statusId?: string;
-    priority?: string;
-    assigneeId?: string | null;
-    sprintId?: string | null;
-    epicId?: string | null;
-    addLabelIds?: string[];
-    removeLabelIds?: string[];
-  },
+  patch: BulkUpdateInput['patch'],
+  options: { onlyUnassigned?: boolean } = {},
 ): Promise<{ updated: number }> {
-  assertCan(actor, Permission.ISSUE_UPDATE);
+  const ids = [...new Set(issueIds)];
 
   // Scope to issues the caller can actually reach — never trust the id list.
   const allowed = await visibleProjectIds(actor);
   const issues = await prisma.issue.findMany({
     where: {
-      id: { in: issueIds },
+      id: { in: ids },
       project: { workspaceId: actor.workspaceId },
       ...(allowed === 'ALL' ? {} : { projectId: { in: allowed } }),
     },
@@ -1172,23 +1208,64 @@ export async function bulkUpdate(
       projectId: true,
       statusId: true,
       issueKey: true,
+      title: true,
       completedAt: true,
       type: true,
       parentId: true,
-      status: { select: { category: true } },
+      priority: true,
+      assigneeId: true,
+      sprintId: true,
+      epicId: true,
+      dueDate: true,
+      dueHasTime: true,
+      status: { select: { name: true, category: true } },
+      labels: { select: { labelId: true } },
     },
   });
-  if (!issues.length) return { updated: 0 };
+  // All or nothing, and without naming what is missing: an id that does not
+  // resolve may be a task the caller must not learn anything about, and
+  // quietly changing the rest would leave a half-applied batch nobody chose.
+  if (issues.length !== ids.length) {
+    throw new AppError('NOT_FOUND', 'Часть выбранных задач удалена или недоступна. Обновите список и выберите снова.');
+  }
 
   const projectIds = [...new Set(issues.map((i) => i.projectId))];
+  const nextAssignee = patch.assigneeId === undefined ? undefined : (patch.assigneeId ?? null);
+
+  // Permissions per project, exactly as the card checks them: a project role
+  // can grant what the workspace role does not — a guest who contributes to
+  // one project — and the workspace role alone used to refuse such a person
+  // here while the card let them make the very same change.
+  const projectRoles = await prisma.projectMember.findMany({
+    where: { userId: actor.userId, projectId: { in: projectIds } },
+    select: { projectId: true, role: true },
+  });
+  const roleIn = new Map(projectRoles.map((r) => [r.projectId, r.role]));
+  for (const projectId of projectIds) {
+    const projectActor: ActorContext = { ...actor, projectRole: (roleIn.get(projectId) ?? null) as never };
+    assertCan(projectActor, Permission.ISSUE_UPDATE);
+    const reassigns =
+      nextAssignee !== undefined && issues.some((i) => i.projectId === projectId && i.assigneeId !== nextAssignee);
+    if (reassigns) assertCan(projectActor, Permission.ISSUE_ASSIGN);
+  }
+
+  if (options.onlyUnassigned && nextAssignee !== undefined) {
+    const taken = issues.filter((i) => i.assigneeId && i.assigneeId !== nextAssignee);
+    if (taken.length) {
+      throw conflict(
+        `Уже назначены другим людям: ${taken.map((i) => i.issueKey).join(', ')}. Обновите список и выберите снова.`,
+      );
+    }
+  }
+
   if (patch.statusId && projectIds.length > 1) {
     throw badRequest('Массово менять статус можно только в пределах одного проекта');
   }
 
   const status = patch.statusId ? await resolveStatus(projectIds[0]!, patch.statusId) : null;
   // Per project: a guest may belong to one of the selected issues' projects and not another.
-  if (patch.assigneeId !== undefined) {
-    await Promise.all(projectIds.map((pid) => validateAssignee(actor.workspaceId, pid, patch.assigneeId)));
+  if (nextAssignee) {
+    await Promise.all(projectIds.map((pid) => validateAssignee(actor.workspaceId, pid, nextAssignee)));
   }
 
   // Reject cross-project links exactly like single-issue updates do: sprints
@@ -1235,80 +1312,105 @@ export async function bulkUpdate(
     }
   }
 
+  const nextDue = patch.dueDate === undefined ? undefined : patch.dueDate ? new Date(patch.dueDate) : null;
+  const nextDueHasTime = Boolean(patch.dueDate && patch.dueHasTime);
+
   const now = new Date();
+  const announcements: { issue: (typeof issues)[number]; changes: IssueChanges }[] = [];
+  let changed = 0;
+
   await prisma.$transaction(async (tx) => {
     for (const issue of issues) {
       const data: Prisma.IssueUpdateInput = {};
-      const activity: Prisma.ActivityEventCreateManyInput[] = [];
+      // The same field map the card uses, so the history of a task does not
+      // depend on whether it was changed alone or together with others.
+      const after: Record<string, unknown> = {};
+      const changes: IssueChanges = {};
 
       if (status && status.id !== issue.statusId) {
         data.status = { connect: { id: status.id } };
         data.completedAt = nextCompletedAt(status.category as never, issue.completedAt, now);
-        activity.push({
-          issueId: issue.id,
-          actorId: actor.userId,
-          type: ActivityType.STATUS_CHANGED,
-          field: 'statusId',
-          fromValue: issue.statusId,
-          toValue: status.id,
-        });
+        after.statusId = status.id;
+        changes.status = { name: status.name };
       }
-      if (patch.priority) {
+      if (patch.priority && patch.priority !== issue.priority) {
         data.priority = patch.priority as never;
-        activity.push({
-          issueId: issue.id,
-          actorId: actor.userId,
-          type: ActivityType.PRIORITY_CHANGED,
-          field: 'priority',
-          toValue: patch.priority,
-        });
+        after.priority = patch.priority;
       }
-      if (patch.assigneeId !== undefined) {
-        data.assignee = patch.assigneeId ? { connect: { id: patch.assigneeId } } : { disconnect: true };
-        activity.push({
-          issueId: issue.id,
-          actorId: actor.userId,
-          type: ActivityType.ASSIGNEE_CHANGED,
-          field: 'assigneeId',
-          toValue: patch.assigneeId,
-        });
+      if (nextAssignee !== undefined && nextAssignee !== issue.assigneeId) {
+        if (options.onlyUnassigned) {
+          // Claimed under the row lock: if someone took the task after the
+          // check above, nothing in this batch is saved.
+          const claimed = await tx.issue.updateMany({
+            where: { id: issue.id, assigneeId: null },
+            data: { assigneeId: nextAssignee },
+          });
+          if (claimed.count === 0) {
+            throw conflict(`Задачу ${issue.issueKey} уже назначили. Обновите список и выберите снова.`);
+          }
+        } else {
+          data.assignee = nextAssignee ? { connect: { id: nextAssignee } } : { disconnect: true };
+        }
+        after.assigneeId = nextAssignee;
+        changes.assignee = { from: issue.assigneeId, to: nextAssignee };
       }
-      if (patch.sprintId !== undefined) {
+      if (patch.sprintId !== undefined && (patch.sprintId ?? null) !== issue.sprintId) {
         data.sprint = patch.sprintId ? { connect: { id: patch.sprintId } } : { disconnect: true };
-        activity.push({
-          issueId: issue.id,
-          actorId: actor.userId,
-          type: ActivityType.SPRINT_CHANGED,
-          field: 'sprintId',
-          toValue: patch.sprintId,
-        });
+        after.sprintId = patch.sprintId;
       }
-      if (patch.epicId !== undefined) {
+      if (patch.epicId !== undefined && (patch.epicId ?? null) !== issue.epicId) {
         data.epic = patch.epicId ? { connect: { id: patch.epicId } } : { disconnect: true };
-        activity.push({
-          issueId: issue.id,
-          actorId: actor.userId,
-          type: ActivityType.EPIC_CHANGED,
-          field: 'epicId',
-          toValue: patch.epicId,
-        });
+        after.epicId = patch.epicId;
+      }
+      if (nextDue !== undefined && (!sameInstant(issue.dueDate, nextDue) || issue.dueHasTime !== nextDueHasTime)) {
+        data.dueDate = nextDue;
+        data.dueHasTime = nextDueHasTime;
+        // A deadline set by hand starts the carry-over count again, as in the card.
+        data.carriedOverDays = 0;
+        after.dueDate = nextDue;
+        if (!sameInstant(issue.dueDate, nextDue)) changes.dueDate = { to: nextDue };
+      }
+
+      const activity: Prisma.ActivityEventCreateManyInput[] = diffIssue(issue as never, after as never).map((c) => ({
+        issueId: issue.id,
+        actorId: actor.userId,
+        type: c.type,
+        field: c.field,
+        fromValue: c.fromValue,
+        toValue: c.toValue,
+        metadata: (c.type === ActivityType.STATUS_CHANGED && status
+          ? { from: issue.status.name, to: status.name }
+          : (c.metadata ?? null)) as never,
+      }));
+
+      const current = new Set(issue.labels.map((l) => l.labelId));
+      const removed = (patch.removeLabelIds ?? []).filter((id) => current.has(id));
+      const added = (patch.addLabelIds ?? []).filter((id) => !current.has(id) && !removed.includes(id));
+      if (removed.length) await tx.issueLabel.deleteMany({ where: { issueId: issue.id, labelId: { in: removed } } });
+      if (added.length) {
+        await tx.issueLabel.createMany({ data: added.map((labelId) => ({ issueId: issue.id, labelId })), skipDuplicates: true });
+      }
+      if (added.length || removed.length) {
+        const labels = await tx.label.findMany({ where: { id: { in: [...added, ...removed] } }, select: { id: true, name: true } });
+        const nameOf = new Map(labels.map((l) => [l.id, l.name]));
+        for (const id of added) {
+          activity.push({ issueId: issue.id, actorId: actor.userId, type: ActivityType.LABEL_ADDED, field: 'labels', toValue: nameOf.get(id) ?? id });
+        }
+        for (const id of removed) {
+          activity.push({ issueId: issue.id, actorId: actor.userId, type: ActivityType.LABEL_REMOVED, field: 'labels', fromValue: nameOf.get(id) ?? id });
+        }
       }
 
       if (Object.keys(data).length) await tx.issue.update({ where: { id: issue.id }, data });
-      if (patch.removeLabelIds?.length) {
-        await tx.issueLabel.deleteMany({ where: { issueId: issue.id, labelId: { in: patch.removeLabelIds } } });
-      }
-      if (patch.addLabelIds?.length) {
-        await tx.issueLabel.createMany({
-          data: patch.addLabelIds.map((labelId) => ({ issueId: issue.id, labelId })),
-          skipDuplicates: true,
-        });
-      }
       if (activity.length) await tx.activityEvent.createMany({ data: activity });
+      if (activity.length || Object.keys(data).length) {
+        changed += 1;
+        announcements.push({ issue, changes });
+      }
     }
   });
 
-  for (const issue of issues) {
+  for (const { issue } of announcements) {
     emit(RealtimeEventType.ISSUE_UPDATED, {
       workspaceId: actor.workspaceId,
       actorId: actor.userId,
@@ -1316,13 +1418,22 @@ export async function bulkUpdate(
     });
   }
 
+  for (const { issue, changes } of announcements) {
+    try {
+      await announceChanges(actor, issue, changes);
+    } catch (error) {
+      // A failed notification must not fail a batch that is already saved.
+      log.warn(error, 'bulk update fan-out failed');
+    }
+  }
+
   if (status?.category === 'COMPLETED') {
-    for (const issue of issues) {
+    for (const { issue } of announcements) {
       if (issue.status.category !== 'COMPLETED') await continueRecurrenceSafely(actor, issue.id);
     }
   }
 
-  return { updated: issues.length };
+  return { updated: changed };
 }
 
 export async function deleteIssue(actor: ActorContext, issueId: string, ip?: string): Promise<void> {

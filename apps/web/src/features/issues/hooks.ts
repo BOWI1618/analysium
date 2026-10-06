@@ -347,11 +347,18 @@ export function useBulkUpdate(workspaceId: string) {
     mutationFn: (input: {
       issueIds: string[];
       patch: Record<string, unknown>;
+      /** Assigning from the pool of unassigned tasks: never take one away from someone. */
+      onlyUnassigned?: boolean;
     }) => api.post<{ updated: number }>(`/workspaces/${workspaceId}/issues/bulk`, input),
     onSuccess: (result) => {
-      invalidateIssueViews(queryClient);
-      toast.success(`Обновлено ${pluralize(result.updated, ['задача', 'задачи', 'задач'])}`);
+      toast.success(
+        result.updated === 0
+          ? 'Ничего не изменилось: у выбранных задач уже эти значения'
+          : `Обновлено ${pluralize(result.updated, ['задача', 'задачи', 'задач'])}`,
+      );
     },
+    // A refused batch may be stale on screen — someone deleted or took a task.
+    onSettled: () => invalidateIssueViews(queryClient),
     onError: (error) => toast.error(error, 'Не удалось обновить задачи'),
   });
 }

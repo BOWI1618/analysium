@@ -123,8 +123,8 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/issues/bulk', async (req) => {
     const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
-    const { issueIds, patch } = parse(bulkUpdateSchema, req.body);
-    return service.bulkUpdate(actor, issueIds, patch);
+    const { issueIds, patch, onlyUnassigned } = parse(bulkUpdateSchema, req.body);
+    return service.bulkUpdate(actor, issueIds, patch, { onlyUnassigned });
   });
 
   app.delete<{ Params: IssueParams }>('/issues/:issueId', async (req, reply) => {

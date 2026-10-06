@@ -426,7 +426,11 @@ describe('permissions', () => {
       payload: { issueIds: [issue.id], patch: { priority: 'URGENT' } },
     });
 
-    expect(response.json().updated).toBe(0);
+    // The whole batch is refused, and the answer does not say what the id was.
+    expect(response.statusCode).toBe(404);
+    expect(response.body).not.toContain('Не трогать');
+    const read = await app.inject({ method: 'GET', url: `/api/v1/issues/${issue.id}`, headers: { cookie: owner.cookie } });
+    expect(read.json().priority).not.toBe('URGENT');
   });
 });
 
