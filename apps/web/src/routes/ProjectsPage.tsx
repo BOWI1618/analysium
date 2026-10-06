@@ -77,7 +77,7 @@ export function ProjectsPage() {
           {error ? (
             <ErrorState error={error} onRetry={() => void refetch()} />
           ) : isLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} className="h-36" />
               ))}
@@ -109,7 +109,7 @@ export function ProjectsPage() {
               }
             />
           ) : (
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {projects?.map((project) => {
                 const total = project.totalIssueCount ?? 0;
                 const open = project.openIssueCount ?? 0;

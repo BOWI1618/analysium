@@ -125,8 +125,10 @@ export const IssueCard = memo(function IssueCard({
         </div>
       )}
 
-      {/* Footer */}
-      <div className="mt-3 flex items-center gap-2">
+      {/* Footer. Wraps: a long overdue plate with counters is wider than a
+          narrow column, and unwrapped it pushed the avatar past the card's
+          edge — enough to make the whole column slide sideways under a finger. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5">
         {fields.dueDate && issue.dueDate && <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} done={done} />}
         {issue.recurrence && (
           <span className="text-text-subtle" title={`Повторяется ${RECURRENCE_LABEL[issue.recurrence]}`}>

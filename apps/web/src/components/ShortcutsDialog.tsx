@@ -82,7 +82,7 @@ export function ShortcutsDialog() {
       description="Клавиши нажимаются одновременно. Работают на любой раскладке."
       size="lg"
     >
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {GROUPS.map((group) => (
           <section key={group.title}>
             <h3 className="fd-eyebrow mb-2.5">{group.title}</h3>

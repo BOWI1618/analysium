@@ -49,9 +49,21 @@ function postEvent(eventType: string, eventData: Record<string, unknown> = {}): 
   }
 }
 
-/** Called once at start: shows the app at full height instead of the default half-sheet. */
+/**
+ * Called once at start, to make the app sit in Telegram like a screen of its
+ * own: full height instead of the default half-sheet, and Telegram's header
+ * in the app's paper colours rather than a dark strip above a light page.
+ *
+ * Vertical swipes are kept for the app. Every screen here scrolls inside its
+ * own area, so to Telegram a pull down on a list at its top looks like the
+ * gesture that closes the Mini App — and the tracker would fold away under a
+ * finger that only wanted to scroll back up.
+ */
 export function startTelegramApp(): void {
   if (!isTelegramApp()) return;
   postEvent('web_app_ready');
   postEvent('web_app_expand');
+  postEvent('web_app_setup_swipe_behavior', { allow_vertical_swipe: false });
+  postEvent('web_app_set_header_color', { color: '#fafcfe' });
+  postEvent('web_app_set_background_color', { color: '#eef3f8' });
 }

@@ -437,7 +437,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
             {issue.attachments.length === 0 ? (
               <p className="text-xs text-text-subtle">Файлов нет.</p>
             ) : (
-              <ul className="grid gap-1.5 sm:grid-cols-2">
+              <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {issue.attachments.map((attachment) => (
                   <li
                     key={attachment.id}

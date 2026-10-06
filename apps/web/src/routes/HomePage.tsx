@@ -126,7 +126,10 @@ export function HomePage() {
             />
           </div>
 
-          <div className="grid gap-6 pt-10 lg:grid-cols-3">
+          {/* `grid-cols-1` on a phone, not an implicit column: an implicit one is
+              as wide as its longest unwrapped title, and one long task name
+              pushed the whole page past the edge of the screen. */}
+          <div className="grid grid-cols-1 gap-6 pt-10 lg:grid-cols-3">
             {/* Assigned to me */}
             <section className="lg:col-span-2">
               <SectionHeading

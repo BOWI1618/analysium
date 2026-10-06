@@ -619,4 +619,28 @@ test.describe('мобильная версия', () => {
     await closeMenu.tap();
     await expect(closeMenu).toBeHidden();
   });
+
+  test('главная помещается в экран: длинное название задачи не раздвигает страницу', async ({ page }) => {
+    await register(page, 'Мобильный Читатель');
+    const session = await (await page.request.get('/api/v1/auth/session')).json();
+    // The case from the report: opened on a phone, the home page slid sideways,
+    // because the queue was as wide as its longest unwrapped task title.
+    const title = 'Согласовать с подрядчиком схему сетевого взаимодействия и сроки поставки оборудования';
+    await page.request.post('/api/v1/issues', {
+      data: { workspaceId: session.workspaces[0].id, title, assigneeId: session.user.id },
+    });
+
+    await page.goto('/');
+    await expect(page.getByText(title).first()).toBeVisible({ timeout: 15_000 });
+
+    // Nothing on the page may scroll sideways.
+    const sideways = await page.evaluate(() => {
+      // Runs in the browser; the e2e project is compiled without DOM types.
+      const w = globalThis as any;
+      return [...w.document.querySelectorAll('*')]
+        .filter((el: any) => el.scrollWidth > el.clientWidth + 1 && ['auto', 'scroll'].includes(w.getComputedStyle(el).overflowX))
+        .map((el: any) => `${el.className} ${el.clientWidth}->${el.scrollWidth}`);
+    });
+    expect(sideways).toEqual([]);
+  });
 });

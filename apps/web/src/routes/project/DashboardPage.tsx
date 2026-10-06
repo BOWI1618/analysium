@@ -92,7 +92,7 @@ export function DashboardPage() {
               />
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {/* Status breakdown */}
               <Panel bodyClassName="p-3.5" title="По статусам">
                 {data.byStatus.length === 0 ? (
@@ -164,7 +164,7 @@ export function DashboardPage() {
               <ActivityChart data={data.activity} />
             </Panel>
 
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {/* Workload */}
               <Panel bodyClassName="p-3.5" title="Нагрузка по исполнителям">
                 {data.byAssignee.length === 0 ? (
@@ -427,7 +427,7 @@ function DashboardSkeleton() {
           <Skeleton key={i} className="h-24" />
         ))}
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <Skeleton className="h-48" />
         <Skeleton className="h-48" />
       </div>
