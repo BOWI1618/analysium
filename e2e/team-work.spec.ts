@@ -122,6 +122,18 @@ test.describe('наблюдатели', () => {
     await create.getByRole('button', { name: 'Создать и открыть' }).click();
     await expect(create).toBeHidden({ timeout: 15_000 });
 
+    // The eye sits right under the top edge of the window. Its hint used to be
+    // drawn above it — that is, off the screen — so hovering showed nothing.
+    await page.getByRole('button', { name: 'Не следить за задачей' }).hover({ timeout: 15_000 });
+    const hint = page.getByRole('tooltip');
+    await expect(hint).toContainText('Вы следите за задачей');
+    const box = (await hint.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+
     // The author and the colleague picked in the form.
     await page.getByRole('button', { name: 'Наблюдатели: 2' }).click({ timeout: 15_000 });
     const list = page.getByRole('list', { name: 'Кто следит за задачей' });

@@ -1,4 +1,4 @@
-import { cloneElement, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { cloneElement, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 
@@ -19,46 +19,80 @@ export interface TooltipProps {
   disabled?: boolean;
 }
 
+type Side = NonNullable<TooltipProps['side']>;
+
+/** Space between the tooltip and what it describes, and between it and the window's edge. */
+const GAP = 8;
+const EDGE = 4;
+
+/**
+ * Where a tooltip of a known size goes. It takes the side it was asked for
+ * unless it does not fit there and fits opposite, and is then pushed back
+ * inside the window. Buttons in a header sit right under the top edge — a
+ * tooltip drawn above them regardless was drawn off the screen.
+ */
+function place(anchor: DOMRect, width: number, height: number, side: Side): { top: number; left: number } {
+  const fits: Record<Side, boolean> = {
+    top: anchor.top - GAP - height >= EDGE,
+    bottom: anchor.bottom + GAP + height <= window.innerHeight - EDGE,
+    left: anchor.left - GAP - width >= EDGE,
+    right: anchor.right + GAP + width <= window.innerWidth - EDGE,
+  };
+  const opposite: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+  const actual = !fits[side] && fits[opposite[side]] ? opposite[side] : side;
+
+  const vertical = actual === 'top' || actual === 'bottom';
+  const top = vertical
+    ? actual === 'top'
+      ? anchor.top - GAP - height
+      : anchor.bottom + GAP
+    : anchor.top + anchor.height / 2 - height / 2;
+  const left = vertical
+    ? anchor.left + anchor.width / 2 - width / 2
+    : actual === 'left'
+      ? anchor.left - GAP - width
+      : anchor.right + GAP;
+
+  const within = (value: number, max: number) => Math.max(EDGE, Math.min(value, max));
+  return {
+    top: within(top, window.innerHeight - height - EDGE),
+    left: within(left, window.innerWidth - width - EDGE),
+  };
+}
+
 /**
  * Lightweight tooltip rendered in a portal so it is never clipped by an
  * `overflow: hidden` ancestor (board columns, table cells). Shows on hover
- * *and* keyboard focus.
+ * *and* keyboard focus, and stays inside the window.
  */
 export function Tooltip({ content, children, side = 'top', delay = 350, disabled }: TooltipProps) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const timerRef = useRef<number>(0);
-  const anchorRef = useRef<HTMLElement | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
 
   const show = (event: AnchorEvent) => {
     if (disabled || !content) return;
     const target = event.currentTarget as HTMLElement | null;
     if (!target) return;
-    anchorRef.current = target;
     window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => {
-      const rect = target.getBoundingClientRect();
-      const offset = 8;
-      const positions = {
-        top: { top: rect.top - offset, left: rect.left + rect.width / 2 },
-        bottom: { top: rect.bottom + offset, left: rect.left + rect.width / 2 },
-        left: { top: rect.top + rect.height / 2, left: rect.left - offset },
-        right: { top: rect.top + rect.height / 2, left: rect.right + offset },
-      };
-      setPosition(positions[side]);
-    }, delay);
+    timerRef.current = window.setTimeout(() => setAnchor(target.getBoundingClientRect()), delay);
   };
 
   const hide = () => {
     window.clearTimeout(timerRef.current);
+    setAnchor(null);
     setPosition(null);
   };
 
-  const transforms = {
-    top: 'translate(-50%, -100%)',
-    bottom: 'translate(-50%, 0)',
-    left: 'translate(-100%, -50%)',
-    right: 'translate(0, -50%)',
-  };
+  // Placed once it is in the document: only then is its size known, and with
+  // the size whether it fits where it was asked to go. Until then it is
+  // rendered unseen, so it never flashes in the wrong spot.
+  useLayoutEffect(() => {
+    if (!anchor || !tipRef.current) return;
+    const tip = tipRef.current.getBoundingClientRect();
+    setPosition(place(anchor, tip.width, tip.height, side));
+  }, [anchor, side]);
 
   return (
     <>
@@ -68,16 +102,17 @@ export function Tooltip({ content, children, side = 'top', delay = 350, disabled
         onFocus: show,
         onBlur: hide,
       })}
-      {position &&
+      {anchor &&
         createPortal(
           <div
+            ref={tipRef}
             role="tooltip"
             className={clsx(
               'pointer-events-none fixed z-[var(--z-tooltip)] max-w-64 rounded-sm px-2 py-1',
               'bg-[var(--text)] text-[var(--text-inverted)] text-xs font-medium border border-border-strong shadow-sm',
-              'animate-in',
+              position && 'animate-in',
             )}
-            style={{ top: position.top, left: position.left, transform: transforms[side] }}
+            style={position ?? { top: 0, left: 0, visibility: 'hidden' }}
           >
             {content}
           </div>,
