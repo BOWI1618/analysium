@@ -163,6 +163,7 @@ test.describe('отделы', () => {
     await create({ title: 'Задача сотрудника отдела', assigneeId: mateId, dueDate: '2020-02-02T12:00:00.000Z' });
     // The lead's own task: they run the department but are not listed in it.
     await create({ title: 'Задача вне отдела', assigneeId: session.user.id });
+    await create({ title: 'Ничья задача' });
 
     // The register of departments is kept in the workspace settings.
     await page.goto('/settings/workspace');
@@ -191,8 +192,31 @@ test.describe('отделы', () => {
     await expect(people).toContainText('просрочено 1');
     await expect(page.getByText('Задача сотрудника отдела')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Задача вне отдела')).toHaveCount(0);
+    await expect(page.getByText('Ничья задача')).toHaveCount(0);
 
-    // From a person in the department to everything that person has.
+    // Whoever keeps the register can also step back and see the whole of the
+    // work: every task with its assignee, and the ones nobody has.
+    await page.getByRole('button', { name: 'Выбрать отдел' }).click();
+    await page.getByRole('menuitem', { name: 'Все сотрудники' }).click();
+    await expect(page).toHaveURL(/department=all/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Все сотрудники');
+    const everyone = page.getByRole('list', { name: 'Сотрудники пространства' });
+    await expect(everyone).toContainText('Глава Отдела');
+    await expect(everyone.getByRole('listitem').filter({ hasText: 'Без исполнителя' })).toContainText('активных 1', {
+      timeout: 15_000,
+    });
+    for (const title of ['Задача сотрудника отдела', 'Задача вне отдела', 'Ничья задача']) {
+      await expect(page.getByRole('row').filter({ hasText: title })).toBeVisible({ timeout: 15_000 });
+    }
+    // The tile narrows the list to what still has to be handed out.
+    await everyone.getByRole('button', { name: /Без исполнителя/ }).click();
+    await expect(page.getByRole('row').filter({ hasText: 'Ничья задача' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('row').filter({ hasText: 'Задача вне отдела' })).toHaveCount(0);
+
+    // Back to the department, and from a person in it to everything that person has.
+    await page.getByRole('button', { name: 'Выбрать отдел' }).click();
+    await page.getByRole('menuitem', { name: 'Аналитика' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Аналитика');
     await people.getByRole('link', { name: 'Все задачи: Сотрудник Отдельный' }).click();
     await expect(page).toHaveURL(/\/employee-work\?user=/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Сотрудник Отдельный');

@@ -218,6 +218,11 @@ export function DueDateChip({
   const label = dueDateLabel(value, hasTime);
   if (!label) return null;
   const due = done ? { ...label, tone: 'normal' as const, overdueDays: 0 } : label;
+  // Days late say more than the hour a deadline passed a week ago, and the two
+  // together are wider than any column: «29 сент., 09:00 · 7 дн» lost its
+  // beginning in lists. The hour stays in the hint.
+  const shown =
+    due.tone === 'overdue' && due.overdueDays > 1 && hasTime ? (dueDateLabel(value, false)?.label ?? due.label) : due.label;
   const carried =
     carriedDays > 0 ? ` · переносилась на следующий день ${pluralize(carriedDays, ['раз', 'раза', 'раз'])}` : '';
 
@@ -254,7 +259,7 @@ export function DueDateChip({
           <path d="M8 3v4M16 3v4M3 11h18" strokeLinecap="round" />
         </svg>
       )}
-      {due.label}
+      {shown}
       {/* How long it has been overdue, counted in days, as Weeek does; «Вчера» already says one. */}
       {due.overdueDays > 1 && <span className="font-normal opacity-80">· {due.overdueDays} дн</span>}
       {/* Carried over unfinished: the delay stays visible although the date is today again. */}

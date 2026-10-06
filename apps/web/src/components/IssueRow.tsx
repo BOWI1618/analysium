@@ -67,7 +67,8 @@ const COLUMN_PX: Record<ListColumn, number> = {
   epic: 128,
   project: 96,
   startDate: 96,
-  dueDate: 112,
+  // Fits the longest deadline as it is written: «вт, 14 окт., 09:00» with its icon.
+  dueDate: 144,
   storyPoints: 56,
   comments: 40,
   created: 80,
@@ -359,7 +360,7 @@ export const IssueRow = memo(function IssueRow({
       )}
 
       {show('dueDate') && (
-        <span style={sized('dueDate')} className="hidden w-28 shrink-0 items-center justify-end gap-1 overflow-hidden sm:flex">
+        <span style={sized('dueDate')} className="hidden w-36 shrink-0 items-center justify-end gap-1 overflow-hidden sm:flex">
           {issue.recurrence && (
             <span className="shrink-0 text-text-subtle" title={`Повторяется ${RECURRENCE_LABEL[issue.recurrence]}`}>
               <Repeat className="size-3" aria-label={`Повторяется ${RECURRENCE_LABEL[issue.recurrence]}`} />
@@ -370,6 +371,9 @@ export const IssueRow = memo(function IssueRow({
             hasTime={issue.dueHasTime}
             carriedDays={issue.carriedOverDays}
             done={isClosedStatus(issue.status)}
+            // In a column dragged narrower than the date, the date keeps its
+            // beginning and loses its end — never the other way round.
+            className="max-w-full min-w-0 overflow-hidden"
           />
         </span>
       )}
@@ -574,7 +578,7 @@ export function IssueRowHeader({
       {show('epic') && cell('epic', 'hidden w-32 sm:block', 'Эпик')}
       {show('project') && cell('project', 'hidden w-24 sm:block', 'Проект')}
       {show('startDate') && cell('startDate', 'hidden w-24 text-right sm:block', 'Начало')}
-      {show('dueDate') && cell('dueDate', 'hidden w-28 text-right sm:block', 'Срок')}
+      {show('dueDate') && cell('dueDate', 'hidden w-36 text-right sm:block', 'Срок')}
       {show('storyPoints') && (
         <span className="hidden w-14 shrink-0 text-right sm:block" title="Оценка в баллах, не в часах">
           Оценка
