@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { PROJECT_ROLES, STATUS_CATEGORIES, Permission, type StatusCategory } from '@flowdesk/contracts';
@@ -314,6 +314,9 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
  * a status: the old «к выполнению / в работе» read like a second status inside
  * the first.
  */
+/** A column that finishes a task, one way or the other. */
+const closes = (category: string) => category === 'COMPLETED' || category === 'CANCELED';
+
 const STATUS_MEANING: Record<StatusCategory, string> = {
   BACKLOG: 'Отложено, в бэклоге',
   UNSTARTED: 'Ещё не начато',
@@ -331,6 +334,14 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState<StatusCategory>('UNSTARTED');
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
+  // The mark moves at the click and is confirmed by the server a moment later;
+  // waiting for the answer made the radio button look as if it had not taken.
+  const [pendingDefault, setPendingDefault] = useState<string | null>(null);
+  const confirmedDefault = project.statuses.find((status) => status.isDefault)?.id;
+  useEffect(() => {
+    // The project was read again and agrees: the server's word is shown from here on.
+    if (pendingDefault && confirmedDefault === pendingDefault) setPendingDefault(null);
+  }, [pendingDefault, confirmedDefault]);
 
   const move = (index: number, direction: -1 | 1) => {
     const ids = project.statuses.map((s) => s.id);
@@ -360,6 +371,10 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
             <b className="text-text">Лимит</b> — сколько задач может одновременно стоять в колонке; пусто — без
             ограничения. <b className="text-text">Задач</b> — сколько их там сейчас.
           </p>
+          <p>
+            <b className="text-text">Новые</b> — в какую колонку попадает задача, если статус при создании не выбран.
+            Закрывающая колонка для этого не подходит.
+          </p>
         </div>
 
         <div className="hidden items-center gap-2 px-2 pb-1.5 sm:flex" aria-hidden="true">
@@ -367,6 +382,7 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
           <span className="w-3 shrink-0" />
           <span className={clsx(cell, 'min-w-24 flex-1')}>Колонка</span>
           <span className={clsx(cell, 'w-44')}>Что означает</span>
+          <span className={clsx(cell, 'w-12 text-center')}>Новые</span>
           <span className={clsx(cell, 'w-10')}>Цвет</span>
           <span className={clsx(cell, 'w-14')}>Лимит</span>
           <span className={clsx(cell, 'w-8 text-right')}>Задач</span>
@@ -423,11 +439,37 @@ function WorkflowSection({ project, canManage }: { project: Project; canManage: 
                 className="h-7 w-44 border-2 border-border-strong bg-surface px-1.5 text-xs disabled:opacity-60"
               >
                 {STATUS_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
+                  // The column new tasks land in cannot become a closing one.
+                  <option key={category} value={category} disabled={Boolean(status.isDefault) && closes(category)}>
                     {STATUS_MEANING[category]}
                   </option>
                 ))}
               </select>
+
+              <span className="flex w-12 shrink-0 items-center justify-center gap-1.5">
+                <input
+                  type="radio"
+                  name={`default-status-${project.id}`}
+                  checked={pendingDefault ? pendingDefault === status.id : Boolean(status.isDefault)}
+                  disabled={!canManage || closes(status.category)}
+                  onChange={() => {
+                    setPendingDefault(status.id);
+                    updateStatus.mutate(
+                      { statusId: status.id, patch: { isDefault: true } },
+                      // Kept until the project is read again; dropped at once if the server refused.
+                      { onError: () => setPendingDefault(null) },
+                    );
+                  }}
+                  aria-label={`Новые задачи попадают в «${status.name}»`}
+                  title={
+                    closes(status.category)
+                      ? 'Новые задачи не могут сразу попадать в закрывающий статус'
+                      : 'Сюда попадает задача, если статус при создании не выбран'
+                  }
+                  className="size-4 cursor-pointer accent-[var(--accent)] disabled:cursor-default disabled:opacity-40"
+                />
+                <span className="text-2xs text-text-subtle sm:hidden">новые</span>
+              </span>
 
               <input
                 type="color"

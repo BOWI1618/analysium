@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { SprintDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
-import { ISSUE_PRIORITIES, type IssuePriority } from '@flowdesk/contracts';
+import { BULK_UPDATE_LIMIT, ISSUE_PRIORITIES, type IssuePriority } from '@flowdesk/contracts';
 import { X } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
@@ -36,6 +36,11 @@ export function BulkActionBar({
 }) {
   if (count === 0) return null;
 
+  // The server takes one batch of this size and refuses a larger one whole.
+  // Saying so before the click beats an error after it.
+  const over = count > BULK_UPDATE_LIMIT;
+  const blocked = pending || over;
+
   return (
     <div
       role="region"
@@ -47,6 +52,11 @@ export function BulkActionBar({
         <span className="fd-num px-1 text-xs font-bold">
           Выбрано: {count}
         </span>
+        {over && (
+          <span role="status" className="w-full text-center text-2xs font-bold text-danger">
+            За одно действие — не больше {BULK_UPDATE_LIMIT} задач. Снимите часть выделения.
+          </span>
+        )}
 
         <span className="h-4 w-px bg-border-strong" />
 
@@ -55,7 +65,7 @@ export function BulkActionBar({
         {statuses.length > 0 && (
           <Menu>
             <MenuTrigger>
-              <Button size="xs" variant="ghost" disabled={pending}>
+              <Button size="xs" variant="ghost" disabled={blocked}>
                 Статус
               </Button>
             </MenuTrigger>
@@ -76,7 +86,7 @@ export function BulkActionBar({
 
         <Menu>
           <MenuTrigger>
-            <Button size="xs" variant="ghost" disabled={pending}>
+            <Button size="xs" variant="ghost" disabled={blocked}>
               Приоритет
             </Button>
           </MenuTrigger>
@@ -97,7 +107,7 @@ export function BulkActionBar({
         {members.length > 0 && (
           <Menu>
             <MenuTrigger>
-              <Button size="xs" variant="ghost" disabled={pending}>
+              <Button size="xs" variant="ghost" disabled={blocked}>
                 Исполнитель
               </Button>
             </MenuTrigger>
@@ -122,7 +132,7 @@ export function BulkActionBar({
         {sprints.length > 0 && (
           <Menu>
             <MenuTrigger>
-              <Button size="xs" variant="ghost" disabled={pending}>
+              <Button size="xs" variant="ghost" disabled={blocked}>
                 Спринт
               </Button>
             </MenuTrigger>
@@ -139,7 +149,7 @@ export function BulkActionBar({
           </Menu>
         )}
 
-        <DueDateMenu pending={pending} onApply={onApply} />
+        <DueDateMenu blocked={blocked} onApply={onApply} />
 
         <span className="h-4 w-px bg-border-strong" />
 
@@ -163,13 +173,13 @@ export function BulkActionBar({
  * change for every digit of the year, and each of those would have been a
  * separate change to every selected task.
  */
-function DueDateMenu({ pending, onApply }: { pending?: boolean; onApply: (patch: Record<string, unknown>) => void }) {
+function DueDateMenu({ blocked, onApply }: { blocked?: boolean; onApply: (patch: Record<string, unknown>) => void }) {
   const [day, setDay] = useState('');
 
   return (
     <Menu onOpenChange={(open) => !open && setDay('')}>
       <MenuTrigger>
-        <Button size="xs" variant="ghost" disabled={pending}>
+        <Button size="xs" variant="ghost" disabled={blocked}>
           Срок
         </Button>
       </MenuTrigger>
@@ -186,7 +196,7 @@ function DueDateMenu({ pending, onApply }: { pending?: boolean; onApply: (patch:
           <Button
             size="xs"
             variant="primary"
-            disabled={!day || pending}
+            disabled={!day || blocked}
             // A whole day: stored at noon UTC, like every date without a time.
             onClick={() => onApply({ dueDate: `${day}T12:00:00.000Z`, dueHasTime: false })}
           >

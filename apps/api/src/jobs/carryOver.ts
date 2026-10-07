@@ -7,6 +7,10 @@
  *
  * A one-day task moves whole, start and deadline; a period keeps its start
  * and stretches to today. Idempotent: a task already on today is not touched.
+ *
+ * Every move is written into the task's history, on behalf of nobody: the
+ * deadline used to change with no trace of what it had been, and a task three
+ * days late looked like one due today.
  */
 import { RealtimeEventType } from '@flowdesk/contracts';
 import { prisma } from '../lib/prisma';
@@ -47,10 +51,23 @@ export async function carryOverTasks(now = new Date()): Promise<number> {
     const oneDay = issue.startDate !== null && utcDay(issue.startDate) === utcDay(due);
     const startDate = oneDay ? new Date(issue.startDate!.getTime() + days * DAY_MS) : issue.startDate;
 
-    await prisma.issue.update({
-      where: { id: issue.id },
-      data: { dueDate, startDate, carriedOverDays: { increment: days } },
-    });
+    await prisma.$transaction([
+      prisma.issue.update({
+        where: { id: issue.id },
+        data: { dueDate, startDate, carriedOverDays: { increment: days } },
+      }),
+      prisma.activityEvent.create({
+        data: {
+          issueId: issue.id,
+          actorId: null,
+          type: 'DUE_DATE_CHANGED',
+          field: 'dueDate',
+          fromValue: due.toISOString(),
+          toValue: dueDate.toISOString(),
+          metadata: { carriedOver: true, days },
+        },
+      }),
+    ]);
 
     emit(RealtimeEventType.ISSUE_UPDATED, {
       workspaceId: issue.project.workspaceId,

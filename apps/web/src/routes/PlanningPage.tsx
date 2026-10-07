@@ -16,6 +16,8 @@ import {
   usePatchIssue,
 } from '~/features/issues/hooks';
 import { useFilterState } from '~/features/issues/useFilterState';
+import { pageParams, viewSearchParams } from '~/features/views/viewState';
+import { SavedViews } from '~/components/SavedViews';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
@@ -26,7 +28,7 @@ import { UserPicker } from '~/components/Pickers';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
-import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
+import { EmptyState, ErrorState, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { dueDateLabel, pluralize, shortDate } from '~/lib/format';
 
 type Period = '7' | '30' | 'all';
@@ -238,7 +240,8 @@ export function PlanningPage() {
                 />
               </div>
 
-              {personTasks.error ? (
+              <StaleNotice query={personTasks} className="border-2" />
+              {personTasks.error && !personTasks.data ? (
                 <ErrorState compact error={personTasks.error} onRetry={() => void personTasks.refetch()} />
               ) : personTasks.isLoading ? (
                 <SkeletonRows rows={5} />
@@ -319,15 +322,27 @@ export function PlanningPage() {
             hideAssignee
             hideDoneOption={false}
             sortOptions={false}
+            views={
+              <SavedViews
+                layout="PLANNING"
+                current={{
+                  filters: chosen as Record<string, unknown>,
+                  display: { params: pageParams(searchParams, ['user', 'period']) },
+                }}
+                onApply={(saved) => setSearchParams(viewSearchParams(saved), { replace: true })}
+                saves="В вид войдут выбранный сотрудник, период и фильтры очереди."
+              />
+            }
           />
 
+          <StaleNotice query={pool} />
           <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
             {/* Room under the last rows, so the floating bar never covers them. */}
             <div
               className="pb-20 sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
               style={listMinStyle(columns, true)}
             >
-              {pool.error ? (
+              {pool.error && !pool.data ? (
                 <ErrorState error={pool.error} onRetry={() => void pool.refetch()} />
               ) : pool.isLoading ? (
                 <SkeletonRows rows={10} />

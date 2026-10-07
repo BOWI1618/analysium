@@ -20,7 +20,7 @@ import { Button, IconButton } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
 import { SegmentedControl } from '~/ui/Tabs';
 import { Dialog } from '~/ui/Dialog';
-import { EmptyState, ErrorState, Skeleton } from '~/ui/Feedback';
+import { EmptyState, ErrorState, Skeleton, StaleNotice } from '~/ui/Feedback';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import type { ScheduleShiftDto } from '@flowdesk/contracts';
 
@@ -63,7 +63,8 @@ export function GanttPage() {
     shifts: ScheduleShiftDto[];
   } | null>(null);
 
-  const { data, isLoading, error, refetch, isFetching } = useGantt(projectId, filters);
+  const ganttQuery = useGantt(projectId, filters);
+  const { data, isLoading, error, refetch, isFetching } = ganttQuery;
 
   const reschedule = useRescheduleIssue(projectId);
   const createDependency = useCreateDependency(projectId);
@@ -105,7 +106,7 @@ export function GanttPage() {
     return { start: start.toISOString(), end: end.toISOString() };
   }, [data]);
 
-  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  if (error && !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   const option = (label: string, checked: boolean, onChange: () => void) => (
     <MenuItem key={label} keepOpen selected={checked} onSelect={onChange}>
@@ -115,6 +116,7 @@ export function GanttPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <StaleNotice query={ganttQuery} />
       <FilterBar
         filters={filters}
         onChange={setFilters}

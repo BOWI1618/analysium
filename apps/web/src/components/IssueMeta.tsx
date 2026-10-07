@@ -12,7 +12,7 @@ import {
   Zap,
   GitBranch,
 } from 'lucide-react';
-import { dueDateLabel, hexWithAlpha, pluralize } from '~/lib/format';
+import { dueDateLabel, hexWithAlpha, pluralize, shortDate } from '~/lib/format';
 import { Tooltip } from '~/ui/Tooltip';
 
 /* ------------------------------------------------------------ issue type */
@@ -223,8 +223,14 @@ export function DueDateChip({
   // beginning in lists. The hour stays in the hint.
   const shown =
     due.tone === 'overdue' && due.overdueDays > 1 && hasTime ? (dueDateLabel(value, false)?.label ?? due.label) : due.label;
+  // The deadline the task had before it was carried: the date on the chip is
+  // already today's, and on its own it would hide how late the task is.
+  const original =
+    carriedDays > 0 && value ? shortDate(new Date(new Date(value).getTime() - carriedDays * 86_400_000).toISOString()) : null;
   const carried =
-    carriedDays > 0 ? ` · переносилась на следующий день ${pluralize(carriedDays, ['раз', 'раза', 'раз'])}` : '';
+    carriedDays > 0
+      ? ` · срок переносился ${pluralize(carriedDays, ['день', 'дня', 'дней'])}${original ? `, исходный срок — ${original}` : ''}`
+      : '';
 
   // Only a date that demands action is printed as a plate. A date that is
   // merely in the future is set as plain text, so a column of cards shows

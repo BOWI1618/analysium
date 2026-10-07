@@ -8,6 +8,8 @@ import { useUiStore } from '~/app/uiStore';
 import { useMembers } from '~/features/members/hooks';
 import { useIssueList, flattenPages } from '~/features/issues/hooks';
 import { useFilterState } from '~/features/issues/useFilterState';
+import { pageParams, viewSearchParams } from '~/features/views/viewState';
+import { SavedViews } from '~/components/SavedViews';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
@@ -24,7 +26,7 @@ import {
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import { Button } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
-import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
+import { EmptyState, ErrorState, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { shortDate } from '~/lib/format';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
 
@@ -181,6 +183,21 @@ export function MyWorkPage() {
         stateFacet={tab !== 'overdue' && tab !== 'done'}
         hideAssignee={personal}
         hideDoneOption={false}
+        views={
+          <SavedViews
+            layout="MY_WORK"
+            current={{
+              filters: extraFilters as Record<string, unknown>,
+              display: { params: pageParams(searchParams, ['tab']), groupBy },
+            }}
+            onApply={(saved) => {
+              setSearchParams(viewSearchParams(saved), { replace: true });
+              const group = saved.display?.groupBy;
+              if (group === 'none' || group === 'status' || group === 'project' || group === 'dueDate') setGroupBy(group);
+            }}
+            saves="В вид войдут вкладка, фильтры и группировка."
+          />
+        }
         trailing={
           <div className="flex items-center gap-2">
           <ColumnsMenu columns={columns} onChange={setColumns} />
@@ -199,13 +216,14 @@ export function MyWorkPage() {
         }
       />
 
+      <StaleNotice query={query} />
       <ColumnWidthsContext.Provider value={widths}>
       <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
           className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
           style={listMinStyle(columns, false, widths)}
         >
-        {query.error ? (
+        {query.error && !query.data ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : query.isLoading ? (
           <SkeletonRows rows={10} />

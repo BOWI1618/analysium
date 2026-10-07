@@ -24,7 +24,7 @@ import { Badge } from '~/ui/Badge';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Dialog, ConfirmDialog, DialogCloseButton } from '~/ui/Dialog';
 import { Input, Textarea, Select } from '~/ui/Input';
-import { EmptyState, ErrorState, ProgressBar, SkeletonRows } from '~/ui/Feedback';
+import { EmptyState, ErrorState, ProgressBar, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { shortDate } from '~/lib/format';
 
 /**
@@ -64,12 +64,13 @@ export function BacklogPage() {
   const canEdit = project?.permissions.includes(Permission.ISSUE_UPDATE) ?? false;
   const openSprints = (sprints ?? []).filter((s) => s.status !== 'COMPLETED');
 
-  if (backlogQuery.error) {
+  if (backlogQuery.error && !backlogQuery.data) {
     return <ErrorState error={backlogQuery.error} onRetry={() => void backlogQuery.refetch()} />;
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <StaleNotice query={backlogQuery} />
       <FilterBar
         filters={filters}
         onChange={setFilters}

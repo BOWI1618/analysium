@@ -8,6 +8,8 @@ import { useMembers } from '~/features/members/hooks';
 import { useProject, useProjects } from '~/features/projects/hooks';
 import { flattenPages, useAssigneeStats, useIssueList } from '~/features/issues/hooks';
 import { useFilterState } from '~/features/issues/useFilterState';
+import { viewSearchParams } from '~/features/views/viewState';
+import { SavedViews } from '~/components/SavedViews';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
@@ -16,7 +18,7 @@ import { UserPicker } from '~/components/Pickers';
 import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
 import { Button } from '~/ui/Button';
-import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
+import { EmptyState, ErrorState, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { pluralize } from '~/lib/format';
 
 type View = 'active' | 'overdue' | 'done' | 'all';
@@ -198,7 +200,10 @@ export function EmployeeWorkPage() {
         </div>
       </header>
 
-      <div className="flex items-stretch overflow-x-auto border-b-2 border-border-strong bg-bg-subtle no-scrollbar">
+      {/* On a phone the four tabs share the width in two lines each, name over
+          figure. In one row they were wider than the screen, and «Все» sat past
+          its edge with no scrollbar to say so. */}
+      <div className="grid grid-cols-4 border-b-2 border-border-strong bg-bg-subtle sm:flex sm:items-stretch sm:overflow-x-auto no-scrollbar">
         {VIEWS.map((item, index) => {
           const count = countFor[item.value];
           return (
@@ -208,14 +213,15 @@ export function EmployeeWorkPage() {
               onClick={() => setParam('view', item.value === 'active' ? null : item.value)}
               aria-current={view === item.value ? 'page' : undefined}
               className={clsx(
-                'inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors',
+                'flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-bold whitespace-nowrap transition-colors',
+                'sm:inline-flex sm:flex-row sm:gap-1.5 sm:px-3.5 sm:py-2 sm:text-sm',
                 index > 0 && 'border-l-2 border-border-strong',
                 view === item.value
                   ? 'relative bg-surface text-text after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-accent'
                   : 'text-text-muted hover:bg-surface-hover hover:text-text',
               )}
             >
-              {item.label}
+              <span className="max-w-full truncate">{item.label}</span>
               {count !== undefined && (
                 <span
                   className={clsx(
@@ -242,14 +248,28 @@ export function EmployeeWorkPage() {
         hideAssignee
         hideDoneOption={false}
         sortOptions={false}
+        views={
+          <SavedViews
+            layout="EMPLOYEE"
+            current={{
+              filters: chosen as Record<string, unknown>,
+              // The person is written down even when it is the viewer: «Неделя
+              // Ивана» has to stay Ivan's week for whoever opens it.
+              display: { params: { ...(userId ? { user: userId } : {}), ...(view !== 'active' ? { view } : {}) } },
+            }}
+            onApply={(saved) => setSearchParams(viewSearchParams(saved), { replace: true })}
+            saves="В вид войдут сотрудник, вкладка и фильтры."
+          />
+        }
       />
 
+      <StaleNotice query={query} />
       <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
           className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
           style={listMinStyle(columns, false)}
         >
-          {query.error ? (
+          {query.error && !query.data ? (
             <ErrorState error={query.error} onRetry={() => void query.refetch()} />
           ) : members && !person ? (
             <EmptyState

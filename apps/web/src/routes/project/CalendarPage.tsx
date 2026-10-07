@@ -25,7 +25,7 @@ import { useFilterState } from '~/features/issues/useFilterState';
 import { FilterBar } from '~/components/FilterBar';
 import { Button, IconButton } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
-import { ErrorState, Skeleton } from '~/ui/Feedback';
+import { ErrorState, Skeleton, StaleNotice } from '~/ui/Feedback';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import { CalendarCard, startCardDrag, type CalendarDrag, type CardFields } from '~/features/calendar/CalendarCard';
@@ -209,7 +209,7 @@ export function CalendarPage() {
     else setAnchor((prev) => addDays(prev, direction));
   };
 
-  if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
+  if (query.error && !query.data) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
 
   const title =
     mode === 'day'
@@ -236,6 +236,7 @@ export function CalendarPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <StaleNotice query={query} />
       <FilterBar
         filters={filters}
         onChange={setFilters}

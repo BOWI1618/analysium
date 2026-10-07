@@ -163,6 +163,51 @@ function describeError(error: unknown): { icon: ReactNode; title: string; descri
   };
 }
 
+/* ------------------------------------------------------------ stale data */
+
+/** What the notice needs from a query; both plain and paged ones have it. */
+export interface RefreshableQuery {
+  error: unknown;
+  data: unknown;
+  dataUpdatedAt: number;
+  isFetching: boolean;
+  refetch: () => unknown;
+}
+
+/**
+ * A refresh failed while the screen already shows something.
+ *
+ * The pages used to swap everything for the error then — the list a person
+ * was reading disappeared because a background request did not get through.
+ * Now what was loaded stays, and this strip says how old it is. Nothing is
+ * shown while there is no error or nothing to keep: a first load that failed
+ * still gets the full error.
+ */
+export function StaleNotice({ query, className }: { query: RefreshableQuery; className?: string }) {
+  if (!query.error || query.data === undefined) return null;
+  const time = query.dataUpdatedAt
+    ? new Date(query.dataUpdatedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  return (
+    <div
+      role="status"
+      className={clsx(
+        'flex flex-wrap items-center gap-x-3 gap-y-1 border-b-2 border-border-strong bg-marker px-3 py-1.5 text-xs text-ink',
+        className,
+      )}
+    >
+      <WifiOff className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1">
+        Не удалось обновить данные{time ? ` — на экране то, что было в ${time}` : ''}. Свежие изменения могут быть не видны.
+      </span>
+      <Button size="xs" variant="secondary" loading={query.isFetching} onClick={() => void query.refetch()}>
+        Повторить
+      </Button>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------- progress */
 
 export function ProgressBar({

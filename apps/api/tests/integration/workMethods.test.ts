@@ -162,6 +162,33 @@ describe('перенос невыполненных задач на следую
     await carryOverTasks();
     expect((await read(wholeDay.id)).carriedOverDays).toBe(3);
 
+    // The move is in the task's history, on behalf of nobody, with the
+    // deadline it had before — once, not once per run.
+    const history = (
+      await app.inject({ method: 'GET', url: `/api/v1/issues/${wholeDay.id}/activity`, headers: { cookie: owner.cookie } })
+    ).json();
+    const events = (history.items ?? history) as {
+      type: string;
+      actor: { name: string };
+      fromValue: string | null;
+      toValue: string | null;
+      metadata: { carriedOver?: boolean; days?: number } | null;
+    }[];
+    const carried = events.filter((event) => event.metadata?.carriedOver);
+    expect(carried).toHaveLength(1);
+    expect(carried[0]).toMatchObject({
+      type: 'DUE_DATE_CHANGED',
+      actor: { name: 'Система' },
+      fromValue: noonUtc(-3),
+      toValue: noonUtc(0),
+      metadata: { carriedOver: true, days: 3 },
+    });
+    // A task that was not late has nothing of the kind.
+    const calm = (
+      await app.inject({ method: 'GET', url: `/api/v1/issues/${today.id}/activity`, headers: { cookie: owner.cookie } })
+    ).json();
+    expect(((calm.items ?? calm) as typeof events).some((event) => event.metadata?.carriedOver)).toBe(false);
+
     const reset = await app.inject({
       method: 'PATCH',
       url: `/api/v1/issues/${wholeDay.id}`,

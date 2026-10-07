@@ -301,7 +301,8 @@ export const IssueRow = memo(function IssueRow({
               {issue.parent.issueKey} ›
             </span>
           )}
-          {issue.title}
+          {/* A long name is cut to one line here; the pointer shows all of it. */}
+          <span title={issue.title}>{issue.title}</span>
           {issue.subtaskCount > 0 && (
             <span className="fd-num ml-2 text-2xs font-normal text-text-subtle" title="Подзадачи: готово из всех">
               {issue.subtaskDoneCount}/{issue.subtaskCount}

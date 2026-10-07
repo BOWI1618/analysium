@@ -15,6 +15,8 @@ import {
   useIssueList,
 } from '~/features/issues/hooks';
 import { useFilterState } from '~/features/issues/useFilterState';
+import { viewSearchParams } from '~/features/views/viewState';
+import { SavedViews } from '~/components/SavedViews';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
@@ -23,7 +25,7 @@ import { IssueRow, IssueRowHeader, listMinStyle, type ListColumn } from '~/compo
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
-import { EmptyState, ErrorState, Skeleton, SkeletonRows } from '~/ui/Feedback';
+import { EmptyState, ErrorState, Skeleton, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { pluralize } from '~/lib/format';
 
 const COLUMNS: ListColumn[] = ['status', 'priority', 'project', 'dueDate', 'assignee'];
@@ -347,14 +349,26 @@ export function DepartmentWorkPage() {
                 dueRange
                 hideDoneOption={false}
                 sortOptions={false}
+                views={
+                  <SavedViews
+                    layout="DEPARTMENT"
+                    current={{
+                      filters: chosen as Record<string, unknown>,
+                      display: { params: { department: everyone ? EVERYONE : (department?.id ?? '') } },
+                    }}
+                    onApply={(saved) => setSearchParams(viewSearchParams(saved), { replace: true })}
+                    saves="В вид войдут отдел и фильтры."
+                  />
+                }
               />
 
+              <StaleNotice query={query} />
               <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
                 <div
                   className="pb-20 sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
                   style={listMinStyle(COLUMNS, true)}
                 >
-                  {query.error ? (
+                  {query.error && !query.data ? (
                     <ErrorState error={query.error} onRetry={() => void query.refetch()} />
                   ) : query.isLoading ? (
                     <SkeletonRows rows={10} />

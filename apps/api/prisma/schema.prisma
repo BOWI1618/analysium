@@ -758,6 +758,9 @@ model SavedView {
   name        String
   layout      String   @default("LIST")
   filters     Json
+  /// What a view remembers besides the filters: the page's own parameters
+  /// (whose tasks, which period), the columns and the grouping of a list.
+  display     Json?
   isShared    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

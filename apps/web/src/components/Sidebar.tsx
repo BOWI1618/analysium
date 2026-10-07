@@ -270,7 +270,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
         <NavItem
           to="/employee-work"
           icon={<Users className="size-4" />}
-          label="Сотрудники"
+          label="Задачи сотрудника"
           index="05"
           collapsed={collapsed}
           onClick={onNavigate}
@@ -290,7 +290,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           <NavItem
             to="/department-work"
             icon={<Network className="size-4" />}
-            label="Отдел"
+            label="Задачи отдела"
             index={canAssign ? '07' : '06'}
             collapsed={collapsed}
             onClick={onNavigate}

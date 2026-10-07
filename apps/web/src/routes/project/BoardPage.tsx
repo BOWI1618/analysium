@@ -48,7 +48,7 @@ import type { BoardColumnDto } from '~/features/issues/types';
 import { FilterBar } from '~/components/FilterBar';
 import { IssueCard, type IssueCardFields } from '~/components/IssueCard';
 import { StatusDot } from '~/components/IssueMeta';
-import { EmptyState, ErrorState, SkeletonCard } from '~/ui/Feedback';
+import { EmptyState, ErrorState, SkeletonCard, StaleNotice } from '~/ui/Feedback';
 import { Tooltip } from '~/ui/Tooltip';
 
 /**
@@ -69,7 +69,8 @@ export function BoardPage() {
   const [filters, setFilters] = useFilterState();
   const { data: project } = useProject(projectId);
   const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? projectId : undefined);
-  const { data: board, isLoading, error, refetch, isFetching } = useBoard(projectId, filters);
+  const boardQuery = useBoard(projectId, filters);
+  const { data: board, isLoading, error, refetch, isFetching } = boardQuery;
   const { data: epicPages } = useIssueList({ projectId }, { type: ['EPIC'], includeDone: true });
 
   const moveIssue = useMoveIssue(projectId, filters);
@@ -171,10 +172,11 @@ export function BoardPage() {
     });
   };
 
-  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  if (error && !board) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-bg">
+      <StaleNotice query={boardQuery} />
       <FilterBar
         filters={filters}
         onChange={setFilters}

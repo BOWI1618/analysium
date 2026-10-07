@@ -53,6 +53,10 @@ function describe(event: ActivityDto, lookups: Lookups): string | null {
     case 'LABEL_REMOVED':
       return `убрал(а) метку «${event.fromValue}»`;
     case 'DUE_DATE_CHANGED':
+      // Moved by «переносить невыполненные задачи», not by a person.
+      if (event.metadata?.carriedOver && event.fromValue && event.toValue) {
+        return `перенесла срок с ${shortDate(event.fromValue)} на ${shortDate(event.toValue)}: задача не была закрыта вовремя`;
+      }
       return event.toValue ? `установил(а) срок ${shortDate(event.toValue)}` : 'убрал(а) срок';
     case 'STORY_POINTS_CHANGED':
       return event.toValue ? `поставил(а) оценку ${event.toValue}` : 'убрал(а) оценку';

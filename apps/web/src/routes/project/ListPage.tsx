@@ -1,7 +1,14 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useParams } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ISSUE_PRIORITIES, Permission, type IssuePriority, type IssueSummaryDto, type StatusDto } from '@flowdesk/contracts';
+import {
+  ISSUE_PRIORITIES,
+  Permission,
+  type IssuePriority,
+  type IssueSummaryDto,
+  type SavedViewDisplay,
+  type StatusDto,
+} from '@flowdesk/contracts';
 import clsx from 'clsx';
 import { ChevronRight, Download, Layers, Plus } from 'lucide-react';
 import { API_BASE, buildQuery } from '~/lib/api';
@@ -12,9 +19,10 @@ import { useProject } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import { useBulkUpdate, useCreateIssue, useIssueList, usePatchIssue, flattenPages } from '~/features/issues/hooks';
 import { useFilterState } from '~/features/issues/useFilterState';
-import { useSavedViews, useCreateSavedView } from '~/features/views/hooks';
 import { FilterBar } from '~/components/FilterBar';
+import { SavedViews } from '~/components/SavedViews';
 import {
+  ALL_COLUMNS,
   ColumnWidthsContext,
   ColumnsMenu,
   IssueRow,
@@ -28,7 +36,7 @@ import { BulkActionBar } from '~/components/BulkActionBar';
 import { Button } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
 import { PRIORITY_META } from '~/components/IssueMeta';
-import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
+import { EmptyState, ErrorState, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 
 type ListGroupBy = 'none' | 'status' | 'assignee' | 'priority';
@@ -71,10 +79,29 @@ export function ListPage() {
   const [selectedIds, setSelected] = useState<string[]>([]);
   const lastClickedRef = useRef<string | null>(null);
 
+  /** The part of a saved view that is not in the address: which columns, grouped how. */
+  const applyDisplay = (display: SavedViewDisplay | null | undefined) => {
+    // A view saved before columns and grouping were part of it changes neither.
+    const columnsOfView = display?.columns?.filter((column): column is ListColumn =>
+      ALL_COLUMNS.some((known) => known.key === column),
+    );
+    if (columnsOfView?.length) setColumns(columnsOfView);
+    if (display?.groupBy && display.groupBy in GROUP_LABELS) {
+      setGroupBy(display.groupBy as ListGroupBy);
+      setFolded(new Set());
+    }
+  };
+
+  // A view opened from the command palette arrives as an address plus this.
+  const location = useLocation();
+  useEffect(() => {
+    const display = (location.state as { viewDisplay?: SavedViewDisplay | null } | null)?.viewDisplay;
+    if (display) applyDisplay(display);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per navigation, not per render
+  }, [location.key]);
+
   const { data: project } = useProject(projectId);
   const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? projectId : undefined);
-  const { data: savedViews } = useSavedViews(workspace?.id, projectId);
-  const createSavedView = useCreateSavedView(workspace?.id ?? '');
   const bulkUpdate = useBulkUpdate(workspace?.id ?? '');
   const patchIssue = usePatchIssue();
 
@@ -144,10 +171,11 @@ export function ListPage() {
     [visibleIssues],
   );
 
-  if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
+  if (query.error && !query.data) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <StaleNotice query={query} />
       <FilterBar
         filters={filters}
         onChange={setFilters}
@@ -157,19 +185,18 @@ export function ListPage() {
         sprints={sprints}
         epics={epics}
         currentUserId={user?.id ?? ''}
-        savedViews={savedViews}
-        onApplyView={(saved) => setFilters(saved as typeof filters)}
-        onSaveView={() => {
-          const name = window.prompt('Название вида');
-          if (!name?.trim()) return;
-          createSavedView.mutate({
-            name: name.trim(),
-            projectId,
-            layout: 'LIST',
-            filters: filters as Record<string, unknown>,
-            isShared: true,
-          });
-        }}
+        views={
+          <SavedViews
+            layout="LIST"
+            projectId={projectId}
+            current={{ filters: filters as Record<string, unknown>, display: { columns, groupBy } }}
+            onApply={(view) => {
+              setFilters(view.filters as typeof filters);
+              applyDisplay(view.display);
+            }}
+            saves="В вид войдут фильтры, сортировка, набор колонок и группировка."
+          />
+        }
         trailing={
           <>
             <Menu>
@@ -345,6 +372,9 @@ export function ListPage() {
         count={selected.length}
         statuses={project?.statuses ?? []}
         members={project?.assignees ?? []}
+        // In a project with sprints the list is where the pool of work is
+        // looked through, so tasks are sent to a sprint from here too.
+        sprints={(sprints ?? []).filter((sprint) => sprint.status !== 'COMPLETED')}
         onClear={() => setSelected([])}
         onApply={(patch) =>
           bulkUpdate.mutate({ issueIds: selected, patch }, { onSuccess: () => setSelected([]) })

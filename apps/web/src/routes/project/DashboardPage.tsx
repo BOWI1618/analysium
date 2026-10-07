@@ -9,7 +9,7 @@ import { qk } from '~/lib/queryKeys';
 import { PRIORITY_META } from '~/components/IssueMeta';
 import { Avatar } from '~/ui/Avatar';
 import { SegmentedControl } from '~/ui/Tabs';
-import { EmptyState, ErrorState, ProgressBar, Skeleton } from '~/ui/Feedback';
+import { EmptyState, ErrorState, ProgressBar, Skeleton, StaleNotice } from '~/ui/Feedback';
 import { Panel } from '~/ui/Panel';
 import { Marker, Masthead } from '~/ui/Masthead';
 import { pluralize, shortDate } from '~/lib/format';
@@ -22,17 +22,19 @@ export function DashboardPage() {
   const { projectId = '' } = useParams();
   const [days, setDays] = useState<number>(30);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const dashboardQuery = useQuery({
     queryKey: qk.dashboard(projectId, days),
     queryFn: () => api.get<DashboardDto>(`/projects/${projectId}/dashboard`, { query: { days } }),
     enabled: Boolean(projectId),
     staleTime: 30_000,
   });
+  const { data, isLoading, error, refetch } = dashboardQuery;
 
-  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  if (error && !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+      <StaleNotice query={dashboardQuery} />
       <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
         {/* The period switch sits with the one block it changes, further
             down. Here in the heading it read as a filter over the whole page,
@@ -302,58 +304,122 @@ function StatCard({
   );
 }
 
-/** Grouped bars: created vs completed per day, rendered as inline SVG. */
+/** `2026-10-07` as «07.10»: short enough to stand under a bar, and no time zone to get wrong. */
+const dayLabel = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
+
+/**
+ * Grouped bars: created vs completed per day, rendered as inline SVG.
+ *
+ * The bars used to stand on a bare line: nothing said how many tasks the
+ * tallest one was, or which day a bar belonged to, short of hovering over it.
+ * The scale and the dates are plain text beside the drawing — inside it they
+ * would be stretched together with the bars.
+ */
 function ActivityChart({ data }: { data: { date: string; created: number; completed: number }[] }) {
   const max = Math.max(1, ...data.map((d) => Math.max(d.created, d.completed)));
   const width = Math.max(data.length * 14, 100);
+  // Every day of a week, every fifth of a month: as many dates as fit in a row.
+  const step = Math.max(1, Math.ceil(data.length / 7));
+  // Where the top of the tallest bar and the baseline sit, as shares of the drawing's height.
+  const TOP = 8;
+  const BASE = 78;
+  const HEIGHT = 90;
+  const at = (y: number) => `${(y / HEIGHT) * 100}%`;
 
   return (
-    <div className="overflow-x-auto scrollbar-thin">
-      <svg
-        viewBox={`0 0 ${width} 90`}
-        className="h-24 w-full min-w-full"
-        role="img"
-        aria-label="Создано и завершено задач по дням"
-        preserveAspectRatio="none"
-      >
-        {data.map((day, index) => {
-          const x = index * 14 + 2;
-          const createdHeight = (day.created / max) * 70;
-          const completedHeight = (day.completed / max) * 70;
-          return (
-            <g key={day.date}>
-              <title>{`${day.date}: создано ${day.created}, завершено ${day.completed}`}</title>
-              <rect
-                x={x}
-                y={78 - createdHeight}
-                width="5"
-                height={Math.max(createdHeight, day.created > 0 ? 2 : 0)}
-                rx="1.5"
-                fill="var(--accent)"
-                opacity="0.85"
-              />
-              <rect
-                x={x + 6}
-                y={78 - completedHeight}
-                width="5"
-                height={Math.max(completedHeight, day.completed > 0 ? 2 : 0)}
-                rx="1.5"
-                fill="var(--success)"
-                opacity="0.85"
-              />
-            </g>
-          );
-        })}
-        <line x1="0" y1="78" x2={width} y2="78" stroke="var(--border)" strokeWidth="1" />
-      </svg>
+    <div>
+      <div className="flex gap-2">
+        <div className="fd-num relative h-24 w-7 shrink-0 text-right text-2xs text-text-subtle" aria-hidden="true">
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: at(TOP) }}>
+            {max}
+          </span>
+          {max % 2 === 0 && (
+            <span className="absolute right-0 -translate-y-1/2" style={{ top: at((TOP + BASE) / 2) }}>
+              {max / 2}
+            </span>
+          )}
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: at(BASE) }}>
+            0
+          </span>
+        </div>
 
-      <div className="mt-2 flex items-center gap-4 text-2xs text-text-subtle">
+        <div className="min-w-0 flex-1">
+          <svg
+            viewBox={`0 0 ${width} ${HEIGHT}`}
+            className="h-24 w-full"
+            role="img"
+            aria-label={`Создано и завершено задач по дням, самое большое значение за день — ${max}`}
+            preserveAspectRatio="none"
+          >
+            <line x1="0" y1={TOP} x2={width} y2={TOP} stroke="var(--border)" strokeWidth="1" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+            <line
+              x1="0"
+              y1={(TOP + BASE) / 2}
+              x2={width}
+              y2={(TOP + BASE) / 2}
+              stroke="var(--border)"
+              strokeWidth="1"
+              strokeDasharray="2 2"
+              vectorEffect="non-scaling-stroke"
+            />
+            {data.map((day, index) => {
+              const x = index * 14 + 2;
+              const createdHeight = (day.created / max) * (BASE - TOP);
+              const completedHeight = (day.completed / max) * (BASE - TOP);
+              return (
+                <g key={day.date}>
+                  <title>{`${dayLabel(day.date)}: создано ${day.created}, завершено ${day.completed}`}</title>
+                  {/* The whole day answers to the pointer, not only its bars: an empty day has none. */}
+                  <rect x={index * 14} y="0" width="14" height={HEIGHT} fill="transparent" />
+                  <rect
+                    x={x}
+                    y={BASE - createdHeight}
+                    width="5"
+                    height={Math.max(createdHeight, day.created > 0 ? 2 : 0)}
+                    rx="1.5"
+                    fill="var(--accent)"
+                    opacity="0.85"
+                  />
+                  <rect
+                    x={x + 6}
+                    y={BASE - completedHeight}
+                    width="5"
+                    height={Math.max(completedHeight, day.completed > 0 ? 2 : 0)}
+                    rx="1.5"
+                    fill="var(--success)"
+                    opacity="0.85"
+                  />
+                </g>
+              );
+            })}
+            <line x1="0" y1={BASE} x2={width} y2={BASE} stroke="var(--border)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          </svg>
+
+          <div className="fd-num relative h-4 text-2xs text-text-subtle" aria-hidden="true">
+            {data.map((day, index) =>
+              // Counted from the last day back, so that today always has its date.
+              (data.length - 1 - index) % step === 0 ? (
+                <span
+                  key={day.date}
+                  className="absolute -translate-x-1/2 whitespace-nowrap"
+                  style={{ left: `${((index * 14 + 7.5) / width) * 100}%` }}
+                >
+                  {dayLabel(day.date)}
+                </span>
+              ) : null,
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-9 text-2xs text-text-subtle">
         <span className="flex items-center gap-1.5">
           <span className="size-2 rounded-xs bg-accent" /> Создано
         </span>
         <span className="flex items-center gap-1.5">
           <span className="size-2 rounded-xs bg-success" /> Завершено
         </span>
+        <span>Слева — задач за день, снизу — даты</span>
       </div>
     </div>
   );

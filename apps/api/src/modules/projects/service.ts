@@ -404,13 +404,26 @@ export async function updateStatus(
   assertCan(actor, Permission.PROJECT_MANAGE_WORKFLOW);
   const existing = await prisma.workflowStatus.findFirst({
     where: { id: statusId, projectId },
-    select: { id: true, category: true },
+    select: { id: true, category: true, isDefault: true },
   });
   if (!existing) throw notFound('Статус');
-  const status = await prisma.workflowStatus.update({
-    where: { id: statusId },
-    data: patch as never,
-    select: statusSelect,
+
+  // A task created without a status lands in the default one. A closing
+  // column there would make every new task finished the moment it is made.
+  const nextCategory = (patch.category ?? existing.category) as never;
+  if (patch.isDefault === true && isDoneCategory(nextCategory)) {
+    throw badRequest('Новые задачи не могут сразу попадать в закрывающий статус — выберите другой');
+  }
+  if (patch.category !== undefined && existing.isDefault && isDoneCategory(nextCategory)) {
+    throw badRequest('В этот статус попадают новые задачи — сначала выберите для них другой статус');
+  }
+
+  const status = await prisma.$transaction(async (tx) => {
+    // One default per project: picking a new one takes the mark off the old.
+    if (patch.isDefault === true) {
+      await tx.workflowStatus.updateMany({ where: { projectId, isDefault: true }, data: { isDefault: false } });
+    }
+    return tx.workflowStatus.update({ where: { id: statusId }, data: patch as never, select: statusSelect });
   });
   // The category drives completedAt — resync the column's issues like issue
   // moves do, so done timestamps never survive a category change.
@@ -469,6 +482,12 @@ export async function deleteStatus(
       await tx.issue.updateMany({ where: { statusId: fallback.id }, data: { completedAt: null } });
     }
     await tx.workflowStatus.delete({ where: { id: statusId } });
+    // The project keeps a status for new tasks: the mark passes to the first
+    // column that does not close a task.
+    if (target.isDefault) {
+      const heir = statuses.find((s) => s.id !== statusId && !isDoneCategory(s.category as never));
+      if (heir) await tx.workflowStatus.update({ where: { id: heir.id }, data: { isDefault: true } });
+    }
   });
 
   auditWorkflow(actor, projectId, { deleted: target.name, movedTo: fallback.name });

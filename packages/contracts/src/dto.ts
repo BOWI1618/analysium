@@ -354,14 +354,29 @@ export interface NotificationDto {
   workspaceId: string;
 }
 
+export type SavedViewLayout = 'BOARD' | 'LIST' | 'CALENDAR' | 'MY_WORK' | 'EMPLOYEE' | 'PLANNING' | 'DEPARTMENT';
+
+/** What a view remembers besides the filters. */
+export interface SavedViewDisplay {
+  /** The page's own address parameters: whose tasks, which period, which department. */
+  params?: Record<string, string>;
+  columns?: string[];
+  groupBy?: string;
+}
+
 export interface SavedViewDto {
   id: string;
   name: string;
   projectId: string | null;
-  layout: 'BOARD' | 'LIST' | 'CALENDAR';
+  layout: SavedViewLayout;
   filters: Record<string, unknown>;
+  display: SavedViewDisplay | null;
+  /** Shown to the whole team; otherwise only its author sees it. */
   isShared: boolean;
   ownerId: string;
+  ownerName: string;
+  /** Whether the viewer may rename, change or delete it: the author, or an administrator for a shared one. */
+  canManage: boolean;
   createdAt: string;
 }
 

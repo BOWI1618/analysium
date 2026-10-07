@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
-import type { AttachmentDto, CreateIssueRequest, IssuePriority, IssueType } from '@flowdesk/contracts';
-import { EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
-import { ChevronDown, CornerDownLeft, Eye } from 'lucide-react';
+import type { AttachmentDto, CreateIssueRequest, IssuePriority, IssueRecurrence, IssueType } from '@flowdesk/contracts';
+import { EMPTY_DOC, ISSUE_RECURRENCES, isDocEmpty } from '@flowdesk/contracts';
+import { ChevronDown, CornerDownLeft, Eye, History } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
@@ -18,6 +19,8 @@ import {
 import { useMembers } from '~/features/members/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import { useCreateIssue, useIssueList } from '~/features/issues/hooks';
+import { clearIssueDraft, readIssueDraft, writeIssueDraft, type IssueDraft } from '~/features/issues/createDraft';
+import { RECURRENCE_LABEL } from '~/lib/labels';
 import { Dialog, DialogCloseButton } from '~/ui/Dialog';
 import { Button } from '~/ui/Button';
 import { Input } from '~/ui/Input';
@@ -47,7 +50,7 @@ export function CreateIssueDialog() {
   const defaults = useUiStore((s) => s.createIssueDefaults);
   const close = useUiStore((s) => s.closeCreateIssue);
   const openIssue = useUiStore((s) => s.openIssue);
-  const { workspace } = useSession();
+  const { workspace, user } = useSession();
   const toast = useToast();
 
   const { data: projects } = useProjects(workspace?.id ?? '', false, { includeSystem: true });
@@ -64,7 +67,16 @@ export function CreateIssueDialog() {
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [dueHasTime, setDueHasTime] = useState(false);
   const [watcherIds, setWatcherIds] = useState<string[]>([]);
+  // «Все поля»: what most tasks do without, one click away rather than only
+  // in the task's card after it is created.
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [startHasTime, setStartHasTime] = useState(false);
+  const [storyPoints, setStoryPoints] = useState<number | null>(null);
+  const [recurrence, setRecurrence] = useState<IssueRecurrence | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [createAnother, setCreateAnother] = useState(false);
+  /** When the draft now in the form was last saved; `null` for a form started from scratch. */
+  const [restoredAt, setRestoredAt] = useState<number | null>(null);
 
   // An empty choice means "without a project". Such tasks live in the
   // workspace's list of tasks without a project; once that list exists its
@@ -133,19 +145,20 @@ export function CreateIssueDialog() {
 
   // Latest values without making them effect dependencies — a background
   // refetch of `projects` must never wipe what the user is typing.
-  const latest = useRef({ defaults, projects });
-  latest.current = { defaults, projects };
+  const draftOwner = user && workspace ? { userId: user.id, workspaceId: workspace.id } : null;
+  const latest = useRef({ defaults, projects, draftOwner });
+  latest.current = { defaults, projects, draftOwner };
 
-  // Seed the form once, on the transition from closed to open.
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    if (!open) {
-      wasOpen.current = false;
-      return;
-    }
-    if (wasOpen.current) return;
-    wasOpen.current = true;
+  // Whether the draft in the browser is this form's own: restored into it or
+  // written by it. A draft the form did not take — it belongs to a subtask of
+  // another task — is left alone.
+  const ownsDraft = useRef(false);
+  // The first pass of the saving effect after opening still sees the fields
+  // of the previous opening; it must neither save nor erase anything.
+  const settled = useRef(false);
 
+  /** The form as it opens from where it was called, with nothing typed. */
+  const seedForm = () => {
     const { defaults: seed, projects: list } = latest.current;
     // From a project page the task belongs there; from anywhere else it starts
     // without a project, and a project can be picked if wanted.
@@ -163,7 +176,135 @@ export function CreateIssueDialog() {
     setWatcherIds([]);
     setDueDate(seed?.dueDate ?? null);
     setDueHasTime(seed?.dueHasTime ?? false);
+    setStartDate(seed?.startDate ?? null);
+    setStartHasTime(seed?.startHasTime ?? false);
+    setStoryPoints(null);
+    setRecurrence(null);
+    // A start that came with the form (an hour slot of the calendar) is shown, not hidden.
+    setMoreOpen(Boolean(seed?.startDate));
+    setRestoredAt(null);
+  };
+
+  const restoreDraft = (draft: IssueDraft) => {
+    const { projects: list } = latest.current;
+    // The project may have been archived or closed to this person since.
+    setProjectId(list?.some((p) => p.id === draft.projectId && !p.isSystem) ? draft.projectId : '');
+    setStatusId(draft.statusId);
+    setSprintId(draft.sprintId);
+    setEpicId(draft.epicId);
+    setTitle(draft.title);
+    setDescription(draft.description ?? EMPTY_DOC);
+    setType(draft.type);
+    setPriority(draft.priority);
+    setAssigneeId(draft.assigneeId);
+    setLabelIds(draft.labelIds ?? []);
+    setWatcherIds(draft.watcherIds ?? []);
+    setDueDate(draft.dueDate);
+    setDueHasTime(draft.dueHasTime);
+    setStartDate(draft.startDate);
+    setStartHasTime(draft.startHasTime);
+    setStoryPoints(draft.storyPoints);
+    setRecurrence(draft.recurrence);
+    setMoreOpen(Boolean(draft.startDate) || draft.storyPoints !== null || draft.recurrence !== null);
+    setRestoredAt(draft.savedAt);
+  };
+
+  // Seed the form once, on the transition from closed to open.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      wasOpen.current = false;
+      return;
+    }
+    if (wasOpen.current) return;
+    wasOpen.current = true;
+    settled.current = false;
+    ownsDraft.current = false;
+
+    seedForm();
+    const { defaults: seed, draftOwner: owner } = latest.current;
+    const draft = owner ? readIssueDraft(owner.userId, owner.workspaceId) : null;
+    if (draft && draft.parentId === (seed?.parentId ?? null) && (draft.title.trim() || !isDocEmpty(draft.description))) {
+      restoreDraft(draft);
+      ownsDraft.current = true;
+    }
   }, [open]);
+
+  // While there is text in the form it is kept in the browser: a reload or a
+  // phone that put the tab to sleep must not cost what was typed.
+  const hasText = title.trim().length > 0 || !isDocEmpty(description);
+  useEffect(() => {
+    if (!open || !draftOwner) return;
+    if (!settled.current) {
+      settled.current = true;
+      return;
+    }
+    const { userId, workspaceId } = draftOwner;
+    if (!hasText) {
+      // Everything was erased by hand: there is nothing left worth restoring.
+      if (ownsDraft.current) clearIssueDraft(userId, workspaceId);
+      ownsDraft.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      ownsDraft.current = true;
+      writeIssueDraft(userId, workspaceId, {
+        savedAt: Date.now(),
+        parentId: defaults?.parentId ?? null,
+        projectId,
+        title,
+        // A picture held in memory cannot outlive the page; the text can.
+        description: replaceImageSources(description, new Map()),
+        type,
+        priority,
+        statusId,
+        assigneeId,
+        labelIds,
+        watcherIds,
+        sprintId,
+        epicId,
+        dueDate,
+        dueHasTime,
+        startDate,
+        startHasTime,
+        storyPoints,
+        recurrence,
+      });
+    }, 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the owner's ids are stable while the form is open
+  }, [
+    open,
+    hasText,
+    title,
+    description,
+    projectId,
+    type,
+    priority,
+    statusId,
+    assigneeId,
+    labelIds,
+    watcherIds,
+    sprintId,
+    epicId,
+    dueDate,
+    dueHasTime,
+    startDate,
+    startHasTime,
+    storyPoints,
+    recurrence,
+  ]);
+
+  const dropDraft = () => {
+    if (ownsDraft.current && draftOwner) clearIssueDraft(draftOwner.userId, draftOwner.workspaceId);
+    ownsDraft.current = false;
+  };
+
+  /** Closing on purpose — created, cancelled or confirmed «не сохранять» — ends the draft. */
+  const closeForm = () => {
+    dropDraft();
+    close();
+  };
 
 
 
@@ -203,7 +344,13 @@ export function CreateIssueDialog() {
     labelIds.length > 0 ||
     watcherIds.length > 0 ||
     // A date that came with the form (a calendar day's «+») is not the person's input.
-    (dueDate ?? null) !== (defaults?.dueDate ?? null);
+    (dueDate ?? null) !== (defaults?.dueDate ?? null) ||
+    (startDate ?? null) !== (defaults?.startDate ?? null) ||
+    storyPoints !== null ||
+    recurrence !== null;
+
+  const isSubtask = Boolean(defaults?.parentId);
+  const extraCount = [startDate, storyPoints, isSubtask ? null : recurrence].filter((value) => value !== null).length;
 
   const canSubmit = title.trim().length > 0 && Boolean(workspace) && !createIssue.isPending;
 
@@ -227,8 +374,10 @@ export function CreateIssueDialog() {
       ...(epicId ? { epicId } : {}),
       ...(defaults?.parentId ? { parentId: defaults.parentId } : {}),
       ...(dueDate ? { dueDate, dueHasTime } : {}),
-      // A start comes only from where the form was opened (an hour slot in the calendar).
-      ...(defaults?.startDate ? { startDate: defaults.startDate, startHasTime: defaults.startHasTime ?? false } : {}),
+      ...(startDate ? { startDate, startHasTime } : {}),
+      ...(storyPoints !== null ? { storyPoints } : {}),
+      // A subtask comes back together with its parent, never on its own.
+      ...(recurrence && !isSubtask ? { recurrence } : {}),
       ...(isDocEmpty(body) ? {} : { description: body as Record<string, unknown> }),
     };
 
@@ -236,6 +385,9 @@ export function CreateIssueDialog() {
       const issue = await createIssue.mutateAsync(input);
       await attachHeldImages(issue.id, description).catch(() => undefined);
       releaseImages();
+      // The task exists now; its text is no longer a draft.
+      dropDraft();
+      setRestoredAt(null);
       // «Создать и открыть» opens the task itself; a toast offering to open it
       // would only cover the panel.
       if (!openAfter) toast.toast({
@@ -250,7 +402,7 @@ export function CreateIssueDialog() {
         setDescription(EMPTY_DOC);
         return;
       }
-      close();
+      closeForm();
       if (openAfter) openIssue(issue.id);
     } catch {
       /* the mutation's onError already surfaced a toast */
@@ -262,7 +414,7 @@ export function CreateIssueDialog() {
   return (
     <Dialog
       open={open}
-      onClose={close}
+      onClose={closeForm}
       dirty={dirty}
       title="Новая задача"
       size="lg"
@@ -273,7 +425,13 @@ export function CreateIssueDialog() {
           <Checkbox
             checked={createAnother}
             onChange={(event) => setCreateAnother(event.target.checked)}
-            label={<span className="text-xs text-text-muted">Создать ещё</span>}
+            label={
+              <span className="text-xs text-text-muted">
+                Создать ещё
+                {/* What «ещё» keeps is said, not left to be found out on the second task. */}
+                {createAnother && <span className="hidden sm:inline"> — поля останутся, очистится только текст</span>}
+              </span>
+            }
           />
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <DialogCloseButton size="sm" variant="ghost">
@@ -307,6 +465,29 @@ export function CreateIssueDialog() {
       }
     >
       <div className="space-y-3">
+        {restoredAt !== null && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 border-2 border-border-strong bg-surface-sunken px-2.5 py-1.5 text-xs"
+          >
+            <History className="size-3.5 shrink-0 text-text-subtle" />
+            <span className="min-w-0 flex-1">
+              Восстановлен несохранённый черновик от{' '}
+              {new Date(restoredAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </span>
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => {
+                dropDraft();
+                seedForm();
+              }}
+            >
+              Начать заново
+            </Button>
+          </div>
+        )}
+
         {/* Project + type */}
         <div className="flex flex-wrap items-center gap-2">
           <ProjectPicker
@@ -500,6 +681,92 @@ export function CreateIssueDialog() {
               }}
             />
           </div>
+        </div>
+
+        {/* All fields */}
+        <div>
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((shown) => !shown)}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-text-muted hover:text-text"
+          >
+            <ChevronDown className={clsx('size-3.5 transition-transform', !moreOpen && '-rotate-90')} />
+            Все поля
+            {extraCount > 0 && <span className="fd-num text-2xs font-normal text-accent">заполнено: {extraCount}</span>}
+          </button>
+
+          {moreOpen && (
+            <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-3">
+              <div>
+                <span className="mb-1 block text-2xs font-bold tracking-wide text-text-subtle uppercase">Начало</span>
+                <DateField
+                  label="Начало"
+                  value={startDate}
+                  hasTime={startHasTime}
+                  onChange={(value, hasTime) => {
+                    setStartDate(value);
+                    setStartHasTime(hasTime);
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="create-issue-points"
+                  className="mb-1 block text-2xs font-bold tracking-wide text-text-subtle uppercase"
+                >
+                  Оценка, баллы
+                </label>
+                <input
+                  id="create-issue-points"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100}
+                  value={storyPoints ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    const points = Math.round(Number(raw));
+                    setStoryPoints(raw === '' || !Number.isFinite(points) ? null : Math.min(100, Math.max(0, points)));
+                  }}
+                  placeholder="—"
+                  title="Оценка в баллах, не в часах"
+                  className="fd-num h-7 w-full rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover focus:border-accent focus:outline-none"
+                />
+              </div>
+
+              {!isSubtask && (
+                <div>
+                  <label
+                    htmlFor="create-issue-recurrence"
+                    className="mb-1 block text-2xs font-bold tracking-wide text-text-subtle uppercase"
+                  >
+                    Повтор
+                  </label>
+                  <select
+                    id="create-issue-recurrence"
+                    value={recurrence ?? ''}
+                    onChange={(event) => setRecurrence((event.target.value || null) as IssueRecurrence | null)}
+                    className="h-7 w-full rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover focus:border-accent focus:outline-none"
+                  >
+                    <option value="">Не повторять</option>
+                    {ISSUE_RECURRENCES.map((rule) => (
+                      <option key={rule} value={rule}>
+                        {RECURRENCE_LABEL[rule].charAt(0).toUpperCase() + RECURRENCE_LABEL[rule].slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {recurrence && !isSubtask && (
+                <p className="text-2xs text-text-subtle sm:col-span-3">
+                  Повтор срабатывает после закрытия: когда эту задачу завершат, появится следующая — со сдвинутым сроком.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <p className="flex items-center gap-1.5 text-2xs text-text-subtle">

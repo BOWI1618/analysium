@@ -15,12 +15,16 @@ import {
   Users,
   ListTodo,
   Network,
+  Bookmark,
 } from 'lucide-react';
 import { useSession, useWorkspaceCan } from '~/app/session';
 import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useSearch } from '~/features/search/hooks';
 import { useDepartments } from '~/features/departments/hooks';
+import { useProjects } from '~/features/projects/hooks';
+import { useSavedViews } from '~/features/views/hooks';
+import { viewPath } from '~/features/views/viewState';
 import { Avatar } from '~/ui/Avatar';
 import { Kbd } from '~/ui/Tooltip';
 import { Shortcut } from '~/ui/Shortcut';
@@ -179,11 +183,34 @@ export function CommandPalette() {
     [navigate, openCreateIssue, setShortcutsOpen, canCreateIssue, canCreateProject, canAssign, showDepartment],
   );
 
+  // Saved views are places to go, like the screens above: «Просроченные
+  // отдела» is one line here instead of a screen, a menu and a click.
+  const { data: savedViews } = useSavedViews(open ? workspace?.id : undefined);
+  const { data: projects } = useProjects(workspace?.id ?? '', false, { includeSystem: true });
+  const viewCommands = useMemo<Command[]>(
+    () =>
+      (savedViews ?? []).flatMap((view) => {
+        const path = viewPath(view);
+        if (!path) return [];
+        const project = view.projectId ? projects?.find((item) => item.id === view.projectId) : undefined;
+        return [
+          {
+            id: `view-${view.id}`,
+            label: project ? `Вид: ${view.name} — ${project.name}` : `Вид: ${view.name}`,
+            icon: <Bookmark className="size-4" />,
+            group: 'Виды',
+            // The columns and grouping of a list are not in the address; they travel with the navigation.
+            run: () => navigate(path, { state: { viewDisplay: view.display } }),
+          },
+        ];
+      }),
+    [savedViews, projects, navigate],
+  );
+
   const commands = useMemo<Command[]>(() => {
     const q = term.trim().toLowerCase();
-    const matched = q
-      ? staticCommands.filter((c) => c.label.toLowerCase().includes(q))
-      : staticCommands;
+    const known = [...staticCommands, ...viewCommands];
+    const matched = q ? known.filter((c) => c.label.toLowerCase().includes(q)) : known;
 
     const searchCommands: Command[] = [];
 
@@ -231,7 +258,7 @@ export function CommandPalette() {
     }
 
     return q ? [...searchCommands, ...matched] : matched;
-  }, [term, staticCommands, results, navigate, openIssue]);
+  }, [term, staticCommands, viewCommands, results, navigate, openIssue]);
 
   useEffect(() => setActiveIndex(0), [term, results]);
 

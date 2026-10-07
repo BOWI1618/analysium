@@ -183,7 +183,7 @@ test.describe('отделы', () => {
     await expect(page.getByText('Руководитель: Глава Отдела')).toBeVisible();
 
     // The lead's screen: the department's people with their figures, and their tasks only.
-    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Отдел/ }).click();
+    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Задачи отдела/ }).click();
     await expect(page).toHaveURL(/\/department-work$/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Аналитика');
     const people = page.getByRole('list', { name: 'Сотрудники отдела' });

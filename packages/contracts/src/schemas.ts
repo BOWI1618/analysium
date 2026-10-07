@@ -239,6 +239,11 @@ export type CreateStatusInput = z.infer<typeof createStatusSchema>;
 
 export const updateStatusSchema = createStatusSchema.partial().extend({
   position: z.number().int().min(0).max(999).optional(),
+  /**
+   * Makes this the status a task gets when none is picked. Only ever set: a
+   * project always has one such status, so it is moved, never taken away.
+   */
+  isDefault: z.literal(true).optional(),
 });
 
 export const reorderStatusesSchema = z.object({
@@ -355,8 +360,11 @@ export const duplicateIssueSchema = z.object({
 });
 export type DuplicateIssueInput = z.infer<typeof duplicateIssueSchema>;
 
+/** How many tasks one bulk action takes; the interface warns before the server refuses. */
+export const BULK_UPDATE_LIMIT = 200;
+
 export const bulkUpdateSchema = z.object({
-  issueIds: z.array(cuidLike).min(1).max(200),
+  issueIds: z.array(cuidLike).min(1).max(BULK_UPDATE_LIMIT),
   patch: z.object({
     statusId: cuidLike.optional(),
     priority: z.enum(ISSUE_PRIORITIES as [string, ...string[]]).optional(),
@@ -437,11 +445,28 @@ export type IssueFilterInput = z.infer<typeof issueFilterSchema>;
 export type SortKey = IssueFilterInput['sort'];
 export type SortOrder = IssueFilterInput['order'];
 
+/**
+ * The screens a view can be saved on. The first three belong to a project;
+ * the rest are the lists that span projects.
+ */
+export const SAVED_VIEW_LAYOUTS = ['BOARD', 'LIST', 'CALENDAR', 'MY_WORK', 'EMPLOYEE', 'PLANNING', 'DEPARTMENT'] as const;
+
+/** What a view remembers besides the filters. */
+export const savedViewDisplaySchema = z.object({
+  /** The page's own address parameters: whose tasks, which period, which department. */
+  params: z.record(z.string().max(40), z.string().max(200)).optional(),
+  columns: z.array(z.string().max(40)).max(30).optional(),
+  groupBy: z.string().max(40).optional(),
+});
+
 export const savedViewSchema = z.object({
-  name: z.string().trim().min(1).max(60),
+  name: z.string().trim().min(1, 'Укажите название').max(60),
   projectId: cuidLike.nullable().optional(),
-  layout: z.enum(['BOARD', 'LIST', 'CALENDAR']).default('LIST'),
-  filters: z.record(z.unknown()),
+  layout: z.enum(SAVED_VIEW_LAYOUTS).default('LIST'),
+  // Filters are stored as they are and read back by the page that wrote them;
+  // the cap keeps a view from becoming a place to store anything at all.
+  filters: z.record(z.unknown()).refine((value) => JSON.stringify(value).length <= 4000, 'Слишком много условий'),
+  display: savedViewDisplaySchema.nullable().optional(),
   isShared: z.boolean().default(false),
 });
 

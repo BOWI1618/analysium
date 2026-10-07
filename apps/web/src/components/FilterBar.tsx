@@ -12,7 +12,7 @@ import {
   type StatusDto,
   type UserSummaryDto,
 } from '@flowdesk/contracts';
-import { Filter, ListFilter, Search, SlidersHorizontal, X, Bookmark } from 'lucide-react';
+import { Filter, ListFilter, Search, SlidersHorizontal, X } from 'lucide-react';
 import type { IssueFilters } from '~/features/issues/types';
 import { activeFilterCount } from '~/features/issues/types';
 import { MultiSelect } from './Pickers';
@@ -34,9 +34,8 @@ export interface FilterBarProps {
   currentUserId: string;
   /** Extra controls rendered on the right (view switcher, grouping). */
   trailing?: React.ReactNode;
-  onSaveView?: () => void;
-  savedViews?: { id: string; name: string; filters: Record<string, unknown> }[];
-  onApplyView?: (filters: Record<string, unknown>) => void;
+  /** «Виды» of the page: its saved sets of conditions, next to the filters they hold. */
+  views?: React.ReactNode;
   sortOptions?: boolean;
   /** «Скрыть завершённые» in «Ещё»; left out where the state is picked in «Состояние». */
   hideDoneOption?: boolean;
@@ -102,9 +101,7 @@ export function FilterBar({
   epics = [],
   currentUserId,
   trailing,
-  onSaveView,
-  savedViews = [],
-  onApplyView,
+  views,
   sortOptions = true,
   hideDoneOption = true,
   stateFacet = false,
@@ -417,21 +414,7 @@ export function FilterBar({
           </MenuContent>
         </Menu>
 
-        {savedViews.length > 0 && onApplyView && (
-          <Menu>
-            <MenuTrigger>
-              <FacetButton label="Виды" icon={<Bookmark className="size-3" />} />
-            </MenuTrigger>
-            <MenuContent width={220} label="Сохранённые виды">
-              <MenuLabel>Сохранённые виды</MenuLabel>
-              {savedViews.map((view) => (
-                <MenuItem key={view.id} onSelect={() => onApplyView(view.filters)}>
-                  {view.name}
-                </MenuItem>
-              ))}
-            </MenuContent>
-          </Menu>
-        )}
+        {views}
 
         {count > 0 && (
           <>
@@ -452,12 +435,6 @@ export function FilterBar({
           </>
         )}
 
-        {onSaveView && count > 0 && (
-          <Button size="xs" variant="ghost" iconLeft={<Bookmark className="size-3" />} onClick={onSaveView}>
-            Сохранить вид
-          </Button>
-        )}
-
       </div>
 
       {trailing && <div className="ml-auto flex items-center gap-1.5">{trailing}</div>}
@@ -465,14 +442,17 @@ export function FilterBar({
   );
 }
 
-function FacetButton({
+export function FacetButton({
   label,
   count,
   icon,
+  active,
 }: {
   label: string;
   count?: number;
   icon?: React.ReactNode;
+  /** Printed as an applied filter without a figure — a saved view that is on right now. */
+  active?: boolean;
 }) {
   return (
     <button
@@ -481,13 +461,13 @@ function FacetButton({
         'inline-flex h-7 items-center gap-1.5 border-2 border-border-strong px-2 text-xs font-bold whitespace-nowrap transition-colors',
         // An applied filter is a solid plate: it has to be obvious at a glance
         // which of a dozen chips are actually narrowing the list.
-        count
+        count || active
           ? 'bg-ink text-text-inverted shadow-xs'
           : 'text-text-muted hover:bg-surface-hover hover:text-text hover:shadow-xs',
       )}
     >
       {icon ?? <ListFilter className="size-3" />}
-      {label}
+      <span className="max-w-40 truncate">{label}</span>
       {count ? <span className="tabular-nums">{count}</span> : null}
     </button>
   );

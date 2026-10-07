@@ -616,7 +616,7 @@ test.describe('задачи сотрудника', () => {
     await create({ title: 'Обычная задача коллеги', assigneeId: mateId });
     await create({ title: 'Моя собственная', assigneeId: session.user.id });
 
-    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Сотрудники/ }).click();
+    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Задачи сотрудника/ }).click();
     await expect(page).toHaveURL(/\/employee-work$/);
     // Without a choice it is the viewer's own list — and the heading says whose it is.
     const heading = page.getByRole('heading', { level: 1 });
