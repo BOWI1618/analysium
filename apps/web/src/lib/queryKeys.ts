@@ -30,6 +30,9 @@ export const qk = {
   /** Under the `issues` root on purpose: whatever refreshes the lists refreshes their figures. */
   assigneeStats: (workspaceId: string, userIds: string[], filters: unknown) =>
     ['issues', workspaceId, 'stats', userIds, filters] as const,
+  /** Under the `issues` root too: a task given to someone changes their weeks at once. */
+  workload: (workspaceId: string, userIds: string[], bounds: string[]) =>
+    ['issues', workspaceId, 'workload', userIds, bounds] as const,
   issue: (issueId: string) => ['issue', issueId] as const,
   /**
    * The standalone /issue/:key page resolves by human key, not id, so it reads

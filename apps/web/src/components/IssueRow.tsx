@@ -1,7 +1,7 @@
 import { createContext, memo, useCallback, useContext } from 'react';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import clsx from 'clsx';
-import { ChevronRight, Columns3, CornerDownRight, MessageSquare, Repeat, SquareCheck, UserPen } from 'lucide-react';
+import { ChevronRight, Columns3, CornerDownRight, Hourglass, MessageSquare, Repeat, SquareCheck, UserPen } from 'lucide-react';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import type { IssueSummaryDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
@@ -303,6 +303,17 @@ export const IssueRow = memo(function IssueRow({
           )}
           {/* A long name is cut to one line here; the pointer shows all of it. */}
           <span title={issue.title}>{issue.title}</span>
+          {/* Why the task sits still: it cannot start before another one is finished. */}
+          {issue.blockedBy.length > 0 && !isClosedStatus(issue.status) && (
+            <span
+              className="ml-2 inline-flex items-center gap-0.5 text-2xs font-normal whitespace-nowrap text-warning"
+              title={`Ждёт завершения: ${issue.blockedBy.map((blocker) => `${blocker.issueKey} «${blocker.title}»`).join(', ')}`}
+            >
+              <Hourglass className="size-3" />
+              ждёт {issue.blockedBy[0]!.issueKey}
+              {issue.blockedBy.length > 1 && ` +${issue.blockedBy.length - 1}`}
+            </span>
+          )}
           {issue.subtaskCount > 0 && (
             <span className="fd-num ml-2 text-2xs font-normal text-text-subtle" title="Подзадачи: готово из всех">
               {issue.subtaskDoneCount}/{issue.subtaskCount}

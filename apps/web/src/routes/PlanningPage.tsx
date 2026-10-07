@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import clsx from 'clsx';
 import { addDays, differenceInCalendarDays, format } from 'date-fns';
 import { ChevronDown } from 'lucide-react';
 import { Permission, type IssueSummaryDto } from '@flowdesk/contracts';
@@ -28,6 +29,7 @@ import { UserPicker } from '~/components/Pickers';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
+import { PlanningWeeks } from './PlanningWeeks';
 import { EmptyState, ErrorState, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { dueDateLabel, pluralize, shortDate } from '~/lib/format';
 
@@ -42,6 +44,46 @@ const PERIODS: { value: Period; label: string }[] = [
 const isPeriod = (value: string | null): value is Period => PERIODS.some((item) => item.value === value);
 
 /**
+ * «Распределение задач» in its two modes: handing work out, and looking at
+ * who has how much by the week. Each mode keeps its own state in the address.
+ */
+export function PlanningPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const mode = searchParams.get('mode') === 'weeks' ? 'weeks' : 'pool';
+  const modes = [
+    { value: 'pool', label: 'Раздача задач' },
+    { value: 'weeks', label: 'По неделям' },
+  ] as const;
+
+  return (
+    <>
+      <Topbar breadcrumbs={[{ label: 'Распределение задач' }]} />
+      <div className="flex items-stretch overflow-x-auto border-b-2 border-border-strong bg-bg-subtle no-scrollbar">
+        {modes.map((item, index) => (
+          <button
+            key={item.value}
+            type="button"
+            // The other mode starts clean: a chosen person or filter of one means nothing in the other.
+            onClick={() => setSearchParams(item.value === 'weeks' ? { mode: 'weeks' } : {})}
+            aria-current={mode === item.value ? 'page' : undefined}
+            className={clsx(
+              'px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors',
+              index > 0 && 'border-l-2 border-border-strong',
+              mode === item.value
+                ? 'relative bg-surface text-text after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-accent'
+                : 'text-text-muted hover:bg-surface-hover hover:text-text',
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {mode === 'weeks' ? <PlanningWeeks /> : <PlanningPool />}
+    </>
+  );
+}
+
+/**
  * Handing out work: the tasks nobody has yet on the left, the person about to
  * receive them — with what they already carry — on the right.
  *
@@ -49,7 +91,7 @@ const isPeriod = (value: string | null): value is Period => PERIODS.some((item) 
  * It does not show a percentage of load: the system knows neither hours nor
  * anyone's calendar, and a made-up figure would be read as a real one.
  */
-export function PlanningPage() {
+function PlanningPool() {
   const { user, workspace } = useSession();
   const openIssue = useUiStore((s) => s.openIssue);
   const workspaceId = workspace?.id ?? '';
@@ -174,8 +216,6 @@ export function PlanningPage() {
 
   return (
     <>
-      <Topbar breadcrumbs={[{ label: 'Распределение задач' }]} />
-
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* On a phone the person comes first: who gets the work is decided before what. */}
         <aside className="order-first flex max-h-[45vh] min-h-0 w-full shrink-0 flex-col overflow-y-auto border-b-2 border-border-strong bg-surface scrollbar-thin lg:order-last lg:max-h-none lg:w-96 lg:border-b-0 lg:border-l-2">
@@ -224,7 +264,8 @@ export function PlanningPage() {
                 {figures && figures.activePoints > 0 && (
                   <p className="col-span-2 text-2xs text-text-subtle">
                     Оценка активных задач: <span className="fd-num font-bold text-text">{figures.activePoints}</span> в
-                    баллах. Это относительная оценка, а не часы и не занятость.
+                    баллах. Это относительная оценка, а не часы и не занятость; у задачи с оценёнными подзадачами
+                    считаются только они.
                   </p>
                 )}
               </dl>

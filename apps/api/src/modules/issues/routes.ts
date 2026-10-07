@@ -21,6 +21,7 @@ import * as service from './service';
 import { transferIssue } from './transfer';
 import { duplicateIssue } from './duplicate';
 import { exportIssuesCsv } from './exportCsv';
+import { parseBounds, workload } from './workload';
 import { badRequest } from '../../lib/errors';
 
 type IssueParams = { issueId: string };
@@ -52,6 +53,21 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     if (filter.assigneeId.length > 200) throw badRequest('Слишком много людей в одном запросе');
     return { items: await service.assigneeStats(actor, filter, user.viewerTimezone) };
   });
+
+  /** Active work of several people by the week it falls due: «Распределение → По неделям». */
+  app.get<{ Params: { workspaceId: string }; Querystring: { bounds?: string } }>(
+    '/workspaces/:workspaceId/issues/workload',
+    async (req) => {
+      const user = currentUser(req);
+      const actor = await workspaceContext(user.id, req.params.workspaceId);
+      const filter = parse(issueFilterSchema, req.query);
+      if (!filter.assigneeId?.length) throw badRequest('Укажите, по кому считать задачи');
+      if (filter.assigneeId.length > 200) throw badRequest('Слишком много людей в одном запросе');
+      const bounds = parseBounds(req.query.bounds);
+      if (!bounds) throw badRequest('Укажите границы недель: от двух до четырнадцати моментов по возрастанию');
+      return workload(actor, filter, bounds, user.viewerTimezone);
+    },
+  );
 
   app.get<{ Params: { projectId: string } }>('/projects/:projectId/issues', async (req) => {
     const user = currentUser(req);

@@ -155,6 +155,7 @@ export function buildIssueWhere(
   }
   if (filter.noDates) and.push({ startDate: null, dueDate: null });
   if (filter.noDueDate) and.push({ dueDate: null });
+  if (filter.noEstimate) and.push({ storyPoints: null });
 
   if (filter.isOverdue) {
     and.push(overdueWhere(new Date(), scope.timezone));

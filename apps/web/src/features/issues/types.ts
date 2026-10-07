@@ -35,6 +35,8 @@ export interface IssueFilters {
   noDates?: boolean;
   /** Only tasks without a deadline — the ones planning has not reached yet. */
   noDueDate?: boolean;
+  /** Only tasks nobody has estimated yet. */
+  noEstimate?: boolean;
   sort?: IssueFilterInput['sort'];
   order?: IssueFilterInput['order'];
 }

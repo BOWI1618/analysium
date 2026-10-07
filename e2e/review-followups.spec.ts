@@ -228,3 +228,45 @@ test.describe('экран сотрудника на телефоне', () => {
     }
   });
 });
+
+test.describe('распределение по неделям', () => {
+  test('показывает, у кого сколько работы и когда она в срок; число открывает свой список', async ({ page }) => {
+    await register(page, 'Плановик Недель');
+    const projectId = await createProject(page, 'Недели');
+    const session = await (await page.request.get('/api/v1/auth/session')).json();
+    const me = session.user.id as string;
+    // Today by the calendar of the machine the browser runs on: always inside the current week.
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T12:00:00.000Z`;
+    const first = await (
+      await page.request.post('/api/v1/issues', { data: { projectId, title: 'Срок сегодня', assigneeId: me, dueDate: today } })
+    ).json();
+    const second = await (
+      await page.request.post('/api/v1/issues', { data: { projectId, title: 'Ждёт первую', assigneeId: me } })
+    ).json();
+    await page.request.post(`/api/v1/projects/${projectId}/dependencies`, {
+      data: { predecessorId: first.id, successorId: second.id },
+    });
+
+    await page.goto('/planning');
+    await page.getByRole('button', { name: 'По неделям' }).click();
+    await expect(page).toHaveURL(/mode=weeks/);
+    const table = page.getByRole('table', { name: 'Активные задачи сотрудников по неделям' });
+    await expect(table.getByRole('link', { name: 'Плановик Недель: активные: 2' })).toBeVisible({ timeout: 15_000 });
+    await expect(table.getByRole('link', { name: 'Плановик Недель: без срока: 1' })).toBeVisible();
+    await expect(table.getByRole('columnheader', { name: /эта неделя/ })).toBeVisible();
+    await expect(table.getByRole('columnheader', { name: /следующая/ })).toBeVisible();
+
+    // The figure of this week opens the list of exactly the tasks it counted.
+    await table.locator('tbody tr').first().locator('td').nth(3).getByRole('link').click();
+    await expect(page).toHaveURL(/\/employee-work\?.*dueAfter=/, { timeout: 15_000 });
+    await expect(page.getByRole('row').filter({ hasText: 'Срок сегодня' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('row').filter({ hasText: 'Ждёт первую' })).toHaveCount(0);
+
+    // Without the dates: the second task says in its row what it waits for.
+    await page.goto('/employee-work');
+    const waiting = page.getByRole('row').filter({ hasText: 'Ждёт первую' });
+    await expect(waiting.getByText(`ждёт ${first.issueKey}`)).toBeVisible({ timeout: 15_000 });
+  });
+});

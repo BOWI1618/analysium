@@ -72,6 +72,17 @@ export const issueSummarySelect = {
   _count: { select: { comments: true, attachments: true } },
   subtasks: { select: { id: true, status: { select: { category: true } } } },
   parent: { select: { id: true, issueKey: true, title: true } },
+  // What the task waits for: predecessors it cannot start before that are
+  // still open. Dependencies never leave a project, so whoever reads the task
+  // may read these too.
+  dependsOn: {
+    where: {
+      type: 'FINISH_TO_START',
+      predecessor: { archivedAt: null, status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
+    },
+    select: { predecessor: { select: { id: true, issueKey: true, title: true } } },
+    take: 5,
+  },
 } satisfies Prisma.IssueSelect;
 
 type IssueRow = Prisma.IssueGetPayload<{ select: typeof issueSummarySelect }>;
@@ -144,6 +155,7 @@ export function toIssueSummary(issue: IssueRow): IssueSummaryDto {
     checklistDone: checklist.done,
     checklistTotal: checklist.total,
     parent: issue.parent ?? null,
+    blockedBy: (issue.dependsOn ?? []).map((link) => link.predecessor),
     createdAt: issue.createdAt.toISOString(),
     updatedAt: issue.updatedAt.toISOString(),
     completedAt: iso(issue.completedAt),

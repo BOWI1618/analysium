@@ -14,6 +14,7 @@ import type {
   MoveIssueInput,
   Paginated,
   UpdateIssueInput,
+  WorkloadDto,
 } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
@@ -83,6 +84,26 @@ export function useAssigneeStats(workspaceId: string, userIds: string[], filters
     staleTime: 10_000,
     placeholderData: (prev) => prev,
     select: (data) => new Map(data.items.map((item) => [item.userId, item])),
+  });
+}
+
+/**
+ * Active work of the given people by the week it falls due. The weeks are the
+ * viewer's own — Mondays of the browser's calendar — and go to the server as
+ * instants, so a cell and the list it opens are cut along the same lines.
+ */
+export function useWorkload(workspaceId: string, userIds: string[], bounds: Date[]) {
+  const edges = bounds.map((bound) => bound.toISOString());
+  return useQuery({
+    queryKey: qk.workload(workspaceId, userIds, edges),
+    queryFn: ({ signal }) =>
+      api.get<WorkloadDto>(`/workspaces/${workspaceId}/issues/workload`, {
+        query: { assigneeId: userIds, bounds: edges.join(',') },
+        signal,
+      }),
+    enabled: Boolean(workspaceId) && userIds.length > 0,
+    staleTime: 10_000,
+    placeholderData: (prev) => prev,
   });
 }
 

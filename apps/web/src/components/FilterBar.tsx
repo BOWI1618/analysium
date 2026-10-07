@@ -373,6 +373,13 @@ export function FilterBar({
             >
               Только просроченные
             </MenuItem>
+            <MenuItem
+              keepOpen
+              selected={filters.noEstimate === true}
+              onSelect={() => patch({ noEstimate: filters.noEstimate ? undefined : true })}
+            >
+              Только без оценки
+            </MenuItem>
             {hideDoneOption && (
               <MenuItem
                 keepOpen

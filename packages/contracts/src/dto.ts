@@ -186,6 +186,12 @@ export interface IssueSummaryDto {
   checklistTotal: number;
   /** Set for a subtask, so a list that shows it on its own can say whose part it is. */
   parent: { id: string; issueKey: string; title: string } | null;
+  /**
+   * Unfinished tasks this one cannot start before («окончание — начало» in the
+   * Gantt chart). Why a task sits still is then visible in a list, not only
+   * on the chart.
+   */
+  blockedBy: { id: string; issueKey: string; title: string }[];
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -466,6 +472,36 @@ export interface AssigneeStatsDto {
   done: number;
   /** Story points of the active tasks: a relative estimate, never hours or a share of someone's time. */
   activePoints: number;
+}
+
+/** One person's active work: in all, and by when it falls due. */
+export interface WorkloadRowDto {
+  userId: string;
+  active: number;
+  /** Also counted in the week its date falls into: every figure opens a list of exactly its tasks. */
+  overdue: number;
+  noDueDate: number;
+  /** Due after the last week shown. */
+  later: number;
+  /** Active tasks without an estimate. */
+  unestimated: number;
+  /** Story points of the active tasks. A task split into estimated subtasks adds nothing of its own. */
+  points: number;
+  weeks: { count: number; points: number }[];
+}
+
+/**
+ * Active work of several people over the coming weeks. Counts and relative
+ * estimates only — never hours or a share of anyone's time.
+ */
+export interface WorkloadDto {
+  /** The weeks as they were asked for: a task belongs to one when `start <= dueDate < end`. */
+  weeks: { start: string; end: string }[];
+  rows: WorkloadRowDto[];
+  /** Whether any of the counted tasks carries an estimate; without one the estimate columns mean nothing. */
+  usesEstimates: boolean;
+  /** More active tasks than the calculation takes: the figures are incomplete. */
+  truncated: boolean;
 }
 
 export interface SearchResultsDto {

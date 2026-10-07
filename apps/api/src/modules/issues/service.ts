@@ -133,19 +133,22 @@ export async function assigneeStats(
     done: { AND: [base, { status: { category: 'COMPLETED' } }] },
   };
 
-  const points = new Map<string | null, number>();
   const counted = await Promise.all(
     Object.entries(wheres).map(async ([key, where]) => {
-      const rows = await prisma.issue.groupBy({
-        by: ['assigneeId'],
-        where,
-        _count: { _all: true },
-        _sum: { storyPoints: true },
-      });
-      if (key === 'active') for (const row of rows) points.set(row.assigneeId, row._sum.storyPoints ?? 0);
+      const rows = await prisma.issue.groupBy({ by: ['assigneeId'], where, _count: { _all: true } });
       return [key, new Map(rows.map((row) => [row.assigneeId, row._count._all]))] as const;
     }),
   );
+  // A task split into estimated subtasks is measured by its parts: its own
+  // estimate on top of theirs would count the same work twice.
+  const estimated = await prisma.issue.groupBy({
+    by: ['assigneeId'],
+    where: {
+      AND: [wheres.active, { NOT: { subtasks: { some: { storyPoints: { not: null }, archivedAt: null } } } }],
+    },
+    _sum: { storyPoints: true },
+  });
+  const points = new Map<string | null, number>(estimated.map((row) => [row.assigneeId, row._sum.storyPoints ?? 0]));
   const byKey = Object.fromEntries(counted) as Record<keyof typeof wheres, Map<string | null, number>>;
   return ids.map((userId) => ({
     userId,

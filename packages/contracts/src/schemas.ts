@@ -428,6 +428,8 @@ export const issueFilterSchema = z.object({
   noDates: queryBoolean.optional(),
   /** Only issues without a deadline, whatever their start — what planning has not reached yet. */
   noDueDate: queryBoolean.optional(),
+  /** Only tasks nobody has estimated yet. */
+  noEstimate: queryBoolean.optional(),
   /** `true` → only issues with no sprint; used by the backlog view. */
   noSprint: queryBoolean.optional(),
   includeSubtasks: queryBoolean.optional(),
