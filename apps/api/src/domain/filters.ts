@@ -15,6 +15,8 @@ export interface FilterScope {
   allowedProjectIds: string[] | 'ALL';
   /** Resolves `@me` in assignee/reporter filters. */
   currentUserId: string;
+  /** Where the viewer's day ends — decides when a date without a time becomes overdue. */
+  timezone?: string;
 }
 
 const enumIn = <T extends string>(
@@ -155,7 +157,7 @@ export function buildIssueWhere(
   if (filter.noDueDate) and.push({ dueDate: null });
 
   if (filter.isOverdue) {
-    and.push(overdueWhere());
+    and.push(overdueWhere(new Date(), scope.timezone));
     and.push({ status: { category: { notIn: [StatusCategory.COMPLETED, StatusCategory.CANCELED] as never } } });
   }
 
@@ -189,19 +191,43 @@ export function orderByFor(sort: SortKey, order: 'asc' | 'desc'): Prisma.IssueOr
   }
 }
 
-/** A day's worth of milliseconds either side of noon UTC, where whole-day dates are stored. */
-const HALF_DAY_MS = 12 * 60 * 60 * 1000;
+/** The calendar date it is now for someone in `timezone`; an unknown zone reads as UTC. */
+function localDate(timezone: string, now: Date): { year: number; month: number; day: number } {
+  let local: string;
+  try {
+    local = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  } catch {
+    local = now.toISOString().slice(0, 10);
+  }
+  const [year, month, day] = local.split('-').map(Number);
+  return { year: year!, month: month!, day: day! };
+}
+
+/**
+ * The first moment of the viewer's «today», written on the UTC clock with the
+ * same calendar date. Whole-day dates are stored at noon UTC of their date, so
+ * such a date lies before this moment exactly when its day is already
+ * yesterday for the viewer.
+ */
+export function viewerDayStart(timezone = 'UTC', now = new Date()): Date {
+  const { year, month, day } = localDate(timezone, now);
+  return new Date(Date.UTC(year, month - 1, day));
+}
 
 /**
  * Overdue: a due time has passed, or — for a due date without a time — its
- * whole day is over. Whole-day dates sit at noon UTC; comparing them with the
- * current moment made a task due today "overdue" from 15:00 Moscow time.
+ * whole day is over.
+ *
+ * Over for whom is the point. The day used to end at midnight UTC, while the
+ * interface ends it at the viewer's own midnight: in Moscow a task due
+ * yesterday was red on the card from 00:00 and joined the «просрочено» count
+ * only at 03:00. Both now follow the zone the request names.
  */
-export function overdueWhere(now = new Date()): Prisma.IssueWhereInput {
+export function overdueWhere(now = new Date(), timezone = 'UTC'): Prisma.IssueWhereInput {
   return {
     OR: [
       { dueHasTime: true, dueDate: { lt: now } },
-      { dueHasTime: false, dueDate: { lt: new Date(now.getTime() - HALF_DAY_MS) } },
+      { dueHasTime: false, dueDate: { lt: viewerDayStart(timezone, now) } },
     ],
   };
 }
@@ -213,18 +239,12 @@ export function overdueWhere(now = new Date()): Prisma.IssueWhereInput {
  * day in UTC, which is close enough for a count and never drops a whole day.
  */
 export function dueSoonUntil(timezone: string, now = new Date(), days = 7): Date {
-  let local: string;
-  try {
-    local = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  } catch {
-    local = now.toISOString().slice(0, 10);
-  }
-  const [year, month, day] = local.split('-').map(Number);
-  return new Date(Date.UTC(year!, month! - 1, day! + days - 1, 23, 59, 59, 999));
+  const { year, month, day } = localDate(timezone, now);
+  return new Date(Date.UTC(year, month - 1, day + days - 1, 23, 59, 59, 999));
 }
 
 /** The same rule for one issue already in memory. */
-export function isPastDue(dueDate: Date | null, dueHasTime: boolean, now = Date.now()): boolean {
+export function isPastDue(dueDate: Date | null, dueHasTime: boolean, now = Date.now(), timezone = 'UTC'): boolean {
   if (!dueDate) return false;
-  return dueHasTime ? dueDate.getTime() < now : dueDate.getTime() + HALF_DAY_MS < now;
+  return dueHasTime ? dueDate.getTime() < now : dueDate.getTime() < viewerDayStart(timezone, new Date(now)).getTime();
 }

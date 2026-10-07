@@ -30,15 +30,17 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
 
   /** Cross-project queries: My Work, calendar, saved views. */
   app.get<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/issues', async (req) => {
-    const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
+    const user = currentUser(req);
+    const actor = await workspaceContext(user.id, req.params.workspaceId);
     const filter = parse(issueFilterSchema, req.query);
-    return service.listIssues(actor, filter);
+    return service.listIssues(actor, filter, user.viewerTimezone);
   });
 
   app.get<{ Params: { workspaceId: string } }>('/workspaces/:workspaceId/issues/count', async (req) => {
-    const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
+    const user = currentUser(req);
+    const actor = await workspaceContext(user.id, req.params.workspaceId);
     const filter = parse(issueFilterSchema, req.query);
-    return { count: await service.countIssues(actor, filter) };
+    return { count: await service.countIssues(actor, filter, user.viewerTimezone) };
   });
 
   /** Figures per person over the same filters: «Задачи сотрудника», planning, a department. */
@@ -48,13 +50,14 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const filter = parse(issueFilterSchema, req.query);
     if (!filter.assigneeId?.length) throw badRequest('Укажите, по кому считать задачи');
     if (filter.assigneeId.length > 200) throw badRequest('Слишком много людей в одном запросе');
-    return { items: await service.assigneeStats(actor, filter, user.timezone) };
+    return { items: await service.assigneeStats(actor, filter, user.viewerTimezone) };
   });
 
   app.get<{ Params: { projectId: string } }>('/projects/:projectId/issues', async (req) => {
-    const { actor } = await projectContext(currentUser(req).id, req.params.projectId);
+    const user = currentUser(req);
+    const { actor } = await projectContext(user.id, req.params.projectId);
     const filter = parse(issueFilterSchema, { ...(req.query as object), projectId: req.params.projectId });
-    return service.listIssues(actor, filter);
+    return service.listIssues(actor, filter, user.viewerTimezone);
   });
 
   /** The list as a table file: every task matching the filters, subtasks included. */
@@ -62,7 +65,7 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const user = currentUser(req);
     const { actor, project } = await projectContext(user.id, req.params.projectId);
     const filter = parse(issueFilterSchema, { ...(req.query as object), projectId: req.params.projectId });
-    const csv = await exportIssuesCsv(actor, filter, user.timezone);
+    const csv = await exportIssuesCsv(actor, filter, user.viewerTimezone);
     const filename = `${project.key}-задачи-${new Date().toISOString().slice(0, 10)}.csv`;
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
@@ -71,9 +74,10 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get<{ Params: { projectId: string } }>('/projects/:projectId/board', async (req) => {
-    const { actor } = await projectContext(currentUser(req).id, req.params.projectId);
+    const user = currentUser(req);
+    const { actor } = await projectContext(user.id, req.params.projectId);
     const filter = parse(issueFilterSchema.partial(), req.query);
-    return service.getBoard(actor, req.params.projectId, filter);
+    return service.getBoard(actor, req.params.projectId, filter, user.viewerTimezone);
   });
 
   app.post('/issues', async (req, reply) => {

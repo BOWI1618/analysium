@@ -33,6 +33,7 @@ export const statusSelect = {
   color: true,
   position: true,
   wipLimit: true,
+  isDefault: true,
 } satisfies Prisma.WorkflowStatusSelect;
 
 export const labelSelect = { id: true, name: true, color: true } satisfies Prisma.LabelSelect;
@@ -94,6 +95,7 @@ export function toStatus(s: Prisma.WorkflowStatusGetPayload<{ select: typeof sta
     color: s.color,
     position: s.position,
     wipLimit: s.wipLimit,
+    isDefault: s.isDefault,
   };
 }
 

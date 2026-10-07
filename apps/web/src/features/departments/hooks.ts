@@ -72,9 +72,10 @@ const PAGE_SIZE = 50;
 export function useDepartmentIssues(departmentId: string | undefined, filters: IssueFilters) {
   return useInfiniteQuery({
     queryKey: ['issues', 'department', departmentId, 'list', filters],
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, signal }) =>
       api.get<Paginated<IssueSummaryDto>>(`/departments/${departmentId}/issues`, {
         query: { ...filtersToQuery(filters), limit: PAGE_SIZE, cursor: pageParam },
+        signal,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -88,8 +89,11 @@ export function useDepartmentIssues(departmentId: string | undefined, filters: I
 export function useDepartmentStats(departmentId: string | undefined, filters: IssueFilters = {}) {
   return useQuery({
     queryKey: ['issues', 'department', departmentId, 'stats', filters],
-    queryFn: () =>
-      api.get<{ items: AssigneeStatsDto[] }>(`/departments/${departmentId}/stats`, { query: filtersToQuery(filters) }),
+    queryFn: ({ signal }) =>
+      api.get<{ items: AssigneeStatsDto[] }>(`/departments/${departmentId}/stats`, {
+        query: filtersToQuery(filters),
+        signal,
+      }),
     enabled: Boolean(departmentId),
     staleTime: 10_000,
     placeholderData: (prev) => prev,

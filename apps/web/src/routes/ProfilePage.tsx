@@ -8,7 +8,7 @@ import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { Topbar } from '~/components/Topbar';
-import { IssueRow, IssueRowHeader, listMinWidth, type ListColumn } from '~/components/IssueRow';
+import { IssueRow, IssueRowHeader, listMinStyle, type ListColumn } from '~/components/IssueRow';
 import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
 import { EmptyState, ErrorState, Skeleton } from '~/ui/Feedback';
@@ -184,8 +184,8 @@ export function ProfilePage() {
                     const columns = PROFILE_COLUMNS[tab];
                     return (
                       <div
-                        className="sm:min-w-[var(--list-min)]"
-                        style={{ '--list-min': `${listMinWidth(columns, false)}px` } as React.CSSProperties}
+                        className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
+                        style={listMinStyle(columns, false)}
                       >
                         <IssueRowHeader columns={columns} selectable={false} />
                         {issues.map((issue) => (

@@ -23,9 +23,19 @@ export async function projectDashboard(
   _actor: ActorContext,
   projectId: string,
   days = 30,
+  timezone?: string,
 ): Promise<DashboardDto> {
   const since = new Date(Date.now() - days * DAY_MS);
   const base = { projectId, archivedAt: null };
+  // Work still to be done: neither finished nor called off. «Открыто» used
+  // to be «all minus completed», which counted cancelled tasks as open, and
+  // «без исполнителя» counted tasks closed long ago — a single finished task
+  // with nobody on it showed as an unassigned backlog of one.
+  const active: Prisma.IssueWhereInput = {
+    ...base,
+    status: { category: { notIn: [StatusCategory.COMPLETED, StatusCategory.CANCELED] } },
+  };
+  const late = overdueWhere(new Date(), timezone);
 
   const [statuses, byStatus, byPriority, byType, totals, overdue, unassigned, members, activeSprint, recentSprints] =
     await Promise.all([
@@ -38,10 +48,8 @@ export async function projectDashboard(
       prisma.issue.groupBy({ by: ['priority'], where: base, _count: { _all: true } }),
       prisma.issue.groupBy({ by: ['type'], where: base, _count: { _all: true } }),
       prisma.issue.count({ where: base }),
-      prisma.issue.count({
-        where: { AND: [base, overdueWhere()], status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
-      }),
-      prisma.issue.count({ where: { ...base, assigneeId: null } }),
+      prisma.issue.count({ where: { AND: [active, late] } }),
+      prisma.issue.count({ where: { ...active, assigneeId: null } }),
       prisma.issue.groupBy({ by: ['assigneeId'], where: base, _count: { _all: true } }),
       prisma.sprint.findFirst({ where: { projectId, status: 'ACTIVE' }, include: sprintInclude }),
       prisma.sprint.findMany({
@@ -65,6 +73,17 @@ export async function projectDashboard(
     _count: { _all: true },
   });
   const completedMap = new Map(completedByAssignee.map((c) => [c.assigneeId, c._count._all]));
+  // And what each person has on them now — the part of the table that
+  // actually speaks about load.
+  const [activeByAssignee, overdueByAssignee] = await Promise.all([
+    prisma.issue.groupBy({ by: ['assigneeId'], where: active, _count: { _all: true } }),
+    prisma.issue.groupBy({ by: ['assigneeId'], where: { AND: [active, late] }, _count: { _all: true } }),
+  ]);
+  const activeMap = new Map(activeByAssignee.map((c) => [c.assigneeId, c._count._all]));
+  const overdueMap = new Map(overdueByAssignee.map((c) => [c.assigneeId, c._count._all]));
+  const canceled = byStatus
+    .filter((s) => statusById.get(s.statusId)?.category === 'CANCELED')
+    .reduce((sum, s) => sum + s._count._all, 0);
 
   const assigneeIds = members.map((m) => m.assigneeId).filter((id): id is string => Boolean(id));
   const users = assigneeIds.length
@@ -105,10 +124,12 @@ export async function projectDashboard(
     totals: {
       total: totals,
       completed,
-      open: totals - completed,
+      canceled,
+      open: totals - completed - canceled,
       overdue,
       unassigned,
     },
+    period: { days, created: createdRows.length, completed: completedRows.length },
     byStatus: byStatus
       .map((s) => {
         const status = statusById.get(s.statusId);
@@ -136,8 +157,11 @@ export async function projectDashboard(
         user: m.assigneeId ? toUserSummary(userById.get(m.assigneeId) ?? null) : null,
         count: m._count._all,
         completed: completedMap.get(m.assigneeId) ?? 0,
+        active: activeMap.get(m.assigneeId) ?? 0,
+        overdue: overdueMap.get(m.assigneeId) ?? 0,
       }))
-      .sort((a, b) => b.count - a.count)
+      // Whoever carries the most now comes first.
+      .sort((a, b) => b.active - a.active || b.count - a.count)
       .slice(0, 10),
     activity: [...activityMap.entries()].map(([date, v]) => ({ date, ...v })),
     sprint: activeSprint ? { ...toSprint(activeSprint), burndown: await burndown(activeSprint.id) } : null,
@@ -195,7 +219,7 @@ async function burndown(sprintId: string): Promise<{ date: string; remaining: nu
 }
 
 /** Aggregated counts for the "My Work" page. */
-export async function myWorkSummary(actor: ActorContext) {
+export async function myWorkSummary(actor: ActorContext, timezone?: string) {
   const now = new Date();
   const soon = new Date(now.getTime() + 7 * DAY_MS);
   const open: Prisma.WorkflowStatusWhereInput = {
@@ -207,7 +231,7 @@ export async function myWorkSummary(actor: ActorContext) {
     prisma.issue.count({ where: { ...scope, assigneeId: actor.userId, status: open } }),
     prisma.issue.count({ where: { ...scope, reporterId: actor.userId, status: open } }),
     prisma.issue.count({
-      where: { AND: [scope, overdueWhere(now)], assigneeId: actor.userId, status: open },
+      where: { AND: [scope, overdueWhere(now, timezone)], assigneeId: actor.userId, status: open },
     }),
     prisma.issue.count({
       where: { ...scope, assigneeId: actor.userId, dueDate: { gte: now, lte: soon }, status: open },

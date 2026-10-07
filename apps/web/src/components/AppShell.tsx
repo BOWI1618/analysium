@@ -68,13 +68,13 @@ export function AppShell() {
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">
       {/* Desktop sidebar */}
-      <div className="hidden shrink-0 md:block">
+      <div className="hidden shrink-0 lg:block">
         <Sidebar />
       </div>
 
       {/* Mobile drawer */}
       {mobileNavOpen && (
-        <div className="fixed inset-0 z-[75] md:hidden">
+        <div className="fixed inset-0 z-[75] lg:hidden">
           <div
             className="fixed inset-0 bg-[var(--overlay)] animate-in"
             onClick={() => setMobileNavOpen(false)}

@@ -57,11 +57,41 @@ export class ApiError extends Error {
 }
 
 export class NetworkError extends Error {
-  constructor() {
-    super('Сервер недоступен. Проверьте соединение и попробуйте ещё раз.');
+  /** The request was sent and nothing came back in time — as opposed to not getting through at all. */
+  readonly timedOut: boolean;
+
+  constructor(message = 'Сервер недоступен. Проверьте соединение и попробуйте ещё раз.', timedOut = false) {
+    super(message);
     this.name = 'NetworkError';
+    this.timedOut = timedOut;
   }
 }
+
+/**
+ * How long a request may wait for an answer.
+ *
+ * There used to be no limit at all: with the server out of reach a list stayed
+ * a skeleton for as long as the network itself took to give up — minutes — and
+ * nothing on the screen said that anything was wrong. Changes get longer, and
+ * the message for them says what is not known: whether the change was saved.
+ * Uploads are exempt; a large file on a slow line is not a hung request.
+ */
+const READ_TIMEOUT_MS = 30_000;
+const WRITE_TIMEOUT_MS = 60_000;
+
+/**
+ * The browser's own time zone, sent with every request. The screen draws dates
+ * on this clock — «вчера», «сегодня», the red overdue plate — so the server
+ * must count overdue and due-soon on the same one, or a figure and the list
+ * under it disagree around midnight.
+ */
+const TIME_ZONE: string = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
+  } catch {
+    return '';
+  }
+})();
 
 type Query = Record<string, string | number | boolean | string[] | null | undefined>;
 
@@ -92,30 +122,61 @@ interface RequestOptions {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, signal, query, formData } = options;
 
+  // One controller for both reasons to stop: the caller no longer wants the
+  // answer (a query was replaced by a newer one), or the wait ran out.
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = formData
+    ? undefined
+    : setTimeout(
+        () => {
+          timedOut = true;
+          controller.abort();
+        },
+        method === 'GET' ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS,
+      );
+  const cancel = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener('abort', cancel);
+
   let response: Response;
+  let text: string;
   try {
     response = await fetch(`${API_BASE}${path}${buildQuery(query)}`, {
       method,
       // Cookie-based sessions: the browser must send credentials.
       credentials: 'same-origin',
-      signal,
+      signal: controller.signal,
       headers: {
         ...(formData ? {} : body !== undefined ? { 'content-type': 'application/json' } : {}),
         // Marks the call as a same-origin XHR; the server rejects
         // cross-origin state changes.
         'x-requested-with': 'flowdesk',
         'x-client-id': CLIENT_ID,
+        ...(TIME_ZONE ? { 'x-time-zone': TIME_ZONE } : {}),
       },
       body: formData ?? (body !== undefined ? JSON.stringify(body) : undefined),
     });
+    // The body is part of the wait: headers can arrive and the rest never follow.
+    text = response.status === 204 ? '' : await response.text();
   } catch (error) {
+    if (timedOut) {
+      throw new NetworkError(
+        method === 'GET'
+          ? 'Сервер не ответил за 30 секунд. Попробуйте ещё раз чуть позже.'
+          : 'Сервер не ответил вовремя, и неизвестно, сохранилось ли изменение. Обновите страницу и проверьте.',
+        true,
+      );
+    }
     if ((error as Error).name === 'AbortError') throw error;
     throw new NetworkError();
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
   }
 
   if (response.status === 204) return undefined as T;
 
-  const text = await response.text();
   const payload = text ? safeParse(text) : null;
 
   if (!response.ok) {

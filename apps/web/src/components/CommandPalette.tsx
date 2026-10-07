@@ -12,11 +12,15 @@ import {
   Zap,
   Inbox,
   Home,
+  Users,
+  ListTodo,
+  Network,
 } from 'lucide-react';
 import { useSession, useWorkspaceCan } from '~/app/session';
 import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useSearch } from '~/features/search/hooks';
+import { useDepartments } from '~/features/departments/hooks';
 import { Avatar } from '~/ui/Avatar';
 import { Kbd } from '~/ui/Tooltip';
 import { Shortcut } from '~/ui/Shortcut';
@@ -65,6 +69,10 @@ export function CommandPalette() {
 
   const canCreateIssue = useWorkspaceCan(Permission.ISSUE_CREATE);
   const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
+  // The same two conditions the sidebar shows these screens by.
+  const canAssign = useWorkspaceCan(Permission.ISSUE_ASSIGN);
+  const { data: departments } = useDepartments(workspace?.id);
+  const showDepartment = Boolean(departments && (departments.items.length > 0 || departments.canManage));
   const staticCommands = useMemo<Command[]>(
     () => ([
       {
@@ -99,6 +107,35 @@ export function CommandPalette() {
         group: 'Навигация',
         run: () => navigate('/projects'),
       },
+      {
+        id: 'nav-employee-work',
+        label: 'Перейти к задачам сотрудника',
+        icon: <Users className="size-4" />,
+        group: 'Навигация',
+        run: () => navigate('/employee-work'),
+      },
+      ...(canAssign
+        ? [
+            {
+              id: 'nav-planning',
+              label: 'Перейти к распределению задач',
+              icon: <ListTodo className="size-4" />,
+              group: 'Навигация',
+              run: () => navigate('/planning'),
+            },
+          ]
+        : []),
+      ...(showDepartment
+        ? [
+            {
+              id: 'nav-department',
+              label: 'Перейти к задачам отдела',
+              icon: <Network className="size-4" />,
+              group: 'Навигация',
+              run: () => navigate('/department-work'),
+            },
+          ]
+        : []),
       {
         id: 'action-create-issue',
         label: 'Создать задачу',
@@ -139,7 +176,7 @@ export function CommandPalette() {
         (command.id !== 'action-create-issue' || canCreateIssue) &&
         (command.id !== 'action-create-project' || canCreateProject),
     ),
-    [navigate, openCreateIssue, setShortcutsOpen, canCreateIssue, canCreateProject],
+    [navigate, openCreateIssue, setShortcutsOpen, canCreateIssue, canCreateProject, canAssign, showDepartment],
   );
 
   const commands = useMemo<Command[]>(() => {

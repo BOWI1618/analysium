@@ -1,7 +1,7 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ApiError } from './lib/api';
+import { ApiError, NetworkError } from './lib/api';
 import { qk } from './lib/queryKeys';
 import { ToastProvider } from './app/toast';
 import { SessionProvider } from './app/session';
@@ -23,6 +23,10 @@ const queryClient = new QueryClient({
       refetchOnReconnect: true,
       retry: (failureCount, error) => {
         if (error instanceof ApiError && error.status < 500) return false;
+        // A request that already waited out its limit is not asked twice
+        // more: that would be a minute and a half of skeletons before the
+        // screen admits something is wrong. «Повторить» is one click away.
+        if (error instanceof NetworkError && error.timedOut) return false;
         return failureCount < 2;
       },
     },

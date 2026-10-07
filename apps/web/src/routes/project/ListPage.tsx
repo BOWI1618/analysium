@@ -5,7 +5,7 @@ import { ISSUE_PRIORITIES, Permission, type IssuePriority, type IssueSummaryDto,
 import clsx from 'clsx';
 import { ChevronRight, Download, Layers, Plus } from 'lucide-react';
 import { API_BASE, buildQuery } from '~/lib/api';
-import { filtersToQuery } from '~/features/issues/types';
+import { activeFilterCount, filtersToQuery } from '~/features/issues/types';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useProject } from '~/features/projects/hooks';
@@ -20,7 +20,7 @@ import {
   IssueRow,
   IssueRowHeader,
   DEFAULT_COLUMNS,
-  listMinWidth,
+  listMinStyle,
   useColumnWidths,
   type ListColumn,
 } from '~/components/IssueRow';
@@ -68,7 +68,7 @@ export function ListPage() {
   const [widths, resizeColumn] = useColumnWidths('flowdesk.list-widths');
   const [groupBy, setGroupBy] = useLocalStorage<ListGroupBy>('flowdesk.list-group', 'none');
   const [folded, setFolded] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selectedIds, setSelected] = useState<string[]>([]);
   const lastClickedRef = useRef<string | null>(null);
 
   const { data: project } = useProject(projectId);
@@ -80,6 +80,14 @@ export function ListPage() {
 
   const query = useIssueList({ projectId }, filters);
   const issues = useMemo(() => flattenPages(query.data), [query.data]);
+
+  // Only what the list still shows stays selected. A task that a new filter
+  // or another project took off the screen used to remain in the selection,
+  // and the bar offered to change «Выбрано: 1» with nothing in sight.
+  const selected = useMemo(() => {
+    const listed = new Set(issues.map((issue) => issue.id));
+    return selectedIds.filter((id) => listed.has(id));
+  }, [selectedIds, issues]);
 
   const { data: epicPages } = useIssueList({ projectId }, { type: ['EPIC'], includeDone: true });
   const epics = useMemo(
@@ -208,8 +216,8 @@ export function ListPage() {
       <ColumnWidthsContext.Provider value={widths}>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
-          className="sm:min-w-[var(--list-min)]"
-          style={{ '--list-min': `${listMinWidth(columns, true, widths)}px` } as React.CSSProperties}
+          className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
+          style={listMinStyle(columns, true, widths)}
         >
         <IssueRowHeader columns={columns} onResize={resizeColumn} />
         {canCreate && <QuickAddRow projectId={projectId} />}
@@ -217,20 +225,37 @@ export function ListPage() {
         {query.isLoading ? (
           <SkeletonRows rows={12} />
         ) : issues.length === 0 ? (
-          <EmptyState
-            title="Под фильтры ничего не подходит"
-description="Ослабьте фильтры или создайте первую задачу в проекте."
-            action={
-              <Button
-                size="sm"
-                variant="primary"
-                iconLeft={<Plus className="size-3.5" />}
-                onClick={() => openCreateIssue({ projectId })}
-              >
-                Создать задачу
-              </Button>
-            }
-          />
+          // Two different empties. A project with no tasks invites the first
+          // one; a filter that matched nothing offers to drop the filter — it
+          // used to offer «создать первую задачу» in a project full of them.
+          activeFilterCount(filters) > 0 || filters.search ? (
+            <EmptyState
+              title="Под фильтры ничего не подходит"
+              description="В проекте есть задачи, но ни одна не соответствует выбранным условиям."
+              action={
+                <Button size="sm" variant="secondary" onClick={() => setFilters({ sort: filters.sort, order: filters.order })}>
+                  Сбросить фильтры
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="В проекте пока нет задач"
+              description="Создайте первую — она появится здесь и на доске."
+              action={
+                canCreate ? (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    iconLeft={<Plus className="size-3.5" />}
+                    onClick={() => openCreateIssue({ projectId })}
+                  >
+                    Создать задачу
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
         ) : (
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {

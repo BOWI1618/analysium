@@ -15,9 +15,10 @@ export async function ganttRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
 
   app.get<{ Params: { projectId: string } }>('/projects/:projectId/gantt', async (req) => {
-    const { actor } = await projectContext(currentUser(req).id, req.params.projectId);
+    const user = currentUser(req);
+    const { actor } = await projectContext(user.id, req.params.projectId);
     const query = parse(ganttQuerySchema, req.query);
-    return service.getGantt(actor, req.params.projectId, query);
+    return service.getGantt(actor, req.params.projectId, query, user.viewerTimezone);
   });
 
   /** Drag or resize on the timeline. Separate from PATCH /issues/:id because it

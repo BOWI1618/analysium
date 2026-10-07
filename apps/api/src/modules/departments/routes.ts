@@ -51,9 +51,10 @@ export async function departmentRoutes(app: FastifyInstance): Promise<void> {
 
   /** Tasks of the department's people, within the projects the caller may open. */
   app.get<{ Params: DepartmentParams }>('/departments/:departmentId/issues', async (req) => {
-    const actor = await actorFor(currentUser(req).id, req.params.departmentId);
+    const user = currentUser(req);
+    const actor = await actorFor(user.id, req.params.departmentId);
     const filter = parse(issueFilterSchema, req.query);
-    return service.departmentIssues(actor, req.params.departmentId, filter);
+    return service.departmentIssues(actor, req.params.departmentId, filter, user.viewerTimezone);
   });
 
   /** Figures per person of the department, over the same tasks. */
@@ -61,6 +62,6 @@ export async function departmentRoutes(app: FastifyInstance): Promise<void> {
     const user = currentUser(req);
     const actor = await actorFor(user.id, req.params.departmentId);
     const filter = parse(issueFilterSchema, req.query);
-    return { items: await service.departmentStats(actor, req.params.departmentId, filter, user.timezone) };
+    return { items: await service.departmentStats(actor, req.params.departmentId, filter, user.viewerTimezone) };
   });
 }

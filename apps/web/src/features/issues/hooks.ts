@@ -28,8 +28,8 @@ const PAGE_SIZE = 50;
 export function useBoard(projectId: string | undefined, filters: IssueFilters) {
   return useQuery({
     queryKey: qk.board(projectId ?? '', filters),
-    queryFn: () =>
-      api.get<BoardDto>(`/projects/${projectId}/board`, { query: filtersToQuery(filters) }),
+    queryFn: ({ signal }) =>
+      api.get<BoardDto>(`/projects/${projectId}/board`, { query: filtersToQuery(filters), signal }),
     enabled: Boolean(projectId),
     staleTime: 10_000,
     // Keeps the previous board visible while a filter change loads.
@@ -50,9 +50,12 @@ export function useIssueList(
 
   return useInfiniteQuery({
     queryKey: qk.issues(scopeKey, filters),
-    queryFn: ({ pageParam }) =>
+    // The signal lets a request nobody waits for any more be dropped: typing
+    // in a filter replaces the query several times a second.
+    queryFn: ({ pageParam, signal }) =>
       api.get<Paginated<IssueSummaryDto>>(path, {
         query: { ...filtersToQuery(filters), limit: options.limit ?? PAGE_SIZE, cursor: pageParam },
+        signal,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -71,9 +74,10 @@ export function useIssueList(
 export function useAssigneeStats(workspaceId: string, userIds: string[], filters: IssueFilters = {}) {
   return useQuery({
     queryKey: qk.assigneeStats(workspaceId, userIds, filters),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<{ items: AssigneeStatsDto[] }>(`/workspaces/${workspaceId}/issues/stats`, {
         query: { ...filtersToQuery(filters), assigneeId: userIds },
+        signal,
       }),
     enabled: Boolean(workspaceId) && userIds.length > 0,
     staleTime: 10_000,
@@ -87,8 +91,8 @@ export function useIssueCount(workspaceId: string, filters: IssueFilters, enable
   return useQuery({
     // Under the `issues` root, so it moves together with the list it counts.
     queryKey: ['issues', workspaceId, 'count', filters],
-    queryFn: () =>
-      api.get<{ count: number }>(`/workspaces/${workspaceId}/issues/count`, { query: filtersToQuery(filters) }),
+    queryFn: ({ signal }) =>
+      api.get<{ count: number }>(`/workspaces/${workspaceId}/issues/count`, { query: filtersToQuery(filters), signal }),
     enabled: enabled && Boolean(workspaceId),
     staleTime: 10_000,
     placeholderData: (prev) => prev,

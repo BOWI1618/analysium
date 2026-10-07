@@ -59,7 +59,7 @@ const ganttIssueSelect = {
   baselineStartDate: true,
   baselineDueDate: true,
   completedAt: true,
-  status: { select: { id: true, name: true, category: true, color: true, position: true, wipLimit: true } },
+  status: { select: { id: true, name: true, category: true, color: true, position: true, wipLimit: true, isDefault: true } },
   assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
 } satisfies Prisma.IssueSelect;
 
@@ -69,10 +69,14 @@ type GanttIssueRow = Prisma.IssueGetPayload<{ select: typeof ganttIssueSelect }>
  * Builds the whole chart in two queries — issues and dependencies — rather than
  * walking the tree, so a deep hierarchy costs the same as a flat one.
  */
+/** How many issues one chart loads. */
+const GANTT_LIMIT = 2000;
+
 export async function getGantt(
   actor: ActorContext,
   projectId: string,
   query: GanttQueryInput,
+  timezone?: string,
 ): Promise<GanttDto> {
   // The same filters as the board and the list; subtasks stay, since the
   // chart draws them under their parents.
@@ -82,7 +86,7 @@ export async function getGantt(
     AND: [
       buildIssueWhere(
         { ...filters, projectId, includeSubtasks: true, includeDone },
-        { workspaceId: actor.workspaceId, allowedProjectIds: 'ALL', currentUserId: actor.userId },
+        { workspaceId: actor.workspaceId, allowedProjectIds: 'ALL', currentUserId: actor.userId, timezone },
         { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES },
       ),
     ],
@@ -113,13 +117,17 @@ export async function getGantt(
   }
 
   // Deliberate cap: the chart stops being readable long before this, and the
-  // from/to window is what keeps huge projects queryable.
-  const issues = await prisma.issue.findMany({
+  // from/to window is what keeps huge projects queryable. One row more than
+  // the cap is asked for, so the answer can say when it is not the whole
+  // project — a chart that silently stops at 2000 reads as «that is all».
+  const found = await prisma.issue.findMany({
     where,
     orderBy: [{ startDate: { sort: 'asc', nulls: 'last' } }, { rank: 'asc' }],
     select: ganttIssueSelect,
-    take: 2000,
+    take: GANTT_LIMIT + 1,
   });
+  const truncated = found.length > GANTT_LIMIT;
+  const issues = truncated ? found.slice(0, GANTT_LIMIT) : found;
 
   const idSet = new Set(issues.map((i) => i.id));
   const dependencyRows = idSet.size
@@ -189,7 +197,7 @@ export async function getGantt(
       baselineEnd: iso(issue.baselineDueDate),
       slackDays: path?.slackDays ?? null,
       isCritical: path?.isCritical ?? false,
-      isOverdue: !isDone && isPastDue(bar.end, !bar.isSummary && issue.dueHasTime, now),
+      isOverdue: !isDone && isPastDue(bar.end, !bar.isSummary && issue.dueHasTime, now, timezone),
     };
   });
 
@@ -216,6 +224,7 @@ export async function getGantt(
     dependencies,
     range,
     unscheduledCount: rows.filter((r) => !r.start && !r.end).length,
+    truncated,
     permissions: permissionsFor(actor),
   };
 }

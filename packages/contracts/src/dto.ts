@@ -101,6 +101,8 @@ export interface StatusDto {
   color: string;
   position: number;
   wipLimit: number | null;
+  /** The status a new task lands in when none is chosen — not necessarily the first column. */
+  isDefault?: boolean;
   issueCount?: number;
 }
 
@@ -318,6 +320,8 @@ export interface GanttDto {
   range: { start: string; end: string } | null;
   /** Issues with no dates at all — shown in a separate "unscheduled" tray. */
   unscheduledCount: number;
+  /** The project has more issues than the chart loads at once: what is drawn is not all of it. */
+  truncated: boolean;
   permissions: Permission[];
 }
 
@@ -384,10 +388,17 @@ export interface SessionDto {
 }
 
 export interface DashboardDto {
-  totals: { total: number; completed: number; open: number; overdue: number; unassigned: number };
+  /**
+   * The project as it stands now. `open` and `unassigned` count work still
+   * to be done: neither includes completed or cancelled tasks.
+   */
+  totals: { total: number; completed: number; canceled: number; open: number; overdue: number; unassigned: number };
+  /** What happened within the chosen period — the only figures the period changes. */
+  period: { days: number; created: number; completed: number };
   byStatus: { statusId: string; name: string; color: string; category: StatusCategory; count: number }[];
   byPriority: { priority: IssuePriority; count: number }[];
-  byAssignee: { user: UserSummaryDto | null; count: number; completed: number }[];
+  /** Per person: all their tasks ever, the completed ones, and what is on them now. */
+  byAssignee: { user: UserSummaryDto | null; count: number; completed: number; active: number; overdue: number }[];
   byType: { type: IssueType; count: number }[];
   activity: { date: string; created: number; completed: number }[];
   sprint: (SprintDto & { burndown: { date: string; remaining: number | null; ideal: number }[] }) | null;

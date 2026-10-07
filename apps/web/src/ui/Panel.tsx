@@ -26,7 +26,8 @@ export function Panel({
 }) {
   return (
     <section className={clsx('border-2 border-border-strong bg-surface shadow-md', className)}>
-      <header className="flex items-center gap-2 border-b-2 border-border-strong bg-surface-sunken px-3 py-1.5">
+      {/* Wraps: a caption, a figure and a switch do not fit one line on a phone. */}
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-2 border-border-strong bg-surface-sunken px-3 py-1.5">
         {icon}
         <h3 className="fd-eyebrow">{title}</h3>
         {subtitle && <span className="fd-num text-2xs text-text-subtle">{subtitle}</span>}

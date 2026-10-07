@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { DashboardDto } from '@flowdesk/contracts';
@@ -12,7 +12,7 @@ import { SegmentedControl } from '~/ui/Tabs';
 import { EmptyState, ErrorState, ProgressBar, Skeleton } from '~/ui/Feedback';
 import { Panel } from '~/ui/Panel';
 import { Marker, Masthead } from '~/ui/Masthead';
-import { shortDate } from '~/lib/format';
+import { pluralize, shortDate } from '~/lib/format';
 
 /**
  * Project insights. Every number is computed server-side from grouped queries,
@@ -34,25 +34,16 @@ export function DashboardPage() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
+        {/* The period switch sits with the one block it changes, further
+            down. Here in the heading it read as a filter over the whole page,
+            while the figures under it never moved. */}
         <Masthead
           size="md"
-          kicker={`последние ${days} дн.`}
+          kicker="проект сейчас"
           title={
             <>
               <Marker>Аналитика</Marker>
             </>
-          }
-          actions={
-            <SegmentedControl
-              label="Период"
-              value={String(days)}
-              onChange={(value) => setDays(Number(value))}
-              options={[
-                { value: '7', label: '7 дн' },
-                { value: '30', label: '30 дн' },
-                { value: '90', label: '90 дн' },
-              ]}
-            />
           }
         />
 
@@ -61,34 +52,43 @@ export function DashboardPage() {
         ) : (
           <>
             {/* Totals */}
+            {/* Each figure leads to the tasks it counts. */}
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard
-                label="Открыто"
+                label="В работе и в очереди"
                 value={data.totals.open}
                 total={data.totals.total}
+                of="всех"
+                to={`/projects/${projectId}/list?includeDone=false`}
                 icon={<CircleDot className="size-4" />}
                 tone="accent"
-              />
-              <StatCard
-                label="Завершено"
-                value={data.totals.completed}
-                total={data.totals.total}
-                icon={<CheckCircle2 className="size-4" />}
-                tone="success"
               />
               <StatCard
                 label="Просрочено"
                 value={data.totals.overdue}
                 total={data.totals.open}
+                of="открытых"
+                to={`/projects/${projectId}/list?isOverdue=true`}
                 icon={<AlertTriangle className="size-4" />}
                 tone="danger"
               />
               <StatCard
                 label="Без исполнителя"
                 value={data.totals.unassigned}
-                total={data.totals.total}
+                total={data.totals.open}
+                of="открытых"
+                to={`/projects/${projectId}/list?assigneeId=none&includeDone=false`}
                 icon={<UserX className="size-4" />}
                 tone="warning"
+              />
+              <StatCard
+                label="Завершено за всё время"
+                value={data.totals.completed}
+                total={data.totals.total}
+                of="всех"
+                to={`/projects/${projectId}/list?statusCategory=COMPLETED`}
+                icon={<CheckCircle2 className="size-4" />}
+                tone="success"
               />
             </div>
 
@@ -160,13 +160,33 @@ export function DashboardPage() {
             </div>
 
             {/* Created vs completed */}
-            <Panel bodyClassName="p-3.5" title={`Создано и завершено — за ${days} дн.`}>
+            <Panel
+              bodyClassName="p-3.5"
+              title="Динамика за период"
+              subtitle={`За ${data.period.days} дн.: создано ${data.period.created}, завершено ${data.period.completed}`}
+              actions={
+                <SegmentedControl
+                  label="Период"
+                  value={String(days)}
+                  onChange={(value) => setDays(Number(value))}
+                  options={[
+                    { value: '7', label: '7 дн' },
+                    { value: '30', label: '30 дн' },
+                    { value: '90', label: '90 дн' },
+                  ]}
+                />
+              }
+            >
               <ActivityChart data={data.activity} />
             </Panel>
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {/* Workload */}
-              <Panel bodyClassName="p-3.5" title="Нагрузка по исполнителям">
+              {/* It was called «Нагрузка», and showed completed out of all
+                  tasks ever — someone with every task finished read as loaded
+                  at 100%. What a person has on them now is said in words; the
+                  bar stays what it is, a share of work done. */}
+              <Panel bodyClassName="p-3.5" title="По сотрудникам" subtitle="Сейчас на человеке и сколько сделано за всё время">
                 {data.byAssignee.length === 0 ? (
                   <EmptyState compact title="Ничего не назначено" />
                 ) : (
@@ -174,8 +194,12 @@ export function DashboardPage() {
                     {data.byAssignee.map((row) => (
                       <li key={row.user?.id ?? 'unassigned'} className="flex items-center gap-2.5">
                         <Avatar user={row.user} size="md" />
-                        <span className="min-w-0 flex-1 truncate text-xs">
-                          {row.user?.name ?? 'Без исполнителя'}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs">{row.user?.name ?? 'Без исполнителя'}</span>
+                          <span className="fd-num block truncate text-2xs text-text-subtle">
+                            {pluralize(row.active, ['активная', 'активные', 'активных'])}
+                            {row.overdue > 0 && <span className="font-bold text-danger"> · просрочено {row.overdue}</span>}
+                          </span>
                         </span>
                         <ProgressBar
                           value={row.completed}
@@ -234,12 +258,18 @@ function StatCard({
   label,
   value,
   total,
+  of,
+  to,
   icon,
   tone,
 }: {
   label: string;
   value: number;
   total: number;
+  /** What the share is taken of — «всех», «открытых» — so the percentage says what it measures. */
+  of: string;
+  /** The list of exactly the tasks counted here. */
+  to: string;
   icon: React.ReactNode;
   tone: 'accent' | 'success' | 'danger' | 'warning';
 }) {
@@ -253,18 +283,22 @@ function StatCard({
   const percent = total > 0 ? Math.round((value / total) * 100) : 0;
 
   return (
-    <div className={clsx('border-2 border-border-strong p-4 shadow-md', tones[tone])}>
-      <div className="flex items-center justify-between">
+    <Link
+      to={to}
+      title="Открыть эти задачи списком"
+      className={clsx('fd-lift block border-2 border-border-strong p-4 shadow-md', tones[tone])}
+    >
+      <div className="flex items-center justify-between gap-2">
         {icon}
-        <span className="fd-num text-[10px] uppercase tracking-widest opacity-70">{label}</span>
+        <span className="fd-num text-right text-[10px] uppercase tracking-widest opacity-70">{label}</span>
       </div>
       <p className="mt-3 font-display text-3xl font-black tabular-nums">{value}</p>
       {total > 0 && (
         <p className="fd-num mt-1.5 text-[10px] uppercase tracking-widest opacity-70">
-          {percent}% из {total}
+          {percent}% из {total} {of}
         </p>
       )}
-    </div>
+    </Link>
   );
 }
 

@@ -20,14 +20,14 @@ import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
 import { BulkActionBar } from '~/components/BulkActionBar';
-import { IssueRow, IssueRowHeader, listMinWidth, type ListColumn } from '~/components/IssueRow';
+import { IssueRow, IssueRowHeader, listMinStyle, type ListColumn } from '~/components/IssueRow';
 import { DueDateChip } from '~/components/IssueMeta';
 import { UserPicker } from '~/components/Pickers';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
 import { EmptyState, ErrorState, SkeletonRows } from '~/ui/Feedback';
-import { pluralize, shortDate } from '~/lib/format';
+import { dueDateLabel, pluralize, shortDate } from '~/lib/format';
 
 type Period = '7' | '30' | 'all';
 
@@ -324,8 +324,8 @@ export function PlanningPage() {
           <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
             {/* Room under the last rows, so the floating bar never covers them. */}
             <div
-              className="pb-20 sm:min-w-[var(--list-min)]"
-              style={{ '--list-min': `${listMinWidth(columns, true)}px` } as React.CSSProperties}
+              className="pb-20 sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
+              style={listMinStyle(columns, true)}
             >
               {pool.error ? (
                 <ErrorState error={pool.error} onRetry={() => void pool.refetch()} />
@@ -436,9 +436,13 @@ function groupByPeriod(issues: IssueSummaryDto[], period: Period): TaskGroup[] {
       groups[3]!.issues.push(issue);
       continue;
     }
-    // Calendar days, as the due chip counts them: due at noon today is «сегодня», not late.
+    // Late by the one rule the red plate and the «просрочено» figure follow:
+    // a time that has passed, or a whole day that is over. Counting calendar
+    // days alone kept a task due at 10:00 this morning under «в ближайшие дни»
+    // while the figure above already counted it as overdue.
+    const late = dueDateLabel(issue.dueDate, issue.dueHasTime)?.tone === 'overdue';
     const ahead = differenceInCalendarDays(new Date(issue.dueDate), today);
-    groups[ahead < 0 ? 0 : ahead < days ? 1 : 2]!.issues.push(issue);
+    groups[late ? 0 : ahead < days ? 1 : 2]!.issues.push(issue);
   }
   return groups.filter((group) => group.issues.length > 0);
 }

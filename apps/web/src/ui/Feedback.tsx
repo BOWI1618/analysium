@@ -125,10 +125,15 @@ export function ErrorState({ error, onRetry, className, compact }: ErrorStatePro
 
 function describeError(error: unknown): { icon: ReactNode; title: string; description: string } {
   if (error instanceof NetworkError) {
+    // This is shown where something failed to load. It used to promise that
+    // «изменения сохранены и отправятся повторно» — to someone who had changed
+    // nothing, and with no queue behind the promise.
     return {
       icon: <WifiOff className="size-6" />,
-      title: 'Сервер недоступен',
-      description: 'Проверьте соединение — изменения сохранены и отправятся повторно.',
+      title: error.timedOut ? 'Сервер не отвечает' : 'Сервер недоступен',
+      description: error.timedOut
+        ? 'Данные не загрузились: сервер не ответил за 30 секунд. Попробуйте ещё раз чуть позже.'
+        : 'Данные не загрузились. Проверьте соединение и нажмите «Повторить».',
     };
   }
   if (error instanceof ApiError) {

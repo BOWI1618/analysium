@@ -30,7 +30,7 @@ export function Topbar({ breadcrumbs, actions }: { breadcrumbs: Crumb[]; actions
       className="flex shrink-0 items-stretch border-b-2 border-border-strong bg-surface"
       style={{ height: 'var(--topbar-height)' }}
     >
-      <div className="flex shrink-0 items-center gap-2 px-2 md:hidden">
+      <div className="flex shrink-0 items-center gap-2 px-2 lg:hidden">
         <IconButton
           label="Открыть меню"
           size="sm"

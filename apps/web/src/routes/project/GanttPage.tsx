@@ -153,6 +153,15 @@ export function GanttPage() {
 
         <div className="ml-auto flex items-center gap-2">
           {isFetching && <span className="text-2xs text-text-subtle">Обновляем…</span>}
+          {data?.truncated && (
+            <span
+              role="status"
+              className="border-2 border-border-strong bg-marker px-2 py-0.5 text-2xs font-bold text-ink"
+              title="Диаграмма загружает не больше 2000 задач за раз"
+            >
+              Показаны не все задачи — сузьте фильтром
+            </span>
+          )}
           {data && data.unscheduledCount > 0 && (
             <span className="fd-num inline-flex items-center gap-1 border-2 border-border-strong bg-surface-active px-2 py-0.5 text-2xs text-text-muted">
               <CalendarClock className="size-3" />

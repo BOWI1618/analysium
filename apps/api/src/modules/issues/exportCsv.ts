@@ -53,7 +53,7 @@ export async function exportIssuesCsv(
   const issues: IssueSummaryDto[] = [];
   let cursor: string | undefined;
   do {
-    const page = await listIssues(actor, { ...filter, includeSubtasks: true, limit: 200, cursor });
+    const page = await listIssues(actor, { ...filter, includeSubtasks: true, limit: 200, cursor }, timezone);
     issues.push(...page.items);
     cursor = page.nextCursor ?? undefined;
   } while (cursor && issues.length < MAX_ROWS);

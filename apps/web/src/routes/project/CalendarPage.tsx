@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import {
@@ -54,6 +54,9 @@ interface CalendarSettings {
   /** Where a day by the hour opens when it is not today. */
   dayStartsAt: number;
 }
+
+/** Pages of 200 the calendar loads for one period before it says the picture is incomplete. */
+const PERIOD_PAGES_MAX = 10;
 
 const DEFAULT_SETTINGS: CalendarSettings = {
   weekStart: 'monday',
@@ -130,6 +133,17 @@ export function CalendarPage() {
     { ...filters, noDates: true, sort: 'updated', order: 'desc' },
     { limit: 100, enabled: unscheduledOpen },
   );
+
+  // A calendar that shows part of a month is worse than none: an empty day
+  // reads as a free day. The first page used to be all there was — 200 tasks —
+  // so the rest are fetched as soon as it is known that there are more, up to
+  // a bound past which the page says it is incomplete instead of pretending.
+  const periodPages = query.data?.pages.length ?? 0;
+  const { hasNextPage: periodHasMore, isFetchingNextPage: periodLoadingMore, fetchNextPage: loadMorePeriod } = query;
+  useEffect(() => {
+    if (periodHasMore && !periodLoadingMore && periodPages < PERIOD_PAGES_MAX) void loadMorePeriod();
+  }, [periodHasMore, periodLoadingMore, periodPages, loadMorePeriod]);
+  const periodIncomplete = Boolean(periodHasMore) && periodPages >= PERIOD_PAGES_MAX;
 
   const issues = useMemo(() => flattenPages(query.data), [query.data]);
   const unscheduled = useMemo(() => flattenPages(unscheduledQuery.data), [unscheduledQuery.data]);
@@ -250,6 +264,12 @@ export function CalendarPage() {
           className="h-7 border-2 border-border-strong bg-surface px-1.5 text-xs"
         />
         <h2 className="ml-1 text-sm font-semibold first-letter:uppercase">{title}</h2>
+        {periodHasMore && !periodIncomplete && <span className="text-2xs text-text-subtle">Загружаем остальные задачи…</span>}
+        {periodIncomplete && (
+          <span role="status" className="border-2 border-border-strong bg-marker px-2 py-0.5 text-2xs font-bold text-ink">
+            Показаны не все задачи периода ({issues.length}) — сузьте фильтром
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           <Button
@@ -363,7 +383,10 @@ export function CalendarPage() {
             className="flex w-64 shrink-0 flex-col border-l-2 border-border-strong bg-surface-sunken"
           >
             <div className="border-b-2 border-border-strong px-3 py-2">
-              <h3 className="fd-eyebrow">Без срока · {unscheduled.length}</h3>
+              <h3 className="fd-eyebrow">
+                Без срока · {unscheduled.length}
+                {unscheduledQuery.hasNextPage ? '+' : ''}
+              </h3>
               <p className="mt-0.5 text-2xs text-text-subtle">
                 {canEdit ? 'Перетащите задачу на день или на час, чтобы запланировать.' : 'Задачи, у которых нет дат.'}
               </p>
@@ -400,6 +423,17 @@ export function CalendarPage() {
                     />
                   );
                 })
+              )}
+              {unscheduledQuery.hasNextPage && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  fullWidth
+                  loading={unscheduledQuery.isFetchingNextPage}
+                  onClick={() => void unscheduledQuery.fetchNextPage()}
+                >
+                  Загрузить ещё
+                </Button>
               )}
             </div>
           </aside>

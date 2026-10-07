@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type { SprintDto } from '@flowdesk/contracts';
 import { Permission } from '@flowdesk/contracts';
@@ -39,6 +39,10 @@ export function BacklogPage() {
 
   const [filters, setFilters] = useFilterState({ sort: 'rank', order: 'asc' });
   const [selected, setSelected] = useState<string[]>([]);
+  // A new filter or another project changes what is on the screen in every
+  // section at once; a selection made before it would act on tasks out of sight.
+  const filtersKey = JSON.stringify(filters);
+  useEffect(() => setSelected([]), [filtersKey, projectId]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [createSprintOpen, setCreateSprintOpen] = useState(false);
   const [completing, setCompleting] = useState<SprintDto | null>(null);
@@ -182,6 +186,7 @@ description="Всё уже запланировано — или задач ещ
         count={selected.length}
         statuses={project?.statuses ?? []}
         members={project?.assignees ?? []}
+        sprints={(sprints ?? []).filter((sprint) => sprint.status !== 'COMPLETED')}
         onClear={() => setSelected([])}
         onApply={(patch) => bulkUpdate.mutate({ issueIds: selected, patch }, { onSuccess: () => setSelected([]) })}
         pending={bulkUpdate.isPending}
@@ -264,6 +269,7 @@ function SprintSection({
   );
   const issues = useMemo(() => flattenPages(query.data), [query.data]);
   const startSprint = useStartSprint(projectId);
+  const patchIssue = usePatchIssue();
 
   const isActive = sprint.status === 'ACTIVE';
 
@@ -367,7 +373,7 @@ function SprintSection({
             <EmptyState
               compact
               title="В спринте нет задач"
-description="Перетащите задачи из «Без спринта» или добавьте новую."
+              description="Отметьте задачи в «Без спринта» и перенесите их сюда кнопкой «Спринт» на панели внизу — или добавьте новую."
             />
           ) : (
             issues.map((issue) => (
@@ -381,8 +387,27 @@ description="Перетащите задачи из «Без спринта» и
                 members={project?.assignees ?? []}
                 onToggleSelect={() => onToggleSelect(issue.id)}
                 onOpen={() => onOpen(issue.id)}
+                // Edited in place, like the rows of «Без спринта» above.
+                onPatch={(patch) => patchIssue.mutate({ issueId: issue.id, patch })}
               />
             ))
+          )}
+          {/* The header counts the whole sprint; the rows come a page at a
+              time, and the fifty-first task used to be out of reach. */}
+          {query.hasNextPage && (
+            <div className="flex flex-wrap items-center justify-center gap-3 p-2">
+              <span className="fd-num text-2xs text-text-subtle">
+                Показано {issues.length} из {sprint.issueCount}
+              </span>
+              <Button
+                size="xs"
+                variant="secondary"
+                loading={query.isFetchingNextPage}
+                onClick={() => void query.fetchNextPage()}
+              >
+                Загрузить ещё
+              </Button>
+            </div>
           )}
         </div>
       )}

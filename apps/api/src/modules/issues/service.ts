@@ -58,12 +58,14 @@ import { filterWorkspaceMembers, issueWatchers, notify } from '../notifications/
 export async function listIssues(
   actor: ActorContext,
   filter: IssueFilterInput,
+  timezone?: string,
 ): Promise<Paginated<IssueSummaryDto>> {
   const allowedProjectIds = await visibleProjectIds(actor);
   const where = buildIssueWhere(filter, {
     workspaceId: actor.workspaceId,
     allowedProjectIds,
     currentUserId: actor.userId,
+    timezone,
   }, { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES });
 
   const orderBy = orderByFor(filter.sort, filter.order);
@@ -85,12 +87,13 @@ export async function listIssues(
   };
 }
 
-export async function countIssues(actor: ActorContext, filter: IssueFilterInput): Promise<number> {
+export async function countIssues(actor: ActorContext, filter: IssueFilterInput, timezone?: string): Promise<number> {
   const allowedProjectIds = await visibleProjectIds(actor);
   const where = buildIssueWhere(filter, {
     workspaceId: actor.workspaceId,
     allowedProjectIds,
     currentUserId: actor.userId,
+    timezone,
   }, { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES });
   return prisma.issue.count({ where });
 }
@@ -122,7 +125,7 @@ export async function assigneeStats(
     { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES },
   );
   const active: Prisma.IssueWhereInput = { status: { category: { in: ACTIVE_CATEGORIES as never } } };
-  const overdue = overdueWhere(now);
+  const overdue = overdueWhere(now, timezone);
   const wheres: Record<'active' | 'overdue' | 'dueSoon' | 'done', Prisma.IssueWhereInput> = {
     active: { AND: [base, active] },
     overdue: { AND: [base, active, overdue] },
@@ -170,6 +173,7 @@ export async function getBoard(
   actor: ActorContext,
   projectId: string,
   filter: Partial<IssueFilterInput> & { perColumn?: number },
+  timezone?: string,
 ): Promise<{ columns: BoardColumn[] }> {
   const statuses = await prisma.workflowStatus.findMany({
     where: { projectId },
@@ -180,7 +184,7 @@ export async function getBoard(
   const perColumn = Math.min(filter.perColumn ?? 60, 200);
   const baseWhere = buildIssueWhere(
     { ...filter, projectId, sort: 'rank', order: 'asc', limit: perColumn },
-    { workspaceId: actor.workspaceId, allowedProjectIds: 'ALL', currentUserId: actor.userId },
+    { workspaceId: actor.workspaceId, allowedProjectIds: 'ALL', currentUserId: actor.userId, timezone },
     { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES },
   );
 

@@ -17,7 +17,7 @@ import {
   IssueRow,
   IssueRowHeader,
   DEFAULT_COLUMNS,
-  listMinWidth,
+  listMinStyle,
   useColumnWidths,
   type ListColumn,
 } from '~/components/IssueRow';
@@ -202,8 +202,8 @@ export function MyWorkPage() {
       <ColumnWidthsContext.Provider value={widths}>
       <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
-          className="sm:min-w-[var(--list-min)]"
-          style={{ '--list-min': `${listMinWidth(columns, false, widths)}px` } as React.CSSProperties}
+          className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
+          style={listMinStyle(columns, false, widths)}
         >
         {query.error ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />

@@ -21,6 +21,20 @@ const SCALAR_KEYS = new Set(['sort', 'order', 'search', 'dueAfter', 'dueBefore']
 const isFilterKey = (key: string) => ARRAY_KEYS.has(key) || BOOL_KEYS.has(key) || SCALAR_KEYS.has(key);
 
 /**
+ * The filter part of an address, to take along from one view of a project to
+ * another: narrowed to one person in the list, the board used to open with
+ * everyone again. The order stays behind — each view sorts in its own way.
+ */
+export function carriedFilters(searchParams: URLSearchParams): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of searchParams.entries()) {
+    if (value && isFilterKey(key) && key !== 'sort' && key !== 'order') params.set(key, value);
+  }
+  const text = params.toString();
+  return text ? `?${text}` : '';
+}
+
+/**
  * Filter state lives in the URL, not in a store.
  *
  * That makes every filtered view shareable by copying the address bar, keeps

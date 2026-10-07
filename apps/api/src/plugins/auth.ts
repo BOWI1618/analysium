@@ -21,6 +21,14 @@ export interface AuthenticatedUser {
   avatarUrl: string | null;
   timezone: string;
   status: string;
+  /**
+   * The zone the person is looking from right now: the one their browser
+   * reports with the request, else the one saved in the profile. Used for
+   * «is this overdue yet» — the screen draws dates on the browser's clock,
+   * and the server has to count on the same one. The saved `timezone` stays
+   * what the profile says.
+   */
+  viewerTimezone: string;
 }
 
 declare module 'fastify' {
@@ -97,7 +105,23 @@ async function resolveUser(req: FastifyRequest): Promise<{ user: AuthenticatedUs
   if (!session || session.expiresAt.getTime() < Date.now()) return null;
   if (session.user.status === 'DEACTIVATED') return null;
 
-  return { user: session.user, sessionId: session.id };
+  return {
+    user: { ...session.user, viewerTimezone: reportedTimezone(req) ?? session.user.timezone },
+    sessionId: session.id,
+  };
+}
+
+/** The browser's time zone from the request, if it names a real one. */
+function reportedTimezone(req: FastifyRequest): string | null {
+  const header = req.headers['x-time-zone'];
+  const zone = Array.isArray(header) ? header[0] : header;
+  if (!zone || zone.length > 64) return null;
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone });
+    return zone;
+  } catch {
+    return null;
+  }
 }
 
 /** Throttles `lastActiveAt` writes to at most one per user per few minutes. */

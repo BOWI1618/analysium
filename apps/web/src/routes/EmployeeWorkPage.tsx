@@ -11,7 +11,7 @@ import { useFilterState } from '~/features/issues/useFilterState';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
-import { IssueRow, IssueRowHeader, listMinWidth, type ListColumn } from '~/components/IssueRow';
+import { IssueRow, IssueRowHeader, listMinStyle, type ListColumn } from '~/components/IssueRow';
 import { UserPicker } from '~/components/Pickers';
 import { Avatar } from '~/ui/Avatar';
 import { Badge } from '~/ui/Badge';
@@ -109,7 +109,11 @@ export function EmployeeWorkPage() {
   }, [chosen, userId, view]);
 
   const query = useIssueList({ workspaceId }, listFilters, { enabled: Boolean(userId) });
-  const { data: stats } = useAssigneeStats(workspaceId, userId ? [userId] : [], chosen);
+  const {
+    data: stats,
+    error: statsError,
+    refetch: refetchStats,
+  } = useAssigneeStats(workspaceId, userId ? [userId] : [], chosen);
   const figures = stats?.get(userId);
 
   // A subtask stands on its own only when its parent is not in the list: with
@@ -155,10 +159,21 @@ export function EmployeeWorkPage() {
           </h1>
         </div>
 
-        {figures && (
+        {figures ? (
           <p className="fd-num text-2xs text-text-subtle">
             Срок в ближайшие 7 дней: <span className="font-bold text-text">{figures.dueSoon}</span>
           </p>
+        ) : (
+          // The list and its figures load apart; a figure that did not arrive
+          // is said to be missing rather than left to look like nothing is due.
+          statsError && (
+            <p className="text-2xs text-danger" role="status">
+              Счётчики не загрузились.{' '}
+              <button type="button" className="font-bold underline" onClick={() => void refetchStats()}>
+                Повторить
+              </button>
+            </p>
+          )
         )}
 
         <div className="flex items-center gap-2">
@@ -231,8 +246,8 @@ export function EmployeeWorkPage() {
 
       <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
-          className="sm:min-w-[var(--list-min)]"
-          style={{ '--list-min': `${listMinWidth(columns, false)}px` } as React.CSSProperties}
+          className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
+          style={listMinStyle(columns, false)}
         >
           {query.error ? (
             <ErrorState error={query.error} onRetry={() => void query.refetch()} />

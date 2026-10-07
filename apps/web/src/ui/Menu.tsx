@@ -162,6 +162,21 @@ export function MenuContent({
         (triggerRef.current?.querySelector('button') ?? triggerRef.current)?.focus?.();
         return;
       }
+      // A field inside the menu keeps the keys it uses itself: the arrows of
+      // a date field step through its day, month and year, and Home/End move
+      // the caret in a search box. The arrows of a plain search box still
+      // lead into the list — type, then arrow down to the match.
+      const field = event.target as HTMLElement | null;
+      const tag = field?.tagName;
+      const ownsArrows =
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        Boolean(field?.isContentEditable) ||
+        (tag === 'INPUT' &&
+          ['date', 'time', 'datetime-local', 'month', 'week', 'number', 'range'].includes((field as HTMLInputElement).type));
+      if (ownsArrows) return;
+      if (tag === 'INPUT' && (event.key === 'Home' || event.key === 'End')) return;
+
       const list = items();
       if (list.length === 0) return;
       const index = list.indexOf(document.activeElement as HTMLElement);

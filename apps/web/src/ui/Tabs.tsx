@@ -19,7 +19,8 @@ export function RouteTabs({ items, className }: { items: TabItem[]; className?: 
     <nav className={clsx('flex items-stretch overflow-x-auto no-scrollbar', className)}>
       {items.map((item, index) => (
         <NavLink
-          key={item.to}
+          // By label: the address may carry a filter that changes as it is typed.
+          key={item.label}
           to={item.to}
           end={item.end}
           className={({ isActive }) =>

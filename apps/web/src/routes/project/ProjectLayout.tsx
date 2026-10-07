@@ -1,4 +1,5 @@
-import { Outlet, useParams } from 'react-router-dom';
+import { Outlet, useParams, useSearchParams } from 'react-router-dom';
+import { carriedFilters } from '~/features/issues/useFilterState';
 import {
   CalendarDays,
   Columns3,
@@ -25,6 +26,7 @@ import { ProjectIcon } from '~/ui/ProjectIcon';
  */
 export function ProjectLayout() {
   const { projectId = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const { workspace } = useSession();
   const { data: project, isLoading, error, refetch } = useProject(projectId);
   const toggleFavorite = useToggleFavorite(workspace?.id ?? '');
@@ -54,14 +56,17 @@ export function ProjectLayout() {
   }
 
   const base = `/projects/${project.id}`;
+  // The views that show tasks hand the current filter to each other; analytics
+  // and settings are not filtered lists and get a clean address.
+  const filtered = carriedFilters(searchParams);
   const tabs: TabItem[] = [
-    { to: `${base}/board`, label: 'Доска', icon: <Columns3 className="size-3.5" /> },
-    { to: `${base}/list`, label: 'Список', icon: <LayoutList className="size-3.5" /> },
+    { to: `${base}/board${filtered}`, label: 'Доска', icon: <Columns3 className="size-3.5" /> },
+    { to: `${base}/list${filtered}`, label: 'Список', icon: <LayoutList className="size-3.5" /> },
     ...(project.projectType === 'SCRUM'
-      ? [{ to: `${base}/backlog`, label: 'Спринты', icon: <ListTodo className="size-3.5" /> }]
+      ? [{ to: `${base}/backlog${filtered}`, label: 'Спринты', icon: <ListTodo className="size-3.5" /> }]
       : []),
-    { to: `${base}/gantt`, label: 'Гант', icon: <GanttChartSquare className="size-3.5" /> },
-    { to: `${base}/calendar`, label: 'Календарь', icon: <CalendarDays className="size-3.5" /> },
+    { to: `${base}/gantt${filtered}`, label: 'Гант', icon: <GanttChartSquare className="size-3.5" /> },
+    { to: `${base}/calendar${filtered}`, label: 'Календарь', icon: <CalendarDays className="size-3.5" /> },
     { to: `${base}/dashboard`, label: 'Аналитика', icon: <PieChart className="size-3.5" /> },
     ...(project.permissions.includes(Permission.PROJECT_UPDATE)
       ? [{ to: `${base}/settings`, label: 'Настройки', icon: <Settings className="size-3.5" /> }]

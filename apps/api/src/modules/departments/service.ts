@@ -195,13 +195,14 @@ export async function departmentIssues(
   actor: ActorContext,
   departmentId: string,
   filter: IssueFilterInput,
+  timezone?: string,
 ): Promise<Paginated<IssueSummaryDto>> {
   const department = await getDepartment(actor, departmentId);
   const assigneeId = assigneesWithin(department, filter);
   // Nobody to ask about is an empty list. Passing no assignee on would mean
   // «any assignee» and show the whole workspace under the department's name.
   if (assigneeId.length === 0) return { items: [], nextCursor: null };
-  return listIssues(actor, { ...filter, assigneeId, includeSubtasks: true });
+  return listIssues(actor, { ...filter, assigneeId, includeSubtasks: true }, timezone);
 }
 
 export async function departmentStats(

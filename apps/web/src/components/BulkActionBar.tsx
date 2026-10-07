@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import type { StatusDto, UserSummaryDto } from '@flowdesk/contracts';
+import type { SprintDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
 import { ISSUE_PRIORITIES, type IssuePriority } from '@flowdesk/contracts';
 import { X } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
@@ -15,6 +15,7 @@ export function BulkActionBar({
   count,
   statuses = [],
   members = [],
+  sprints = [],
   onApply,
   onClear,
   pending,
@@ -25,6 +26,8 @@ export function BulkActionBar({
   statuses?: StatusDto[];
   /** People to choose an assignee from; empty where the page assigns in its own way. */
   members?: UserSummaryDto[];
+  /** Sprints the selected tasks can be moved into; where given, «без спринта» is offered too. */
+  sprints?: Pick<SprintDto, 'id' | 'name'>[];
   onApply: (patch: Record<string, unknown>) => void;
   onClear: () => void;
   pending?: boolean;
@@ -112,6 +115,26 @@ export function BulkActionBar({
                   {member.name}
                 </MenuItem>
               ))}
+            </MenuContent>
+          </Menu>
+        )}
+
+        {sprints.length > 0 && (
+          <Menu>
+            <MenuTrigger>
+              <Button size="xs" variant="ghost" disabled={pending}>
+                Спринт
+              </Button>
+            </MenuTrigger>
+            <MenuContent side="top" width={230} label="Перенести в спринт">
+              <MenuLabel>Перенести в спринт</MenuLabel>
+              {sprints.map((sprint) => (
+                <MenuItem key={sprint.id} onSelect={() => onApply({ sprintId: sprint.id })}>
+                  {sprint.name}
+                </MenuItem>
+              ))}
+              <MenuSeparator />
+              <MenuItem onSelect={() => onApply({ sprintId: null })}>Без спринта</MenuItem>
             </MenuContent>
           </Menu>
         )}

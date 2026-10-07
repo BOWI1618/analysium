@@ -80,12 +80,35 @@ const COLUMN_PX: Record<ListColumn, number> = {
  * a minimum width from `sm` up and scroll sideways past it, so every column the
  * user picked stays visible instead of running off the edge.
  */
-export function listMinWidth(columns: ListColumn[], selectable = true, widths: ColumnWidths = {}): number {
+export function listMinWidth(
+  columns: ListColumn[],
+  selectable = true,
+  widths: ColumnWidths = {},
+  title = TITLE_MIN_WIDE,
+): number {
   const fixed =
-    24 /* padding */ + (selectable ? 14 : 0) + 16 /* fold */ + 14 /* type icon */ + 68 /* key */ + 160 /* title */ + 12; /* subtask indent */
+    24 /* padding */ + (selectable ? 14 : 0) + 16 /* fold */ + 14 /* type icon */ + 68 /* key */ + title + 12; /* subtask indent */
   const cells = columns.reduce((sum, column) => sum + (widths[column] ?? COLUMN_PX[column] ?? 0), 0);
   const items = (selectable ? 1 : 0) + 4 + columns.length;
   return fixed + cells + 8 * (items - 1);
+}
+
+/** The least room a row gives its title: 96px up to a wide screen, 160px from there (`sm:min-w-24 xl:min-w-40`). */
+const TITLE_MIN = 96;
+const TITLE_MIN_WIDE = 160;
+
+/**
+ * The two minimum widths of a list, for its wrapper's `style`.
+ *
+ * There used to be one, counted with the wide title on every screen. On a
+ * tablet that asked for 64px more than the rows needed, and a list that would
+ * have fitted scrolled sideways with its status column past the edge.
+ */
+export function listMinStyle(columns: ListColumn[], selectable = true, widths: ColumnWidths = {}): React.CSSProperties {
+  return {
+    '--list-min': `${listMinWidth(columns, selectable, widths, TITLE_MIN)}px`,
+    '--list-min-xl': `${listMinWidth(columns, selectable, widths, TITLE_MIN_WIDE)}px`,
+  } as React.CSSProperties;
 }
 
 /** Columns whose width can be dragged in the header; the rest hold an icon or an avatar. */
@@ -572,7 +595,7 @@ export function IssueRowHeader({
       <span className="shrink-0" style={{ width: 'var(--key-rail)' }}>
         Ключ
       </span>
-      <span className="min-w-0 flex-1 sm:min-w-40">Задача</span>
+      <span className="min-w-0 flex-1 sm:min-w-24 xl:min-w-40">Задача</span>
       {show('type') && cell('type', 'hidden w-24 sm:block', 'Тип')}
       {show('labels') && cell('labels', 'hidden w-32 sm:block', 'Метки')}
       {show('epic') && cell('epic', 'hidden w-32 sm:block', 'Эпик')}
