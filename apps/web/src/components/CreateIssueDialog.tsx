@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
-import type { AttachmentDto, CreateIssueRequest, IssuePriority, IssueRecurrence, IssueType } from '@flowdesk/contracts';
+import type {
+  AttachmentDto,
+  CreateIssueRequest,
+  IssuePriority,
+  IssueRecurrence,
+  IssueTemplateDto,
+  IssueType,
+} from '@flowdesk/contracts';
 import { EMPTY_DOC, ISSUE_RECURRENCES, isDocEmpty } from '@flowdesk/contracts';
-import { ChevronDown, CornerDownLeft, Eye, History } from 'lucide-react';
+import { addDays, format } from 'date-fns';
+import { ChevronDown, CornerDownLeft, Eye, History, LayoutTemplate } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
@@ -19,7 +27,15 @@ import {
 import { useMembers } from '~/features/members/hooks';
 import { useSprints } from '~/features/sprints/hooks';
 import { useCreateIssue, useIssueList } from '~/features/issues/hooks';
-import { clearIssueDraft, readIssueDraft, writeIssueDraft, type IssueDraft } from '~/features/issues/createDraft';
+import {
+  clearIssueDraft,
+  readIssueDraft,
+  writeIssueDraft,
+  type IssueDraft,
+  type IssueDraftTemplate,
+} from '~/features/issues/createDraft';
+import { useIssueTemplates } from '~/features/templates/hooks';
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import { Dialog, DialogCloseButton } from '~/ui/Dialog';
 import { Button } from '~/ui/Button';
@@ -77,6 +93,10 @@ export function CreateIssueDialog() {
   const [createAnother, setCreateAnother] = useState(false);
   /** When the draft now in the form was last saved; `null` for a form started from scratch. */
   const [restoredAt, setRestoredAt] = useState<number | null>(null);
+  // A template the form was started from: typical work written down once in
+  // the workspace settings. It only fills the form; everything stays editable.
+  const [template, setTemplate] = useState<IssueDraftTemplate | null>(null);
+  const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
 
   // An empty choice means "without a project". Such tasks live in the
   // workspace's list of tasks without a project; once that list exists its
@@ -97,6 +117,7 @@ export function CreateIssueDialog() {
   );
   const epics = useMemo(() => epicPages?.pages.flatMap((p) => p.items) ?? [], [epicPages]);
 
+  const { data: templates } = useIssueTemplates(workspace?.id, open);
   const createIssue = useCreateIssue();
   const queryClient = useQueryClient();
   const createLabel = useCreateLabel(effectiveProjectId);
@@ -183,6 +204,28 @@ export function CreateIssueDialog() {
     // A start that came with the form (an hour slot of the calendar) is shown, not hidden.
     setMoreOpen(Boolean(seed?.startDate));
     setRestoredAt(null);
+    setTemplate(null);
+    setSubtaskTitles([]);
+  };
+
+  /** Fills the form from a template. Text already typed is kept: the template adds, it does not erase. */
+  const applyTemplate = (chosen: IssueTemplateDto) => {
+    if (!title.trim()) setTitle(chosen.title);
+    if (isDocEmpty(description) && chosen.description) setDescription(chosen.description);
+    setType(chosen.type);
+    setPriority(chosen.priority);
+    if (chosen.dueInDays !== null) {
+      // A whole day, counted from today by the calendar of whoever creates the task.
+      setDueDate(`${format(addDays(new Date(), chosen.dueInDays), 'yyyy-MM-dd')}T12:00:00.000Z`);
+      setDueHasTime(false);
+    }
+    setStoryPoints(chosen.storyPoints);
+    setRecurrence(chosen.recurrence);
+    // Those without access to the chosen project are dropped when the task is sent, like any watcher.
+    setWatcherIds(chosen.watchers.map((watcher) => watcher.id));
+    setSubtaskTitles(chosen.subtasks);
+    setTemplate({ name: chosen.name, title: chosen.title, description: chosen.description });
+    if (chosen.storyPoints !== null || chosen.recurrence !== null) setMoreOpen(true);
   };
 
   const restoreDraft = (draft: IssueDraft) => {
@@ -207,6 +250,8 @@ export function CreateIssueDialog() {
     setRecurrence(draft.recurrence);
     setMoreOpen(Boolean(draft.startDate) || draft.storyPoints !== null || draft.recurrence !== null);
     setRestoredAt(draft.savedAt);
+    setTemplate(draft.template ?? null);
+    setSubtaskTitles(draft.subtaskTitles ?? []);
   };
 
   // Seed the form once, on the transition from closed to open.
@@ -269,6 +314,8 @@ export function CreateIssueDialog() {
         startHasTime,
         storyPoints,
         recurrence,
+        template,
+        subtaskTitles,
       });
     }, 400);
     return () => window.clearTimeout(timer);
@@ -293,6 +340,8 @@ export function CreateIssueDialog() {
     startHasTime,
     storyPoints,
     recurrence,
+    template,
+    subtaskTitles,
   ]);
 
   const dropDraft = () => {
@@ -378,6 +427,7 @@ export function CreateIssueDialog() {
       ...(storyPoints !== null ? { storyPoints } : {}),
       // A subtask comes back together with its parent, never on its own.
       ...(recurrence && !isSubtask ? { recurrence } : {}),
+      ...(subtaskTitles.length && !isSubtask ? { subtaskTitles } : {}),
       ...(isDocEmpty(body) ? {} : { description: body as Record<string, unknown> }),
     };
 
@@ -398,8 +448,9 @@ export function CreateIssueDialog() {
       });
 
       if (createAnother && !openAfter) {
-        setTitle('');
-        setDescription(EMPTY_DOC);
+        // A series from a template starts each task from the template's text again.
+        setTitle(template?.title ?? '');
+        setDescription(template?.description ?? EMPTY_DOC);
         return;
       }
       closeForm();
@@ -527,6 +578,35 @@ export function CreateIssueDialog() {
             </button>
           </TypePicker>
 
+          {/* A subtask is a part of something already planned; templates are for whole tasks. */}
+          {!isSubtask && (templates?.items.length ?? 0) > 0 && (
+            <Menu>
+              <MenuTrigger>
+                <button
+                  type="button"
+                  className="inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface px-2 text-sm hover:bg-surface-hover hover:shadow-xs"
+                >
+                  <LayoutTemplate className="size-3.5 shrink-0 text-text-subtle" />
+                  <span className="truncate">{template ? `Шаблон: ${template.name}` : 'Шаблон'}</span>
+                  <ChevronDown className="size-3 shrink-0 text-text-subtle" />
+                </button>
+              </MenuTrigger>
+              <MenuContent width={260} label="Заполнить по шаблону">
+                <MenuLabel>Заполнить по шаблону</MenuLabel>
+                {templates!.items.map((item) => (
+                  <MenuItem
+                    key={item.id}
+                    selected={template?.name === item.name}
+                    icon={<IssueTypeIcon type={item.type} withTooltip={false} className="size-3.5" />}
+                    onSelect={() => applyTemplate(item)}
+                  >
+                    {item.name}
+                  </MenuItem>
+                ))}
+              </MenuContent>
+            </Menu>
+          )}
+
           {selectedStatus && (
             <StatusPicker statuses={statuses} value={selectedStatus.id} onChange={setStatusId}>
               <button
@@ -540,6 +620,20 @@ export function CreateIssueDialog() {
             </StatusPicker>
           )}
         </div>
+
+        {subtaskTitles.length > 0 && !isSubtask && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 border-2 border-border-strong bg-surface-sunken px-2.5 py-1.5 text-xs"
+          >
+            <span className="min-w-0 flex-1">
+              Вместе с задачей создадутся подзадачи: <b>{subtaskTitles.join(', ')}</b>
+            </span>
+            <Button size="xs" variant="ghost" onClick={() => setSubtaskTitles([])}>
+              Без подзадач
+            </Button>
+          </div>
+        )}
 
         {/* Title */}
         <Input

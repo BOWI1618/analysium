@@ -188,6 +188,29 @@ export const updateDepartmentSchema = createDepartmentSchema
   .refine((value) => Object.keys(value).length > 0, 'Нет полей для обновления');
 export type UpdateDepartmentInput = z.infer<typeof updateDepartmentSchema>;
 
+/* ------------------------------------------------------ issue templates */
+
+/**
+ * A task filled in advance. A template is never a subtask: it is where a
+ * task with its parts starts.
+ */
+export const issueTemplateSchema = z.object({
+  name: z.string().trim().min(1, 'Укажите название шаблона').max(60),
+  title: z.string().trim().min(1, 'Укажите, как назвать задачу').max(300),
+  description: richDoc,
+  type: z.enum(ISSUE_TYPES.filter((type) => type !== 'SUBTASK') as [string, ...string[]]).default('TASK'),
+  priority: z.enum(ISSUE_PRIORITIES as [string, ...string[]]).default('MEDIUM'),
+  /** Days from the day the task is created to its deadline; `null` — no deadline. */
+  dueInDays: z.number().int().min(0).max(365).nullable().optional(),
+  storyPoints: z.number().int().min(0).max(100).nullable().optional(),
+  recurrence: z.enum(ISSUE_RECURRENCES as [string, ...string[]]).nullable().optional(),
+  subtasks: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
+  watcherIds: z.array(cuidLike).max(20).default([]),
+});
+export type IssueTemplateInput = z.infer<typeof issueTemplateSchema>;
+
+export const updateIssueTemplateSchema = issueTemplateSchema.partial();
+
 /* --------------------------------------------------------------- project */
 
 /** An icon name such as "message-square" (older projects store an emoji). */
@@ -279,6 +302,8 @@ export const createIssueSchema = z.object({
   labelIds: z.array(cuidLike).max(20).optional(),
   /** People subscribed to the task from the start; each must be able to open it. */
   watcherIds: z.array(cuidLike).max(20).optional(),
+  /** Subtasks made together with the task — the parts a template brings. */
+  subtaskTitles: z.array(z.string().trim().min(1).max(300)).max(20).optional(),
 });
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 

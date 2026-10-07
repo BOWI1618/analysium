@@ -32,14 +32,16 @@ import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
 import { AUDIT_ACTION_LABEL, ROLE_LABEL, describeAuditDetails } from '~/lib/labels';
 import { DepartmentsSection } from './DepartmentsSection';
+import { TemplatesSection } from './TemplatesSection';
 
-const SECTIONS = ['general', 'members', 'departments', 'roles', 'projects', 'audit'] as const;
+const SECTIONS = ['general', 'members', 'departments', 'templates', 'roles', 'projects', 'audit'] as const;
 type Section = (typeof SECTIONS)[number];
 
 const SECTION_LABELS: Record<Section, string> = {
   general: 'Основное',
   members: 'Участники',
   departments: 'Отделы',
+  templates: 'Шаблоны задач',
   roles: 'Роли и права',
   projects: 'Проекты',
   audit: 'Журнал аудита',
@@ -61,7 +63,9 @@ export function WorkspaceSettingsPage() {
       ? can(actor, Permission.WORKSPACE_VIEW_AUDIT)
       : s === 'departments'
         ? can(actor, Permission.WORKSPACE_MANAGE_MEMBERS)
-        : true,
+        : s === 'templates'
+          ? can(actor, Permission.WORKSPACE_UPDATE)
+          : true,
   );
   // An address naming a section the viewer may not see falls back to the first one.
   const current: Section = visible.includes(section) ? section : 'general';
@@ -111,6 +115,7 @@ export function WorkspaceSettingsPage() {
             {current === 'general' && <GeneralSection />}
             {current === 'members' && <MembersSection />}
             {current === 'departments' && <DepartmentsSection />}
+            {current === 'templates' && <TemplatesSection />}
             {current === 'roles' && <RolesSection />}
             {current === 'projects' && <ProjectsSection />}
             {current === 'audit' && <AuditSection />}

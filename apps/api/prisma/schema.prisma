@@ -169,6 +169,7 @@ model Workspace {
   auditLogs     AuditLog[]
   savedViews    SavedView[]
   departments   Department[]
+  issueTemplates IssueTemplate[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -770,6 +771,35 @@ model SavedView {
 
   @@index([workspaceId, ownerId])
   @@map("saved_views")
+}
+
+/// A ready-made task: what a «совещание» or a «согласование» consists of
+/// every time. Belongs to the workspace — the same in any project.
+model IssueTemplate {
+  id          String           @id @default(cuid())
+  workspaceId String
+  /// What the template is called in the list: «Совещание».
+  name        String
+  /// The title a task made from it starts with.
+  title       String
+  description Json?
+  type        IssueType        @default(TASK)
+  priority    IssuePriority    @default(MEDIUM)
+  /// The deadline, in days from the day the task is created; null leaves it without one.
+  dueInDays   Int?
+  storyPoints Int?
+  recurrence  IssueRecurrence?
+  /// Titles of the subtasks created together with the task.
+  subtasks    String[]         @default([])
+  /// Members subscribed to the task from the start.
+  watcherIds  String[]         @default([])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@map("issue_templates")
 }
 
 model Favorite {

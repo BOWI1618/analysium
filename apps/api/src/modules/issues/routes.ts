@@ -97,8 +97,13 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/issues', async (req, reply) => {
-    const { workspaceId, projectId: requestedProjectId, ...fields } = parse(createIssueRequestSchema, req.body);
+    const { workspaceId, projectId: requestedProjectId, subtaskTitles, ...fields } = parse(
+      createIssueRequestSchema,
+      req.body,
+    );
     const userId = currentUser(req).id;
+    // Subtasks go one level deep; said before anything is created.
+    if (subtaskTitles?.length && fields.parentId) throw badRequest('У подзадачи не может быть своих подзадач');
 
     // No project: the task goes to the workspace's list of tasks without one.
     // Permission is checked before that list is created, so someone who may not
@@ -112,7 +117,19 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
 
     const { actor, project } = await projectContext(userId, projectId);
     const issue = await service.createIssue(actor, { ...fields, projectId }, project.key);
-    return reply.status(201).send(issue);
+    if (!subtaskTitles?.length) return reply.status(201).send(issue);
+
+    // The parts a template brings: made right after the task, each through the
+    // same door as a subtask added by hand, so they get numbers, history and
+    // the project's default status like any other.
+    for (const title of subtaskTitles) {
+      await service.createIssue(
+        actor,
+        { projectId, parentId: issue.id, title, type: 'SUBTASK', priority: 'MEDIUM' },
+        project.key,
+      );
+    }
+    return reply.status(201).send(await service.getIssue(actor, issue.id));
   });
 
   app.get<{ Params: IssueParams }>('/issues/:issueId', async (req) => {

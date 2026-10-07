@@ -270,3 +270,38 @@ test.describe('распределение по неделям', () => {
     await expect(waiting.getByText(`ждёт ${first.issueKey}`)).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe('шаблоны задач', () => {
+  test('примеры добавляются в настройках, шаблон заполняет форму, подзадачи создаются вместе с задачей', async ({ page }) => {
+    await register(page, 'Проверяющий Шаблоны');
+    const projectId = await createProject(page, 'Шаблонный проект');
+
+    // The administrator starts from the four examples rather than from a blank form.
+    await page.goto('/settings/workspace');
+    await page.getByRole('button', { name: 'Шаблоны задач' }).click();
+    await page.getByRole('button', { name: 'Добавить примеры' }).click();
+    const list = page.getByRole('list', { name: 'Шаблоны задач' });
+    await expect(list.getByRole('heading', { name: 'Подготовить ТЗ' })).toBeVisible({ timeout: 20_000 });
+    await expect(list.getByRole('listitem')).toHaveCount(4);
+    await expect(list.getByRole('listitem').filter({ hasText: 'Регулярная проверка' })).toContainText('повтор каждую неделю');
+
+    // In the create form a template fills the fields; the text stays editable.
+    await page.goto(`/projects/${projectId}/list`);
+    await expect(page.getByRole('link', { name: 'Доска' })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: /Создать задачу/ }).first().click();
+    const form = page.getByRole('dialog', { name: 'Новая задача' });
+    await form.getByRole('button', { name: 'Шаблон', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Подготовить ТЗ' }).click();
+    await expect(form.getByLabel('Название задачи')).toHaveValue('Подготовить ТЗ');
+    await expect(form.getByText(/Вместе с задачей создадутся подзадачи/)).toContainText('Собрать требования');
+    await expect(form.getByRole('button', { name: 'Шаблон: Подготовить ТЗ' })).toBeVisible();
+    await form.getByLabel('Название задачи').fill('Подготовить ТЗ на стенд');
+    await form.getByRole('button', { name: 'Создать и открыть' }).click();
+    await expect(form).toBeHidden({ timeout: 15_000 });
+
+    // The task opens with the three parts the template brought.
+    for (const part of ['Собрать требования', 'Написать черновик', 'Согласовать с заказчиком']) {
+      await expect(page.getByText(part).first()).toBeVisible({ timeout: 15_000 });
+    }
+  });
+});

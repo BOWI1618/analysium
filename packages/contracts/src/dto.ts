@@ -474,6 +474,32 @@ export interface AssigneeStatsDto {
   activePoints: number;
 }
 
+/** A task filled in advance: picked in the create form, changed there as needed. */
+export interface IssueTemplateDto {
+  id: string;
+  /** What it is called in the list of templates: «Совещание». */
+  name: string;
+  /** The title a task made from it starts with. */
+  title: string;
+  description: unknown | null;
+  type: IssueType;
+  priority: IssuePriority;
+  /** Days from the day the task is created to its deadline; `null` — no deadline. */
+  dueInDays: number | null;
+  storyPoints: number | null;
+  recurrence: IssueRecurrence | null;
+  /** Titles of the subtasks created together with the task. */
+  subtasks: string[];
+  /** Subscribed from the start; only people still in the workspace. */
+  watchers: UserSummaryDto[];
+}
+
+export interface IssueTemplateListDto {
+  items: IssueTemplateDto[];
+  /** Whether the viewer may create, change and delete templates. */
+  canManage: boolean;
+}
+
 /** One person's active work: in all, and by when it falls due. */
 export interface WorkloadRowDto {
   userId: string;

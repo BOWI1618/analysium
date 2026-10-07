@@ -29,6 +29,16 @@ export interface IssueDraft {
   startHasTime: boolean;
   storyPoints: number | null;
   recurrence: IssueRecurrence | null;
+  /** The template the form was started from, and the subtasks it brings. */
+  template?: IssueDraftTemplate | null;
+  subtaskTitles?: string[];
+}
+
+/** What the form remembers of a template: enough to name it and to start the next task of a series. */
+export interface IssueDraftTemplate {
+  name: string;
+  title: string;
+  description: unknown;
 }
 
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
