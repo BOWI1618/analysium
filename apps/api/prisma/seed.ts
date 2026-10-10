@@ -361,7 +361,9 @@ async function main(): Promise<void> {
       sprints = [finished, active, planned];
     }
 
-    /* -------------------------------------------------------------- epics */
+    /* ------------------------------------------------------ large tasks */
+    // What other trackers call epics. Here a large piece of work is an
+    // ordinary task; its parts are subtasks.
 
     let counter = 0;
     const nextKey = () => {
@@ -382,7 +384,7 @@ async function main(): Promise<void> {
           title,
           description: issueDescription(title),
           descriptionText: title,
-          type: 'EPIC',
+          type: 'TASK',
           statusId: pick(statusByCategory('STARTED')).id,
           priority: 'HIGH',
           reporterId: lead.id,
@@ -446,7 +448,6 @@ async function main(): Promise<void> {
           priority: isBug ? pick(['URGENT', 'HIGH', 'HIGH', 'MEDIUM']) : pick(['HIGH', 'MEDIUM', 'MEDIUM', 'LOW', 'NONE']),
           reporterId: pick(activeUsers).id,
           assigneeId: chance(0.82) ? pick(activeUsers).id : null,
-          epicId: epics.length && chance(0.6) ? pick(epics).id : null,
           sprintId,
           storyPoints: chance(0.75) ? pick([1, 2, 3, 3, 5, 5, 8, 13]) : null,
           ...schedule(),

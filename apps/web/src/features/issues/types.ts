@@ -22,7 +22,6 @@ export interface IssueFilters {
   type?: string[];
   labelId?: string[];
   sprintId?: string[];
-  epicId?: string[];
   projectId?: string[];
   includeDone?: boolean;
   includeSubtasks?: boolean;

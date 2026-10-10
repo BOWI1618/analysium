@@ -5,6 +5,7 @@ import { Archive, FolderPlus, LayoutGrid, Plus, Star, StarOff } from 'lucide-rea
 import { useSession, useWorkspaceCan } from '~/app/session';
 import { Permission } from '@flowdesk/contracts';
 import { useProjects, useToggleFavorite } from '~/features/projects/hooks';
+import { projectsInTreeOrder } from '~/features/projects/tree';
 import { Topbar } from '~/components/Topbar';
 import { Marker, Masthead } from '~/ui/Masthead';
 import { Avatar } from '~/ui/Avatar';
@@ -110,7 +111,8 @@ export function ProjectsPage() {
             />
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {projects?.map((project) => {
+              {/* A subproject stands right after its project and says whose it is. */}
+              {projectsInTreeOrder(projects ?? []).map(({ project, parent }) => {
                 const total = project.totalIssueCount ?? 0;
                 const open = project.openIssueCount ?? 0;
                 const done = Math.max(0, total - open);
@@ -140,8 +142,9 @@ export function ProjectsPage() {
                             {project.name}
                             <span className="absolute inset-0" aria-hidden="true" />
                           </Link>
-                          <p className="mt-0.5 flex items-center gap-1.5">
+                          <p className="mt-0.5 flex flex-wrap items-center gap-1.5">
                             <span className="fd-key">{project.key}</span>
+                            {parent && <Badge>подпроект · {parent.name}</Badge>}
                             {project.projectType === 'SCRUM' && <Badge>спринты</Badge>}
                             {project.isArchived && (
                               <Badge tone="warning">

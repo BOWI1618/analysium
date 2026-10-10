@@ -116,11 +116,6 @@ export function ListPage() {
     return selectedIds.filter((id) => listed.has(id));
   }, [selectedIds, issues]);
 
-  const { data: epicPages } = useIssueList({ projectId }, { type: ['EPIC'], includeDone: true });
-  const epics = useMemo(
-    () => (epicPages?.pages.flatMap((p) => p.items) ?? []).map((e) => ({ id: e.id, title: e.title })),
-    [epicPages],
-  );
 
   const rows = useMemo<ListItem[]>(() => {
     if (groupBy === 'none') return issues.map((issue) => ({ kind: 'issue', issue }));
@@ -183,7 +178,6 @@ export function ListPage() {
         labels={project?.labels}
         members={project?.assignees}
         sprints={sprints}
-        epics={epics}
         currentUserId={user?.id ?? ''}
         views={
           <SavedViews

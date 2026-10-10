@@ -19,6 +19,7 @@ import { MultiSelect } from './Pickers';
 import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 import { Avatar } from '~/ui/Avatar';
 import { ProjectIcon } from '~/ui/ProjectIcon';
+import { projectPathName, projectsInTreeOrder } from '~/features/projects/tree';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Button } from '~/ui/Button';
 import { Badge } from '~/ui/Badge';
@@ -30,7 +31,6 @@ export interface FilterBarProps {
   labels?: LabelDto[];
   members?: UserSummaryDto[];
   sprints?: SprintDto[];
-  epics?: { id: string; title: string }[];
   currentUserId: string;
   /** Extra controls rendered on the right (view switcher, grouping). */
   trailing?: React.ReactNode;
@@ -42,7 +42,7 @@ export interface FilterBarProps {
   /** «Состояние»: open, in progress, finished — for lists across projects, which share no statuses. */
   stateFacet?: boolean;
   /** «Проект» — for lists that span projects. */
-  projects?: Pick<ProjectDto, 'id' | 'name' | 'icon' | 'color'>[];
+  projects?: (Pick<ProjectDto, 'id' | 'name' | 'icon' | 'color'> & { parentId?: string | null })[];
   /** «Срок»: a window of due dates, by preset or by hand. */
   dueRange?: boolean;
   /** Where the page itself decides whose tasks are shown, a second choice of person would silently fight it. */
@@ -98,7 +98,6 @@ export function FilterBar({
   labels = [],
   members = [],
   sprints = [],
-  epics = [],
   currentUserId,
   trailing,
   views,
@@ -190,9 +189,10 @@ export function FilterBar({
         {projects.length > 0 && (
           <MultiSelect
             title="Проект"
-            options={projects.map((p) => ({
+            // A subproject is named with its project: two subprojects may share a name.
+            options={projectsInTreeOrder(projects).map(({ project: p }) => ({
               value: p.id,
-              label: p.name,
+              label: projectPathName(p, projects),
               icon: <ProjectIcon icon={p.icon} color={p.color} size="sm" />,
             }))}
             value={filters.projectId ?? []}
@@ -251,7 +251,7 @@ export function FilterBar({
 
         <MultiSelect
           title="Тип"
-          options={ISSUE_TYPES.map((t) => ({
+          options={ISSUE_TYPES.filter((t) => t !== 'EPIC').map((t) => ({
             value: t,
             label: ISSUE_TYPE_META[t as IssueType].label,
             icon: <IssueTypeIcon type={t as IssueType} withTooltip={false} className="size-3.5" />,
@@ -288,17 +288,6 @@ export function FilterBar({
             onChange={(sprintId) => patch({ sprintId: sprintId.length ? sprintId : undefined })}
           >
             <FacetButton label="Спринт" count={filters.sprintId?.length} />
-          </MultiSelect>
-        )}
-
-        {epics.length > 0 && (
-          <MultiSelect
-            title="Эпик"
-            options={[{ value: 'none', label: 'Без эпика' }, ...epics.map((e) => ({ value: e.id, label: e.title }))]}
-            value={filters.epicId ?? []}
-            onChange={(epicId) => patch({ epicId: epicId.length ? epicId : undefined })}
-          >
-            <FacetButton label="Эпик" count={filters.epicId?.length} />
           </MultiSelect>
         )}
 

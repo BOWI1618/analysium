@@ -34,7 +34,6 @@ import {
   useDeleteAttachment,
   useDeleteIssue,
   useIssueActivity,
-  useIssueList,
   useTransferIssue,
   useUpdateIssue,
   useUploadAttachment,
@@ -120,10 +119,6 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   const { data: project } = useProject(issue.projectId);
   const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? issue.projectId : undefined);
   const { data: activity, isLoading: activityLoading } = useIssueActivity(issue.id);
-  const { data: epicPages } = useIssueList(
-    { projectId: issue.projectId },
-    { type: ['EPIC'], includeDone: true },
-  );
 
   const updateIssue = useUpdateIssue(issue.id);
   const deleteIssue = useDeleteIssue();
@@ -147,10 +142,6 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   // Everyone who can open this project — the explicit role list would leave out
   // most of the team (a new project holds only its lead).
   const members = useMemo<UserSummaryDto[]>(() => project?.assignees ?? [], [project]);
-  const epics = useMemo(
-    () => (epicPages?.pages.flatMap((p) => p.items) ?? []).filter((e) => e.id !== issue.id),
-    [epicPages, issue.id],
-  );
 
   const can = (permission: Permission) => issue.permissions.includes(permission);
   const canEdit = can(Permission.ISSUE_UPDATE);
@@ -722,24 +713,6 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
               )}
             </Field>
 
-            {issue.type !== 'EPIC' && (
-              <Field label="Эпик">
-                <select
-                  value={issue.epic?.id ?? ''}
-                  disabled={!canEdit}
-                  onChange={(event) => patch({ epicId: event.target.value || null })}
-                  className="h-7 w-full border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none disabled:cursor-default"
-                >
-                  <option value="">Без эпика</option>
-                  {epics.map((epic) => (
-                    <option key={epic.id} value={epic.id}>
-                      {epic.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-
             {sprints && sprints.length > 0 && (
               <Field label="Спринт">
                 <select
@@ -829,7 +802,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
           <>
             Задача получит новый номер в этом проекте
             {issue.subtasks.length > 0 ? ', подзадачи переедут вместе с ней' : ''}. Статус и метки подберутся
-            по названию, спринт и эпик сбросятся. Старая ссылка на задачу продолжит работать.
+            по названию, спринт сбросится. Старая ссылка на задачу продолжит работать.
           </>
         }
         confirmLabel="Перенести"

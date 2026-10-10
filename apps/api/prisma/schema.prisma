@@ -296,11 +296,18 @@ model Project {
   /// Monotonic counter backing issue keys (WEB-1, WEB-2 …). Incremented inside
   /// the same transaction that creates the issue.
   issueCounter Int         @default(0)
+  /// Set on a subproject. A subproject is a project in every respect — its own
+  /// board, statuses, key, members and analytics — that is shown under its
+  /// parent in the navigation. One level deep: a subproject has none of its own.
+  /// Deleting the parent leaves its subprojects as ordinary projects.
+  parentId     String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   lead      User?            @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  parent    Project?         @relation("Subprojects", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Project[]        @relation("Subprojects")
   members   ProjectMember[]
   statuses  WorkflowStatus[]
   labels    Label[]
@@ -310,6 +317,7 @@ model Project {
   @@unique([workspaceId, key])
   @@index([workspaceId, isArchived])
   @@index([workspaceId, isSystem])
+  @@index([parentId])
   @@index([leadId])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("projects")

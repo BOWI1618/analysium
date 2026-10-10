@@ -17,7 +17,6 @@ interface UiState {
     statusId?: string;
     sprintId?: string;
     parentId?: string;
-    epicId?: string;
     /** ISO dates, e.g. from a calendar day or an hour slot. */
     dueDate?: string;
     dueHasTime?: boolean;

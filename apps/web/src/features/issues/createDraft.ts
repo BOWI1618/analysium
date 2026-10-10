@@ -22,7 +22,6 @@ export interface IssueDraft {
   labelIds: string[];
   watcherIds: string[];
   sprintId: string | null;
-  epicId: string | null;
   dueDate: string | null;
   dueHasTime: boolean;
   startDate: string | null;

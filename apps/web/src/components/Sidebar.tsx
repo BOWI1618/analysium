@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import {
   ChevronsLeft,
@@ -16,6 +16,7 @@ import {
   ListTodo,
   Network,
   ChevronDown,
+  ChevronRight,
   LogOut,
   Keyboard,
   Briefcase,
@@ -24,10 +25,13 @@ import { useSession, useWorkspaceCan } from '~/app/session';
 import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useProjects } from '~/features/projects/hooks';
+import { projectTree } from '~/features/projects/tree';
+import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import { useUnreadCount } from '~/features/notifications/hooks';
 import { useDepartments } from '~/features/departments/hooks';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Avatar } from '~/ui/Avatar';
+import { ProjectIcon } from '~/ui/ProjectIcon';
 import { CountBadge } from '~/ui/Badge';
 import { IconButton } from '~/ui/Button';
 import { Tooltip } from '~/ui/Tooltip';
@@ -86,18 +90,22 @@ function NavItem({ to, icon, label, badge, index, collapsed, end, onClick }: Nav
 }
 
 /**
- * A project reads as a colour chip in the rail, not as an icon: at 12px a
- * bordered square of the project's own colour is far easier to find again
- * than a glyph, and it keeps the rail on the same hard-edged grammar as the
- * rest of the product.
+ * A project in the rail is its own icon in its own colour — the same pair it
+ * has in pickers and lists, so a project looks the same wherever it is met.
+ * (It used to be a bare colour chip; with a dozen projects the colours ran
+ * out before the projects did.)
+ *
+ * On the ink plate of the current item the icon takes the plate's text
+ * colour: several project colours are too dark to read on ink.
  */
-function ProjectSwatch({ color }: { color?: string | null }) {
+function ProjectMark({ icon, color }: { icon: string; color?: string | null }) {
   return (
     <span
-      aria-hidden="true"
-      className="size-3 shrink-0 border-2 border-border-strong"
-      style={{ backgroundColor: color || 'var(--accent)' }}
-    />
+      className="flex text-[var(--project-color)] group-aria-[current=page]:text-current"
+      style={{ '--project-color': color || 'var(--accent)' } as React.CSSProperties}
+    >
+      <ProjectIcon icon={icon} size="sm" />
+    </span>
   );
 }
 
@@ -127,7 +135,20 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
   const systemProject = useMemo(() => projects?.find((p) => p.isSystem), [projects]);
   const realProjects = useMemo(() => (projects ?? []).filter((p) => !p.isSystem), [projects]);
   const favorites = useMemo(() => realProjects.filter((p) => p.isFavorite), [realProjects]);
-  const recent = useMemo(() => realProjects.slice(0, 8), [realProjects]);
+  // Subprojects sit under their project and open with its arrow.
+  const tree = useMemo(() => projectTree(realProjects).slice(0, 8), [realProjects]);
+  const hasBranches = tree.some((branch) => branch.children.length > 0);
+  const [openProjects, setOpenProjects] = useLocalStorage<string[]>('flowdesk.sidebar-open-projects', []);
+  const toggleBranch = (projectId: string) =>
+    setOpenProjects((open) => (open.includes(projectId) ? open.filter((id) => id !== projectId) : [...open, projectId]));
+
+  // Coming into a subproject by a link opens its branch, so the place one is
+  // in is always visible in the rail. After that the arrow is the user's.
+  const currentProjectId = useLocation().pathname.match(/^\/projects\/([^/]+)/)?.[1];
+  const currentParentId = realProjects.find((project) => project.id === currentProjectId)?.parentId ?? null;
+  useEffect(() => {
+    if (currentParentId) setOpenProjects((open) => (open.includes(currentParentId) ? open : [...open, currentParentId]));
+  }, [currentParentId, setOpenProjects]);
 
   if (!workspace || !user) return null;
 
@@ -310,7 +331,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
                 <NavItem
                   key={project.id}
                   to={`/projects/${project.id}`}
-                  icon={<ProjectSwatch color={project.color} />}
+                  icon={<ProjectMark icon={project.icon} color={project.color} />}
                   label={project.name}
                   collapsed={false}
                   onClick={onNavigate}
@@ -352,21 +373,70 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
                   }
                 />
               )}
-              {recent.map((project) => (
-                <NavItem
-                  key={project.id}
-                  to={`/projects/${project.id}`}
-                  icon={<ProjectSwatch color={project.color} />}
-                  label={project.name}
-                  collapsed={false}
-                  onClick={onNavigate}
-                  badge={
-                    project.openIssueCount ? (
-                      <span className="fd-num shrink-0 text-2xs opacity-60">{project.openIssueCount}</span>
-                    ) : undefined
-                  }
-                />
-              ))}
+              {tree.map(({ project, children }) => {
+                const expanded = children.length > 0 && openProjects.includes(project.id);
+                const row = (item: typeof project) => (
+                  <NavItem
+                    key={item.id}
+                    to={`/projects/${item.id}`}
+                    icon={<ProjectMark icon={item.icon} color={item.color} />}
+                    label={item.name}
+                    collapsed={false}
+                    onClick={onNavigate}
+                    badge={
+                      item.openIssueCount ? (
+                        <span className="fd-num shrink-0 text-2xs opacity-60">{item.openIssueCount}</span>
+                      ) : undefined
+                    }
+                  />
+                );
+                return (
+                  <div key={project.id}>
+                    <div className="flex items-stretch gap-0.5">
+                      <div className="min-w-0 flex-1">{row(project)}</div>
+                      {children.length > 0 ? (
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-label={
+                            expanded ? `Свернуть подпроекты «${project.name}»` : `Показать подпроекты «${project.name}»`
+                          }
+                          title={expanded ? 'Свернуть подпроекты' : `Подпроекты: ${children.length}`}
+                          onClick={() => toggleBranch(project.id)}
+                          className="flex w-5 shrink-0 items-center justify-center text-text-subtle hover:bg-surface-hover hover:text-text"
+                        >
+                          <ChevronRight className={clsx('size-3.5 transition-transform', expanded && 'rotate-90')} />
+                        </button>
+                      ) : (
+                        // Keeps the figures of all rows in one column once any project has an arrow.
+                        hasBranches && <span className="w-5 shrink-0" aria-hidden="true" />
+                      )}
+                    </div>
+                    {expanded && (
+                      <div
+                        role="group"
+                        aria-label={`Подпроекты «${project.name}»`}
+                        className="mt-0.5 mr-5 ml-3.5 flex flex-col gap-0.5 border-l-2 border-border-strong pl-1.5"
+                      >
+                        {children.map(row)}
+                        {canCreateProject && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigate(`/projects/new?parent=${project.id}`);
+                              onNavigate?.();
+                            }}
+                            className="flex items-center gap-2.5 border-2 border-transparent px-2 py-1 text-left text-xs text-text-subtle hover:bg-surface-hover hover:text-text"
+                          >
+                            <Plus className="size-3.5" />
+                            Подпроект
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {realProjects.length === 0 && projects && (
                 <p className="px-2 py-2 text-xs text-text-subtle">Проектов пока нет</p>
               )}

@@ -60,6 +60,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           void queryClient.invalidateQueries({ queryKey: ['issues'] });
           void queryClient.invalidateQueries({ queryKey: qk.issue(event.payload.issueId) });
           void queryClient.invalidateQueries({ queryKey: qk.issuesByKey });
+          // The open-task figures in the sidebar: a colleague closing a task moves them too.
+          void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
           break;
         }
         case RealtimeEventType.COMMENT_CREATED:

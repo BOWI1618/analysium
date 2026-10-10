@@ -1,4 +1,4 @@
-import { Outlet, useParams, useSearchParams } from 'react-router-dom';
+import { Outlet, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { carriedFilters } from '~/features/issues/useFilterState';
 import {
   CalendarDays,
@@ -6,18 +6,20 @@ import {
   GanttChartSquare,
   LayoutList,
   ListTodo,
+  FolderPlus,
   PieChart,
+  Plus,
   Settings,
   Star,
   StarOff,
 } from 'lucide-react';
 import { Permission } from '@flowdesk/contracts';
-import { useSession } from '~/app/session';
-import { useProject, useToggleFavorite } from '~/features/projects/hooks';
+import { useSession, useWorkspaceCan } from '~/app/session';
+import { useProject, useProjects, useToggleFavorite } from '~/features/projects/hooks';
 import { Topbar } from '~/components/Topbar';
 import { RouteTabs, type TabItem } from '~/ui/Tabs';
 import { ErrorState, Skeleton } from '~/ui/Feedback';
-import { IconButton } from '~/ui/Button';
+import { Button, IconButton } from '~/ui/Button';
 import { ProjectIcon } from '~/ui/ProjectIcon';
 
 /**
@@ -28,6 +30,9 @@ export function ProjectLayout() {
   const { projectId = '' } = useParams();
   const [searchParams] = useSearchParams();
   const { workspace } = useSession();
+  const navigate = useNavigate();
+  const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
+  const { data: projects } = useProjects(workspace?.id ?? '');
   const { data: project, isLoading, error, refetch } = useProject(projectId);
   const toggleFavorite = useToggleFavorite(workspace?.id ?? '');
 
@@ -56,6 +61,8 @@ export function ProjectLayout() {
   }
 
   const base = `/projects/${project.id}`;
+  // Named in the breadcrumbs when the viewer can open it; otherwise the subproject reads as a project of its own.
+  const parent = project.parentId ? projects?.find((candidate) => candidate.id === project.parentId) : undefined;
   // The views that show tasks hand the current filter to each other; analytics
   // and settings are not filtered lists and get a clean address.
   const filtered = carriedFilters(searchParams);
@@ -78,10 +85,36 @@ export function ProjectLayout() {
       <Topbar
         breadcrumbs={[
           ...(project.isSystem ? [] : [{ label: 'Проекты', to: '/projects' }]),
+          ...(parent ? [{ label: parent.name, to: `/projects/${parent.id}` }] : []),
           { label: project.name, icon: <ProjectIcon icon={project.icon} color={project.color} size="sm" /> },
         ]}
         actions={
           project.isSystem ? undefined : (
+          <>
+          {/* One level deep: a subproject is added to a project of its own. */}
+          {canCreateProject && !project.parentId && !project.isArchived && (
+            <>
+              {/* In words where the bar has room for them; as an icon where the breadcrumbs need it more. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="hidden xl:inline-flex"
+                iconLeft={<Plus className="size-3.5" />}
+                onClick={() => navigate(`/projects/new?parent=${project.id}`)}
+              >
+                Подпроект
+              </Button>
+              <span className="hidden sm:inline-flex xl:hidden">
+                <IconButton
+                  label="Новый подпроект"
+                  size="sm"
+                  onClick={() => navigate(`/projects/new?parent=${project.id}`)}
+                >
+                  <FolderPlus className="size-4" />
+                </IconButton>
+              </span>
+            </>
+          )}
           <IconButton
             label={project.isFavorite ? 'Убрать из избранного' : 'В избранное'}
             size="sm"
@@ -93,6 +126,7 @@ export function ProjectLayout() {
               <StarOff className="size-4" />
             )}
           </IconButton>
+          </>
           )
         }
       />

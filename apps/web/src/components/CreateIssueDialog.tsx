@@ -26,7 +26,7 @@ import {
 } from '~/features/projects/hooks';
 import { useMembers } from '~/features/members/hooks';
 import { useSprints } from '~/features/sprints/hooks';
-import { useCreateIssue, useIssueList } from '~/features/issues/hooks';
+import { useCreateIssue } from '~/features/issues/hooks';
 import {
   clearIssueDraft,
   readIssueDraft,
@@ -79,7 +79,6 @@ export function CreateIssueDialog() {
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const [sprintId, setSprintId] = useState<string | null>(null);
-  const [epicId, setEpicId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [dueHasTime, setDueHasTime] = useState(false);
   const [watcherIds, setWatcherIds] = useState<string[]>([]);
@@ -110,12 +109,6 @@ export function CreateIssueDialog() {
   const { data: project } = useProject(effectiveProjectId || undefined);
   const { data: workspaceMembers } = useMembers(workspace?.id);
   const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? effectiveProjectId : undefined);
-  const { data: epicPages } = useIssueList(
-    { projectId: effectiveProjectId || undefined },
-    { type: ['EPIC'], includeDone: true },
-    { enabled: Boolean(effectiveProjectId) },
-  );
-  const epics = useMemo(() => epicPages?.pages.flatMap((p) => p.items) ?? [], [epicPages]);
 
   const { data: templates } = useIssueTemplates(workspace?.id, open);
   const createIssue = useCreateIssue();
@@ -186,7 +179,6 @@ export function CreateIssueDialog() {
     setProjectId(seed?.projectId && list?.some((p) => p.id === seed.projectId && !p.isSystem) ? seed.projectId : '');
     setStatusId(seed?.statusId);
     setSprintId(seed?.sprintId ?? null);
-    setEpicId(seed?.epicId ?? null);
     setTitle('');
     setDescription(EMPTY_DOC);
     releaseImages();
@@ -234,7 +226,6 @@ export function CreateIssueDialog() {
     setProjectId(list?.some((p) => p.id === draft.projectId && !p.isSystem) ? draft.projectId : '');
     setStatusId(draft.statusId);
     setSprintId(draft.sprintId);
-    setEpicId(draft.epicId);
     setTitle(draft.title);
     setDescription(draft.description ?? EMPTY_DOC);
     setType(draft.type);
@@ -307,7 +298,6 @@ export function CreateIssueDialog() {
         labelIds,
         watcherIds,
         sprintId,
-        epicId,
         dueDate,
         dueHasTime,
         startDate,
@@ -333,7 +323,6 @@ export function CreateIssueDialog() {
     labelIds,
     watcherIds,
     sprintId,
-    epicId,
     dueDate,
     dueHasTime,
     startDate,
@@ -420,7 +409,6 @@ export function CreateIssueDialog() {
       ...(labelIds.length ? { labelIds } : {}),
       ...(allowedWatcherIds.length ? { watcherIds: allowedWatcherIds } : {}),
       ...(sprintId ? { sprintId } : {}),
-      ...(epicId ? { epicId } : {}),
       ...(defaults?.parentId ? { parentId: defaults.parentId } : {}),
       ...(dueDate ? { dueDate, dueHasTime } : {}),
       ...(startDate ? { startDate, startHasTime } : {}),
@@ -545,12 +533,11 @@ export function CreateIssueDialog() {
             projects={regularProjects}
             value={projectId}
             onChange={(next) => {
-              // Statuses, labels, epics and sprints belong to a project: a
-              // choice made for one means nothing in another.
+              // Statuses, labels and sprints belong to a project: a choice
+              // made for one means nothing in another.
               if (next !== projectId) {
                 setStatusId(undefined);
                 setLabelIds([]);
-                setEpicId(null);
                 setSprintId(null);
               }
               setProjectId(next);
@@ -746,22 +733,6 @@ export function CreateIssueDialog() {
                     {sprint.name}
                   </option>
                 ))}
-            </select>
-          )}
-
-          {epics.length > 0 && type !== 'EPIC' && (
-            <select
-              value={epicId ?? ''}
-              onChange={(event) => setEpicId(event.target.value || null)}
-              aria-label="Эпик"
-              className="h-7 max-w-40 rounded-md border-2 border-border-strong bg-surface px-2 text-xs hover:bg-surface-hover hover:shadow-xs focus:border-accent focus:outline-none"
-            >
-              <option value="">Без эпика</option>
-              {epics.map((epic) => (
-                <option key={epic.id} value={epic.id}>
-                  {epic.title}
-                </option>
-              ))}
             </select>
           )}
 

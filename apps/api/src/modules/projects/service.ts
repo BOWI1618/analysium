@@ -27,6 +27,7 @@ const projectSelect = {
   projectType: true,
   isArchived: true,
   isSystem: true,
+  parentId: true,
   createdAt: true,
   updatedAt: true,
   lead: { select: { id: true, name: true, email: true, avatarUrl: true } },
@@ -50,8 +51,10 @@ export async function listProjects(
       members: { where: { userId: actor.userId }, select: { role: true } },
       // Same population as openIssueCount below: the UI subtracts one from the
       // other to show progress, so a total that counted archived issues would
-      // silently inflate "готово".
-      _count: { select: { issues: { where: { archivedAt: null } } } },
+      // silently inflate "готово". Tasks only: a subtask is a part of its task,
+      // and counting the parts next to the whole made a project with five tasks
+      // read as one with twenty.
+      _count: { select: { issues: { where: { archivedAt: null, parentId: null } } } },
     },
   });
 
@@ -65,6 +68,7 @@ export async function listProjects(
       where: {
         projectId: { in: projects.map((p) => p.id) },
         archivedAt: null,
+        parentId: null,
         status: { category: { notIn: ['COMPLETED', 'CANCELED'] } },
       },
       _count: { _all: true },
@@ -85,6 +89,7 @@ export async function listProjects(
     projectType: p.projectType,
     isArchived: p.isArchived,
     isSystem: p.isSystem,
+    parentId: p.parentId,
     lead: toUserSummary(p.lead),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -116,6 +121,7 @@ export async function createProject(
     key = uniqueProjectKey(input.name, new Set(taken.map((p) => p.key)));
   }
   if (input.leadId) await assertLeadIsMember(actor.workspaceId, input.leadId);
+  if (input.parentId) await assertParentProject(actor, input.parentId);
 
   const project = await prisma.$transaction(async (tx) => {
     const created = await tx.project.create({
@@ -128,6 +134,7 @@ export async function createProject(
         color: input.color ?? '#005dac',
         projectType: input.projectType as never,
         leadId: input.leadId ?? actor.userId,
+        parentId: input.parentId ?? null,
       },
     });
 
@@ -161,8 +168,39 @@ export async function createProject(
     metadata: { key: project.key, name: project.name },
     ip,
   });
+  // Colleagues see the new project — or the new subproject under its parent —
+  // without reloading.
+  emit(RealtimeEventType.PROJECT_UPDATED, {
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    payload: { projectId: project.id },
+  });
 
   return getProject({ ...actor, projectRole: 'LEAD' }, project.id);
+}
+
+/**
+ * A subproject hangs one level under an ordinary project of the same
+ * workspace — one the actor can open. `projectId` is the project being moved,
+ * absent when it is only being created.
+ */
+async function assertParentProject(actor: ActorContext, parentId: string, projectId?: string): Promise<void> {
+  const refuse = (message: string) => badRequest(message, { parentId: message });
+  if (parentId === projectId) throw refuse('Проект не может быть подпроектом самого себя');
+
+  const allowed = await visibleProjectIds(actor);
+  const parent = await prisma.project.findFirst({
+    where: { id: parentId, workspaceId: actor.workspaceId },
+    select: { parentId: true, isSystem: true, isArchived: true },
+  });
+  if (!parent || parent.isSystem || (allowed !== 'ALL' && !allowed.includes(parentId))) {
+    throw refuse('Основной проект не найден');
+  }
+  if (parent.isArchived) throw refuse('Основной проект в архиве — верните его или выберите другой');
+  if (parent.parentId) throw refuse('У подпроекта не может быть своих подпроектов — выберите основной проект');
+  if (projectId && (await prisma.project.count({ where: { parentId: projectId } })) > 0) {
+    throw refuse('У проекта есть свои подпроекты — сначала сделайте их самостоятельными');
+  }
 }
 
 /**
@@ -200,8 +238,10 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
       },
       // Same population as openIssueCount below: the UI subtracts one from the
       // other to show progress, so a total that counted archived issues would
-      // silently inflate "готово".
-      _count: { select: { issues: { where: { archivedAt: null } } } },
+      // silently inflate "готово". Tasks only: a subtask is a part of its task,
+      // and counting the parts next to the whole made a project with five tasks
+      // read as one with twenty.
+      _count: { select: { issues: { where: { archivedAt: null, parentId: null } } } },
     },
   });
   if (!project) throw notFound('Проект');
@@ -214,7 +254,7 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
       select: { id: true },
     }),
     prisma.issue.count({
-      where: { projectId, archivedAt: null, status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
+      where: { projectId, archivedAt: null, parentId: null, status: { category: { notIn: ['COMPLETED', 'CANCELED'] } } },
     }),
     prisma.issue.groupBy({
       by: ['statusId'],
@@ -237,6 +277,7 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
     projectType: project.projectType,
     isArchived: project.isArchived,
     isSystem: project.isSystem,
+    parentId: project.parentId,
     lead: toUserSummary(project.lead),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
@@ -335,6 +376,7 @@ export async function updateProject(
   assertCan(actor, Permission.PROJECT_UPDATE);
   await assertNotSystem(projectId);
   if (typeof patch.leadId === 'string') await assertLeadIsMember(actor.workspaceId, patch.leadId);
+  if (typeof patch.parentId === 'string') await assertParentProject(actor, patch.parentId, projectId);
   await prisma.project.update({ where: { id: projectId }, data: patch as never });
   audit({
     workspaceId: actor.workspaceId,

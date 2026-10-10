@@ -163,6 +163,18 @@ function invalidateIssueViews(queryClient: ReturnType<typeof useQueryClient>, pr
   void queryClient.invalidateQueries({ queryKey: qk.issuesByKey });
   if (projectId) void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
   else void queryClient.invalidateQueries({ queryKey: ['project'] });
+  invalidateProjectFigures(queryClient);
+}
+
+/**
+ * The number of open tasks next to a project in the sidebar comes with the
+ * list of projects. A task closed, reopened, moved or deleted has to move it
+ * at once: the figure used to stay as it was until the page was reloaded.
+ */
+function invalidateProjectFigures(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey[0] === 'workspace' && query.queryKey[2] === 'projects',
+  });
 }
 
 export function useCreateIssue() {
@@ -375,6 +387,8 @@ export function useMoveIssue(projectId: string, filters: IssueFilters) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       void queryClient.invalidateQueries({ queryKey: ['issues'] });
+      // A card dragged into «Готово» is one open task fewer in the sidebar.
+      invalidateProjectFigures(queryClient);
     },
   });
 }

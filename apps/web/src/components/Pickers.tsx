@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { projectsInTreeOrder } from '~/features/projects/tree';
 import clsx from 'clsx';
 import {
   addDays,
@@ -116,7 +117,8 @@ export function TypePicker({ value, onChange, disabled, children, align = 'start
       {!disabled && (
         <MenuContent align={align} label="Изменить тип задачи" width={180}>
           <MenuLabel>Тип</MenuLabel>
-          {ISSUE_TYPES.filter((t) => t !== 'SUBTASK').map((type) => (
+          {/* A subtask is made from its parent, not picked as a type; epics are gone from the product. */}
+          {ISSUE_TYPES.filter((t) => t !== 'SUBTASK' && t !== 'EPIC').map((type) => (
             <MenuItem
               key={type}
               icon={<IssueTypeIcon type={type as IssueType} withTooltip={false} className="size-3.5" />}
@@ -225,7 +227,7 @@ export function ProjectPicker({
   align = 'start',
   noneLabel = 'Без проекта',
 }: {
-  projects: Pick<ProjectDto, 'id' | 'name' | 'key' | 'icon' | 'color'>[];
+  projects: (Pick<ProjectDto, 'id' | 'name' | 'key' | 'icon' | 'color'> & { parentId?: string | null })[];
   value: string;
   onChange: (projectId: string) => void;
   children: ReactNode;
@@ -235,10 +237,14 @@ export function ProjectPicker({
 }) {
   const [term, setTerm] = useState('');
 
+  // Subprojects follow their project, as in the sidebar. A search result
+  // whose project did not match stands on its own.
   const filtered = useMemo(() => {
     const q = term.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter((p) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().startsWith(q));
+    const matching = q
+      ? projects.filter((p) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().startsWith(q))
+      : projects;
+    return projectsInTreeOrder(matching);
   }, [projects, term]);
 
   return (
@@ -264,7 +270,7 @@ export function ProjectPicker({
         {filtered.length === 0 ? (
           <p className="px-2 py-3 text-center text-xs text-text-subtle">Проектов не найдено</p>
         ) : (
-          filtered.map((project) => (
+          filtered.map(({ project, parent }) => (
             <MenuItem
               key={project.id}
               icon={<ProjectIcon icon={project.icon} color={project.color} size="sm" />}
@@ -272,6 +278,7 @@ export function ProjectPicker({
               onSelect={() => onChange(project.id)}
               shortcut={<span className="fd-key">{project.key}</span>}
             >
+              {parent && <span className="text-text-subtle">↳ </span>}
               {project.name}
             </MenuItem>
           ))

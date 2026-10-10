@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { ApiError } from '~/lib/api';
 import { useSession } from '~/app/session';
 import { useMembers } from '~/features/members/hooks';
-import { useCreateProject } from '~/features/projects/hooks';
+import { useCreateProject, useProjects } from '~/features/projects/hooks';
 import { Topbar } from '~/components/Topbar';
 import { Button } from '~/ui/Button';
 import { Input, Select, Textarea } from '~/ui/Input';
@@ -18,7 +18,12 @@ export function NewProjectPage() {
   const workspaceId = workspace?.id ?? '';
 
   const { data: members } = useMembers(workspaceId);
+  const { data: projects } = useProjects(workspaceId);
   const createProject = useCreateProject(workspaceId);
+  // «Подпроект» on a project's page leads here with that project chosen.
+  const [searchParams] = useSearchParams();
+  // One level deep: only a project of its own can take a subproject.
+  const parents = (projects ?? []).filter((project) => !project.parentId);
 
   const [form, setForm] = useState({
     name: '',
@@ -26,7 +31,9 @@ export function NewProjectPage() {
     icon: PROJECT_ICONS[0]!.name,
     color: PROJECT_COLORS[0]!.value,
     leadId: '',
+    parentId: searchParams.get('parent') ?? '',
   });
+  const parent = parents.find((project) => project.id === form.parentId);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const leaveGuard = useLeavePageGuard(Boolean(form.name.trim() || form.description.trim()));
 
@@ -43,6 +50,8 @@ export function NewProjectPage() {
         // Sprints are switched on later in the project settings, when wanted.
         projectType: 'KANBAN',
         leadId: form.leadId || null,
+        // Sent only once the list has confirmed it: a stale id from the address is dropped.
+        parentId: parent?.id ?? null,
       });
       leaveGuard.allowLeave();
       navigate(`/projects/${project.id}`);
@@ -54,19 +63,29 @@ export function NewProjectPage() {
   return (
     <>
       {leaveGuard.dialog}
-      <Topbar breadcrumbs={[{ label: 'Проекты', to: '/projects' }, { label: 'Новый проект' }]} />
+      <Topbar
+        breadcrumbs={[
+          { label: 'Проекты', to: '/projects' },
+          ...(parent ? [{ label: parent.name, to: `/projects/${parent.id}` }] : []),
+          { label: parent ? 'Новый подпроект' : 'Новый проект' },
+        ]}
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-bg scrollbar-thin">
         <form className="mx-auto max-w-xl space-y-6 p-4 sm:p-6 lg:p-8" onSubmit={submit}>
           <Masthead
             size="md"
-            kicker="новый проект"
+            kicker={parent ? 'новый подпроект' : 'новый проект'}
             title={
               <>
-                Заводим <Marker>проект</Marker>
+                Заводим <Marker>{parent ? 'подпроект' : 'проект'}</Marker>
               </>
             }
-            note="У проекта своя доска, рабочий процесс и метки. Всё это можно изменить позже."
+            note={
+              parent
+                ? `У подпроекта своя доска, статусы, метки и аналитика. В меню слева он стоит под проектом «${parent.name}».`
+                : 'У проекта своя доска, рабочий процесс и метки. Всё это можно изменить позже.'
+            }
           />
 
           <div className="space-y-3 border-2 border-border-strong bg-surface p-4 shadow-lg">
@@ -141,6 +160,27 @@ export function NewProjectPage() {
               </div>
             </fieldset>
 
+            {parents.length > 0 && (
+              <div>
+                <Select
+                  label="В составе проекта"
+                  value={parent?.id ?? ''}
+                  error={fieldErrors.parentId}
+                  onChange={(event) => setForm((f) => ({ ...f, parentId: (event.target as HTMLSelectElement).value }))}
+                >
+                  <option value="">Самостоятельный проект</option>
+                  {parents.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </Select>
+                <p className="mt-1 text-xs text-text-subtle">
+                  Подпроект — такой же проект, только в меню он раскрывается под основным. Доступ и задачи у него свои.
+                </p>
+              </div>
+            )}
+
             <Select
               label="Ведущий проекта"
               value={form.leadId}
@@ -166,7 +206,7 @@ export function NewProjectPage() {
               loading={createProject.isPending}
               disabled={!form.name.trim()}
             >
-              Создать проект
+              {parent ? 'Создать подпроект' : 'Создать проект'}
             </Button>
           </div>
         </form>

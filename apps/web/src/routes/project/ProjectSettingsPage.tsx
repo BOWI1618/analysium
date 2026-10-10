@@ -13,6 +13,7 @@ import {
   useDeleteProject,
   useDeleteStatus,
   useProject,
+  useProjects,
   useRemoveProjectMember,
   useReorderStatuses,
   useUpdateLabel,
@@ -153,9 +154,15 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
     icon: project.icon,
     color: project.color,
     projectType: project.projectType,
+    parentId: project.parentId ?? '',
   });
+  // Where the project stands among the others: under one of them, or on its own.
+  const { data: projects } = useProjects(workspaceId);
+  const hasSubprojects = (projects ?? []).some((candidate) => candidate.parentId === project.id);
+  const parents = (projects ?? []).filter((candidate) => !candidate.parentId && candidate.id !== project.id);
 
   const dirty =
+    form.parentId !== (project.parentId ?? '') ||
     form.name !== project.name ||
     form.description !== (project.description ?? '') ||
     form.icon !== project.icon ||
@@ -261,6 +268,29 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
           placeholder="Для чего этот проект?"
         />
 
+        {(parents.length > 0 || project.parentId) && (
+          <div>
+            <Select
+              label="В составе проекта"
+              value={form.parentId}
+              disabled={hasSubprojects}
+              onChange={(event) => setForm((f) => ({ ...f, parentId: (event.target as HTMLSelectElement).value }))}
+            >
+              <option value="">Самостоятельный проект</option>
+              {parents.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.name}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-text-subtle">
+              {hasSubprojects
+                ? 'У этого проекта есть свои подпроекты, поэтому сам он подпроектом стать не может.'
+                : 'Подпроект в меню слева раскрывается под основным проектом. Задачи, статусы и доступ остаются его собственными.'}
+            </p>
+          </div>
+        )}
+
         {/* Sprints are the one thing a "methodology" changes: the backlog tab,
             the sprint field on tasks and the sprint charts. Everything else is
             the same for every project, so this is a switch, not a choice of three. */}
@@ -294,6 +324,8 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
                 icon: form.icon,
                 color: form.color,
                 projectType: form.projectType,
+                // Only when it was changed: an untouched field must not move the project.
+                ...(form.parentId !== (project.parentId ?? '') ? { parentId: form.parentId || null } : {}),
               })
             }
           >
@@ -754,8 +786,9 @@ function DangerSection({
       <section className="border-2 border-danger-border bg-danger-subtle p-4 shadow-sm">
         <h2 className="fd-eyebrow text-danger">Удалить проект</h2>
         <p className="mt-0.5 text-xs text-text-muted">
-          Безвозвратно удалит {pluralize(project.totalIssueCount ?? 0, ['задачу', 'задачи', 'задач'])}, их комментарии,
-          файлы и историю. Отменить нельзя.
+          Безвозвратно удалит {pluralize(project.totalIssueCount ?? 0, ['задачу', 'задачи', 'задач'])} вместе с
+          подзадачами, их комментарии, файлы и историю. Отменить нельзя. Подпроекты, если они есть, не удаляются —
+          они станут самостоятельными проектами.
         </p>
         <div className="mt-3 space-y-2">
           <Checkbox

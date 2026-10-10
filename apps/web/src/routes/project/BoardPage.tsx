@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   DndContext,
@@ -31,7 +31,7 @@ import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useProject } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
-import { useBoard, useIssueList, useMoveIssue, usePatchIssue } from '~/features/issues/hooks';
+import { useBoard, useMoveIssue, usePatchIssue } from '~/features/issues/hooks';
 import { useUpdateStatus } from '~/features/projects/hooks';
 import {
   AddColumn,
@@ -71,7 +71,6 @@ export function BoardPage() {
   const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? projectId : undefined);
   const boardQuery = useBoard(projectId, filters);
   const { data: board, isLoading, error, refetch, isFetching } = boardQuery;
-  const { data: epicPages } = useIssueList({ projectId }, { type: ['EPIC'], includeDone: true });
 
   const moveIssue = useMoveIssue(projectId, filters);
   const patchIssue = usePatchIssue();
@@ -83,10 +82,6 @@ export function BoardPage() {
   // The column a dragged card would land in, lit up so the move is obvious.
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
-  const epics = useMemo(
-    () => (epicPages?.pages.flatMap((p) => p.items) ?? []).map((e) => ({ id: e.id, title: e.title })),
-    [epicPages],
-  );
 
   const canMove = project?.permissions.includes(Permission.ISSUE_MOVE) ?? false;
   const canCreate = project?.permissions.includes(Permission.ISSUE_CREATE) ?? false;
@@ -184,7 +179,6 @@ export function BoardPage() {
         labels={project?.labels}
         members={project?.assignees}
         sprints={sprints}
-        epics={epics}
         currentUserId={user?.id ?? ''}
         sortOptions={false}
         trailing={

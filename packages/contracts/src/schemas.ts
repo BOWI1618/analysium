@@ -198,7 +198,9 @@ export const issueTemplateSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название шаблона').max(60),
   title: z.string().trim().min(1, 'Укажите, как назвать задачу').max(300),
   description: richDoc,
-  type: z.enum(ISSUE_TYPES.filter((type) => type !== 'SUBTASK') as [string, ...string[]]).default('TASK'),
+  type: z
+    .enum(ISSUE_TYPES.filter((type) => type !== 'SUBTASK' && type !== 'EPIC') as [string, ...string[]])
+    .default('TASK'),
   priority: z.enum(ISSUE_PRIORITIES as [string, ...string[]]).default('MEDIUM'),
   /** Days from the day the task is created to its deadline; `null` — no deadline. */
   dueInDays: z.number().int().min(0).max(365).nullable().optional(),
@@ -232,6 +234,8 @@ export const createProjectSchema = z.object({
   color: hexColor.optional(),
   projectType: z.enum(PROJECT_TYPES as [string, ...string[]]).default('KANBAN'),
   leadId: cuidLike.nullable().optional(),
+  /** The project this one is a subproject of; left out for a project of its own. */
+  parentId: cuidLike.nullable().optional(),
 });
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 
@@ -243,6 +247,8 @@ export const updateProjectSchema = z.object({
   projectType: z.enum(PROJECT_TYPES as [string, ...string[]]).optional(),
   leadId: cuidLike.nullable().optional(),
   isArchived: z.boolean().optional(),
+  /** Moves the project under another one, or — with `null` — makes it a project of its own again. */
+  parentId: cuidLike.nullable().optional(),
 });
 
 export const projectMemberSchema = z.object({
@@ -280,11 +286,19 @@ export const createLabelSchema = z.object({
 
 /* ----------------------------------------------------------------- issue */
 
+/**
+ * The types a task can be given. Epics are not among them any more: a large
+ * piece of work is a task with subtasks, and a second way to say the same
+ * thing only got in the way — an epic could not have subtasks at all. The
+ * value stays in the enum for what the history still mentions.
+ */
+const ASSIGNABLE_ISSUE_TYPES = ISSUE_TYPES.filter((type) => type !== 'EPIC') as [string, ...string[]];
+
 export const createIssueSchema = z.object({
   projectId: cuidLike,
   title: z.string().trim().min(1, 'Укажите название').max(300),
   description: richDoc,
-  type: z.enum(ISSUE_TYPES as [string, ...string[]]).default('TASK'),
+  type: z.enum(ASSIGNABLE_ISSUE_TYPES).default('TASK'),
   statusId: cuidLike.optional(),
   priority: z.enum(ISSUE_PRIORITIES as [string, ...string[]]).default('MEDIUM'),
   assigneeId: cuidLike.nullable().optional(),
@@ -327,7 +341,7 @@ export const updateIssueSchema = z
   .object({
     title: z.string().trim().min(1).max(300).optional(),
     description: richDoc,
-    type: z.enum(ISSUE_TYPES as [string, ...string[]]).optional(),
+    type: z.enum(ASSIGNABLE_ISSUE_TYPES).optional(),
     statusId: cuidLike.optional(),
     priority: z.enum(ISSUE_PRIORITIES as [string, ...string[]]).optional(),
     assigneeId: cuidLike.nullable().optional(),

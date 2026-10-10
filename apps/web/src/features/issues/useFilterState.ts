@@ -11,7 +11,6 @@ const ARRAY_KEYS = new Set([
   'type',
   'labelId',
   'sprintId',
-  'epicId',
   'projectId',
 ]);
 

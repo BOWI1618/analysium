@@ -235,16 +235,6 @@ export function CommandPalette() {
           run: () => navigate(`/projects/${project.id}`),
         });
       }
-      for (const epic of results.epics) {
-        searchCommands.push({
-          id: `epic-${epic.id}`,
-          label: epic.title,
-          hint: epic.issueKey,
-          icon: <Zap className="size-4" style={{ color: epic.color }} />,
-          group: 'Эпики',
-          run: () => openIssue(epic.id),
-        });
-      }
       for (const user of results.users) {
         searchCommands.push({
           id: `user-${user.id}`,

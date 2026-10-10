@@ -5,7 +5,7 @@ import { MessageSquare, Paperclip, ListChecks, Repeat, SquareCheck } from 'lucid
 import { Avatar } from '~/ui/Avatar';
 import { pluralize } from '~/lib/format';
 import { RECURRENCE_LABEL } from '~/lib/labels';
-import { DueDateChip, EpicChip, IssueTypeIcon, LabelChip, PriorityIcon } from './IssueMeta';
+import { DueDateChip, IssueTypeIcon, LabelChip, PriorityIcon } from './IssueMeta';
 import { DoneToggle, isClosedStatus } from './DoneToggle';
 
 /** What a board card shows, chosen in the board settings. */
@@ -13,7 +13,6 @@ export interface IssueCardFields {
   priority: boolean;
   type: boolean;
   labels: boolean;
-  epic: boolean;
   dueDate: boolean;
   assignee: boolean;
   /** Subtasks, comments and files. */
@@ -24,7 +23,6 @@ export const ALL_CARD_FIELDS: IssueCardFields = {
   priority: true,
   type: true,
   labels: true,
-  epic: true,
   dueDate: true,
   assignee: true,
   counters: true,
@@ -63,7 +61,6 @@ export const IssueCard = memo(function IssueCard({
     fields.counters &&
     (issue.commentCount > 0 || issue.attachmentCount > 0 || issue.subtaskCount > 0 || issue.checklistTotal > 0);
   const done = isClosedStatus(issue.status);
-  const epic = fields.epic ? issue.epic : null;
   const labels = fields.labels ? issue.labels : [];
 
   return (
@@ -112,10 +109,9 @@ export const IssueCard = memo(function IssueCard({
         {issue.title}
       </h3>
 
-      {/* Epic + labels */}
-      {(epic || labels.length > 0) && (
+      {/* Labels */}
+      {labels.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
-          {epic && <EpicChip epic={epic} />}
           {labels.slice(0, 3).map((label) => (
             <LabelChip key={label.id} label={label} size="sm" />
           ))}

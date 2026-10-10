@@ -13,7 +13,6 @@ import { Button } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '~/ui/Menu';
 import {
   DueDateChip,
-  EpicChip,
   ISSUE_TYPE_META,
   IssueTypeIcon,
   LabelChip,
@@ -30,7 +29,6 @@ export type ListColumn =
   | 'assignee'
   | 'reporter'
   | 'labels'
-  | 'epic'
   | 'startDate'
   | 'dueDate'
   | 'storyPoints'
@@ -46,7 +44,6 @@ export const ALL_COLUMNS: { key: ListColumn; label: string; width: string }[] = 
   { key: 'assignee', label: 'Исполнитель', width: 'w-8' },
   { key: 'reporter', label: 'Автор', width: 'w-8' },
   { key: 'labels', label: 'Метки', width: 'w-40' },
-  { key: 'epic', label: 'Эпик', width: 'w-32' },
   { key: 'project', label: 'Проект', width: 'w-24' },
   { key: 'startDate', label: 'Начало', width: 'w-20' },
   { key: 'dueDate', label: 'Срок', width: 'w-24' },
@@ -64,7 +61,6 @@ const COLUMN_PX: Record<ListColumn, number> = {
   assignee: 24,
   reporter: 24,
   labels: 128,
-  epic: 128,
   project: 96,
   startDate: 96,
   // Fits the longest deadline as it is written: «вт, 14 окт., 09:00» with its icon.
@@ -115,7 +111,6 @@ export function listMinStyle(columns: ListColumn[], selectable = true, widths: C
 const RESIZABLE: ReadonlySet<ListColumn> = new Set([
   'type',
   'labels',
-  'epic',
   'project',
   'startDate',
   'dueDate',
@@ -301,8 +296,12 @@ export const IssueRow = memo(function IssueRow({
               {issue.parent.issueKey} ›
             </span>
           )}
-          {/* A long name is cut to one line here; the pointer shows all of it. */}
-          <span title={issue.title}>{issue.title}</span>
+          {/* A long name is cut to one line here; the pointer shows all of it.
+              A closed task is crossed out, as on the board and in the calendar:
+              what is done reads as done without looking at the status column. */}
+          <span title={issue.title} className={clsx(isClosedStatus(issue.status) && 'text-text-subtle line-through')}>
+            {issue.title}
+          </span>
           {/* Why the task sits still: it cannot start before another one is finished. */}
           {issue.blockedBy.length > 0 && !isClosedStatus(issue.status) && (
             <span
@@ -375,11 +374,6 @@ export const IssueRow = memo(function IssueRow({
         </span>
       )}
 
-      {show('epic') && (
-        <span style={sized('epic')} className="hidden w-32 shrink-0 overflow-hidden sm:block">
-          {issue.epic && <EpicChip epic={issue.epic} />}
-        </span>
-      )}
 
       {show('project') && (
         <span style={sized('project')} className="hidden w-24 shrink-0 items-center gap-1 truncate text-2xs text-text-subtle sm:flex" title={issue.project.name}>
@@ -610,7 +604,6 @@ export function IssueRowHeader({
       <span className="min-w-0 flex-1 sm:min-w-24 xl:min-w-40">Задача</span>
       {show('type') && cell('type', 'hidden w-24 sm:block', 'Тип')}
       {show('labels') && cell('labels', 'hidden w-32 sm:block', 'Метки')}
-      {show('epic') && cell('epic', 'hidden w-32 sm:block', 'Эпик')}
       {show('project') && cell('project', 'hidden w-24 sm:block', 'Проект')}
       {show('startDate') && cell('startDate', 'hidden w-24 text-right sm:block', 'Начало')}
       {show('dueDate') && cell('dueDate', 'hidden w-36 text-right sm:block', 'Срок')}

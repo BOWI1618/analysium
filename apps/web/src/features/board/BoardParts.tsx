@@ -398,7 +398,6 @@ const FIELD_LABELS: { key: keyof IssueCardFields; label: string }[] = [
   { key: 'priority', label: 'Приоритет' },
   { key: 'type', label: 'Тип' },
   { key: 'labels', label: 'Метки' },
-  { key: 'epic', label: 'Эпик' },
   { key: 'counters', label: 'Подзадачи, комментарии, файлы' },
 ];
 

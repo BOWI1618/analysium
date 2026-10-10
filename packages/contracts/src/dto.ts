@@ -125,6 +125,8 @@ export interface ProjectDto {
   isArchived: boolean;
   /** The workspace's list of tasks without a project — not a project to people. */
   isSystem: boolean;
+  /** Set on a subproject: the project it is shown under in the navigation. */
+  parentId: string | null;
   lead: UserSummaryDto | null;
   createdAt: string;
   updatedAt: string;
