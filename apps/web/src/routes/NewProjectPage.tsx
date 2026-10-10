@@ -9,6 +9,7 @@ import { Topbar } from '~/components/Topbar';
 import { Button } from '~/ui/Button';
 import { Input, Select, Textarea } from '~/ui/Input';
 import { PROJECT_ICONS, PROJECT_COLORS } from '~/lib/projectMeta';
+import { ProjectColorPicker } from '~/components/ProjectColorPicker';
 import { Marker, Masthead } from '~/ui/Masthead';
 import { useLeavePageGuard } from '~/lib/hooks/useLeavePageGuard';
 
@@ -136,28 +137,7 @@ export function NewProjectPage() {
 
             <fieldset>
               <legend className="mb-1.5 text-xs font-bold text-text">Цвет</legend>
-              <div className="flex flex-wrap gap-2">
-                {PROJECT_COLORS.map(({ value, label }) => {
-                  const selected = form.color === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, color: value }))}
-                      aria-pressed={selected}
-                      aria-label={`Цвет: ${label}`}
-                      title={label}
-                      className="size-7 border-2 border-border-strong"
-                      style={{
-                        backgroundColor: value,
-                        boxShadow: selected
-                          ? `0 0 0 2px var(--surface), 0 0 0 4px var(--border-strong)`
-                          : undefined,
-                      }}
-                    />
-                  );
-                })}
-              </div>
+              <ProjectColorPicker value={form.color} onChange={(color) => setForm((f) => ({ ...f, color }))} />
             </fieldset>
 
             {parents.length > 0 && (

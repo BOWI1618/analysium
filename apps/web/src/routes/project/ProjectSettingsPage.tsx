@@ -29,7 +29,8 @@ import { ErrorState, Skeleton } from '~/ui/Feedback';
 import { StatusDot } from '~/components/IssueMeta';
 import { PROJECT_ROLE_LABEL } from '~/lib/labels';
 import { pluralize } from '~/lib/format';
-import { PROJECT_ICONS, PROJECT_COLORS } from '~/lib/projectMeta';
+import { PROJECT_ICONS } from '~/lib/projectMeta';
+import { ProjectColorPicker } from '~/components/ProjectColorPicker';
 
 const SECTIONS = ['general', 'workflow', 'labels', 'members', 'danger'] as const;
 type Section = (typeof SECTIONS)[number];
@@ -169,7 +170,6 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
     form.color !== project.color ||
     form.projectType !== project.projectType;
 
-  const isPresetColor = PROJECT_COLORS.some((c) => c.value === form.color);
   const isPresetIcon = PROJECT_ICONS.some((i) => i.name === form.icon);
 
   return (
@@ -232,33 +232,7 @@ function GeneralSection({ project, workspaceId }: { project: Project; workspaceI
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          {PROJECT_COLORS.map(({ value, label }) => {
-            const selected = form.color === value;
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, color: value }))}
-                aria-pressed={selected}
-                aria-label={`Цвет: ${label}`}
-                title={label}
-                className="size-7 border-2 border-border-strong"
-                style={{
-                  backgroundColor: value,
-                  boxShadow: selected ? `0 0 0 2px var(--surface), 0 0 0 4px var(--border-strong)` : undefined,
-                }}
-              />
-            );
-          })}
-          {!isPresetColor && form.color && (
-            <span
-              className="size-7 border-2 border-border-strong"
-              style={{ backgroundColor: form.color }}
-              title={`Свой цвет: ${form.color}`}
-            />
-          )}
-        </div>
+        <ProjectColorPicker value={form.color} onChange={(color) => setForm((f) => ({ ...f, color }))} />
 
         <Textarea
           label="Описание"

@@ -122,3 +122,25 @@ test.describe('типы задач', () => {
     expect((await created.json()).issueKey).toBe(`${task.issueKey}.1`);
   });
 });
+
+test.describe('цвет проекта', () => {
+  test('кроме предложенных цветов можно выбрать любой свой', async ({ page }) => {
+    await register(page, 'Проверяющий Цвета');
+    await page.goto('/projects/new');
+    await page.getByLabel('Название').fill('Проект своего цвета');
+    // The last square opens the full palette; the colour picked becomes the chosen one.
+    await page.getByLabel('Свой цвет').fill('#8a2be2');
+    await expect(page.getByText('#8a2be2')).toBeVisible();
+    await page.getByRole('button', { name: 'Создать проект' }).click();
+    await expect(page).toHaveURL(/\/projects\/(?!new)[^/]+/, { timeout: 15_000 });
+
+    const session = await (await page.request.get('/api/v1/auth/session')).json();
+    const projects = await (await page.request.get(`/api/v1/workspaces/${session.workspaces[0].id}/projects`)).json();
+    expect(projects.find((project: { name: string }) => project.name === 'Проект своего цвета').color).toBe('#8a2be2');
+
+    // A palette colour is still one click away, in the settings too.
+    await page.getByRole('link', { name: 'Настройки' }).click();
+    await page.getByRole('button', { name: 'Цвет: Зелёный' }).click();
+    await expect(page.getByRole('button', { name: 'Цвет: Зелёный' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
