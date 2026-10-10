@@ -75,8 +75,13 @@ export function viewPath(view: SavedViewDto): string | null {
       return withSearch('/my-work');
     case 'EMPLOYEE':
       return withSearch('/employee-work');
-    case 'PLANNING':
-      return withSearch('/planning');
+    case 'PLANNING': {
+      // Views are saved on the «Без исполнителя» tab; one saved before the
+      // tabs were named in the address has to land there as well.
+      const params = viewSearchParams(view);
+      params.set('mode', 'pool');
+      return `/planning?${params.toString()}`;
+    }
     case 'DEPARTMENT':
       return withSearch('/department-work');
     default:

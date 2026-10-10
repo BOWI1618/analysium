@@ -432,11 +432,66 @@ export interface DashboardDto {
  * A department of the workspace: who leads it and who is in it. The list is
  * kept by administrators; it says nothing about access to projects or tasks.
  */
+/** One person's place in a department: a title and an immediate manager, both optional. */
+export interface DepartmentPlaceDto {
+  userId: string;
+  /** «Главный специалист», «Ведущий специалист»… A title, not a role. */
+  position: string | null;
+  /** User id of the immediate manager — another member of the same department. */
+  managerId: string | null;
+}
+
 export interface DepartmentDto {
   id: string;
   name: string;
   lead: UserSummaryDto | null;
   members: UserSummaryDto[];
+  /** Who is what and who reports to whom, one entry per member. */
+  structure: DepartmentPlaceDto[];
+}
+
+/** A person as the distribution screen shows them. */
+export interface CascadePersonDto {
+  user: UserSummaryDto;
+  position: string | null;
+}
+
+/**
+ * Task figures of one person or of a whole branch, over what the viewer may
+ * read. A task has one assignee, so a branch counts each task once.
+ */
+export interface CascadeFiguresDto {
+  /** Status category BACKLOG: handed over, not yet taken into work. */
+  backlog: number;
+  /** Not completed and not cancelled — the backlog included. */
+  active: number;
+  overdue: number;
+}
+
+export interface CascadeReportDto extends CascadePersonDto {
+  /** The person's own tasks. */
+  own: CascadeFiguresDto;
+  /** Tasks of everyone below them, themselves excluded: what they have passed on and what their people took. */
+  below: CascadeFiguresDto;
+  /** Everyone below them, by user id — for a list of «передано дальше». Empty for someone with no reports. */
+  belowUserIds: string[];
+}
+
+/** What the distribution screen stands on: a person, the line down to them, and their direct reports. */
+export interface CascadeDto {
+  /** Whose pool is shown: the viewer, or someone of the viewer's branch. */
+  person: CascadePersonDto;
+  department: { id: string; name: string } | null;
+  /** From the viewer down to `person`; just the viewer for one's own pool. */
+  chain: CascadePersonDto[];
+  /** The person's immediate manager, if the register names one. */
+  manager: CascadePersonDto | null;
+  own: CascadeFiguresDto;
+  /** The person's own tasks and those of everyone below them, each counted once. */
+  branch: CascadeFiguresDto;
+  /** How many people the branch holds, the person included. */
+  branchSize: number;
+  reports: CascadeReportDto[];
 }
 
 export interface DepartmentListDto {

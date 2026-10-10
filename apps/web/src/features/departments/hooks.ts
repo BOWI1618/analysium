@@ -3,6 +3,7 @@ import type {
   AssigneeStatsDto,
   DepartmentDto,
   DepartmentListDto,
+  DepartmentPlaceDto,
   IssueSummaryDto,
   Paginated,
 } from '@flowdesk/contracts';
@@ -27,6 +28,8 @@ export interface DepartmentForm {
   name: string;
   leadId: string | null;
   memberIds: string[];
+  /** Who is what and who reports to whom, by user id. */
+  structure: DepartmentPlaceDto[];
 }
 
 export function useSaveDepartment(workspaceId: string) {
@@ -40,8 +43,9 @@ export function useSaveDepartment(workspaceId: string) {
         : api.post<DepartmentDto>(`/workspaces/${workspaceId}/departments`, body),
     onSuccess: (department, form) => {
       void queryClient.invalidateQueries({ queryKey: qk.departments(workspaceId) });
-      // Lists and figures of a department follow who is in it.
-      void queryClient.invalidateQueries({ queryKey: ['issues', 'department'] });
+      // Lists and figures of a department follow who is in it — and so does
+      // the distribution screen, which is built on who reports to whom.
+      void queryClient.invalidateQueries({ queryKey: ['issues'] });
       toast.success(form.id ? `Отдел «${department.name}» сохранён` : `Отдел «${department.name}» создан`);
     },
     // The form shows the reason next to the field; a toast would say it twice.

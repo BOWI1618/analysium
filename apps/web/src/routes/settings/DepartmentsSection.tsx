@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { DepartmentDto, UserSummaryDto } from '@flowdesk/contracts';
-import { ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react';
+import clsx from 'clsx';
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { ApiError } from '~/lib/api';
 import { useSession } from '~/app/session';
 import { useToast } from '~/app/toast';
@@ -19,7 +20,7 @@ import { EmptyState, Skeleton } from '~/ui/Feedback';
 import { Input } from '~/ui/Input';
 import { pluralize } from '~/lib/format';
 
-const EMPTY_FORM: DepartmentForm = { name: '', leadId: null, memberIds: [] };
+const EMPTY_FORM: DepartmentForm = { name: '', leadId: null, memberIds: [], structure: [] };
 
 /**
  * The register of departments. It is kept by hand, here: who is in a
@@ -35,6 +36,7 @@ export function DepartmentsSection() {
 
   const [form, setForm] = useState<DepartmentForm | null>(null);
   const [removing, setRemoving] = useState<DepartmentDto | null>(null);
+  const [shownTrees, setShownTrees] = useState<string[]>([]);
 
   const people = useMemo(() => (members ?? []).map((member) => member.user), [members]);
   const departments = data?.items ?? [];
@@ -45,8 +47,10 @@ export function DepartmentsSection() {
         <div className="min-w-0">
           <h2 className="fd-eyebrow">Отделы</h2>
           <p className="mt-1 max-w-prose text-xs text-text-muted">
-            Кто в каком отделе и кто им руководит. Руководитель видит задачи своих сотрудников на экране «Задачи отдела».
-            Доступа к проектам отдел не даёт: каждый видит только те задачи, которые мог открыть и раньше.
+            Кто в каком отделе, в какой должности и кому подчиняется. Руководитель отдела видит задачи своих
+            сотрудников на экране «Задачи отдела»; по подчинённости задачи передаются сверху вниз в разделе
+            «Распределение». Доступа к проектам отдел не даёт: каждый видит только те задачи, которые мог открыть и
+            раньше.
           </p>
         </div>
         <Button size="sm" variant="primary" iconLeft={<Plus className="size-3.5" />} onClick={() => setForm(EMPTY_FORM)}>
@@ -99,6 +103,7 @@ export function DepartmentsSection() {
                         name: department.name,
                         leadId: department.lead?.id ?? null,
                         memberIds: department.members.map((member) => member.id),
+                        structure: department.structure,
                       })
                     }
                   >
@@ -108,6 +113,26 @@ export function DepartmentsSection() {
                     <Trash2 className="size-3.5" />
                   </IconButton>
                 </div>
+                {department.members.length > 0 && (
+                  <div className="w-full">
+                    <button
+                      type="button"
+                      aria-expanded={shownTrees.includes(department.id)}
+                      onClick={() =>
+                        setShownTrees((shown) =>
+                          shown.includes(department.id) ? shown.filter((id) => id !== department.id) : [...shown, department.id],
+                        )
+                      }
+                      className="inline-flex items-center gap-1 text-xs font-bold text-text-muted hover:text-text"
+                    >
+                      <ChevronRight
+                        className={clsx('size-3.5 transition-transform', shownTrees.includes(department.id) && 'rotate-90')}
+                      />
+                      Структура отдела
+                    </button>
+                    {shownTrees.includes(department.id) && <DepartmentTree department={department} />}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -141,6 +166,58 @@ export function DepartmentsSection() {
   );
 }
 
+/**
+ * Who reports to whom, drawn as it is said: a person, and under them the
+ * people whose immediate manager they are. Someone with no manager named
+ * stands at the top — whether they head the department or were simply not
+ * placed yet.
+ */
+function DepartmentTree({ department }: { department: DepartmentDto }) {
+  const userOf = new Map(department.members.map((member) => [member.id, member]));
+  const placeOf = new Map(department.structure.map((place) => [place.userId, place]));
+  const reportsOf = new Map<string, string[]>();
+  for (const place of department.structure) {
+    if (place.managerId && userOf.has(place.managerId)) {
+      reportsOf.set(place.managerId, [...(reportsOf.get(place.managerId) ?? []), place.userId]);
+    }
+  }
+  const byName = (a: string, b: string) => (userOf.get(a)?.name ?? '').localeCompare(userOf.get(b)?.name ?? '', 'ru');
+  const roots = department.members
+    .map((member) => member.id)
+    .filter((id) => {
+      const managerId = placeOf.get(id)?.managerId;
+      return !managerId || !userOf.has(managerId);
+    })
+    .sort(byName);
+
+  const branch = (userId: string, seen: Set<string>): React.ReactNode => {
+    const person = userOf.get(userId);
+    // A ring cannot be saved, but a drawing must not hang on data it did not check.
+    if (!person || seen.has(userId)) return null;
+    const below = [...(reportsOf.get(userId) ?? [])].sort(byName);
+    return (
+      <li key={userId}>
+        <span className="flex items-center gap-2 py-1">
+          <Avatar user={person} size="sm" />
+          <span className="min-w-0 truncate text-sm font-bold">{person.name}</span>
+          <span className="truncate text-xs text-text-subtle">{placeOf.get(userId)?.position ?? 'должность не указана'}</span>
+        </span>
+        {below.length > 0 && (
+          <ul className="ml-2.5 border-l-2 border-border-strong pl-3">
+            {below.map((id) => branch(id, new Set([...seen, userId])))}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
+  return (
+    <ul className="mt-2" aria-label={`Структура отдела «${department.name}»`}>
+      {roots.map((id) => branch(id, new Set()))}
+    </ul>
+  );
+}
+
 function DepartmentDialog({
   workspaceId,
   initial,
@@ -160,6 +237,35 @@ function DepartmentDialog({
   const [leadId, setLeadId] = useState(initial.leadId);
   const [memberIds, setMemberIds] = useState(initial.memberIds);
   const [nameError, setNameError] = useState<string | undefined>();
+  // A title and an immediate manager per person, kept by user id.
+  const initialPlaces = useMemo(
+    () =>
+      Object.fromEntries(
+        initial.structure.map((place) => [place.userId, { position: place.position ?? '', managerId: place.managerId ?? '' }]),
+      ) as Record<string, { position: string; managerId: string }>,
+    [initial.structure],
+  );
+  const [places, setPlaces] = useState(initialPlaces);
+  const [structureError, setStructureError] = useState<string | undefined>();
+  const placeOf = (userId: string) => places[userId] ?? { position: '', managerId: '' };
+  const setPlace = (userId: string, patch: Partial<{ position: string; managerId: string }>) => {
+    setPlaces((current) => ({ ...current, [userId]: { ...(current[userId] ?? { position: '', managerId: '' }), ...patch } }));
+    setStructureError(undefined);
+  };
+  const chosenPeople = people
+    .filter((person) => memberIds.includes(person.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  // What is saved: only people of the department, and only a manager who is one of them.
+  const structure = memberIds.map((userId) => {
+    const place = placeOf(userId);
+    return {
+      userId,
+      position: place.position.trim() || null,
+      managerId: place.managerId && memberIds.includes(place.managerId) ? place.managerId : null,
+    };
+  });
+  const structureKey = (list: { userId: string; position: string | null; managerId: string | null }[]) =>
+    JSON.stringify([...list].sort((a, b) => a.userId.localeCompare(b.userId)));
 
   const lead = people.find((person) => person.id === leadId) ?? null;
 
@@ -177,7 +283,10 @@ function DepartmentDialog({
   }, [departments, initial.id, memberIds, people]);
 
   const dirty =
-    name !== initial.name || leadId !== initial.leadId || memberIds.join() !== initial.memberIds.join();
+    name !== initial.name ||
+    leadId !== initial.leadId ||
+    memberIds.join() !== initial.memberIds.join() ||
+    structureKey(structure) !== structureKey(initial.structure.filter((place) => initial.memberIds.includes(place.userId)));
 
   const submit = () => {
     if (!name.trim()) {
@@ -185,12 +294,14 @@ function DepartmentDialog({
       return;
     }
     save.mutate(
-      { id: initial.id, name: name.trim(), leadId, memberIds },
+      { id: initial.id, name: name.trim(), leadId, memberIds, structure },
       {
         onSuccess: onClose,
         onError: (error) => {
-          // A taken name is shown at the field; anything else has no field to sit at.
+          // A taken name and a broken reporting line are shown where they were entered;
+          // anything else has no field to sit at.
           if (error instanceof ApiError && error.fields.name) setNameError(error.fields.name);
+          else if (error instanceof ApiError && error.fields.structure) setStructureError(error.fields.structure);
           else toast.error(error, 'Не удалось сохранить отдел');
         },
       },
@@ -203,7 +314,7 @@ function DepartmentDialog({
       onClose={onClose}
       dirty={dirty}
       title={initial.id ? 'Отдел' : 'Новый отдел'}
-      size="md"
+      size="lg"
       footer={
         <>
           <DialogCloseButton size="sm" variant="ghost">
@@ -236,7 +347,7 @@ function DepartmentDialog({
         />
 
         <div>
-          <p className="mb-1 text-xs font-bold text-text">Руководитель</p>
+          <p className="mb-1 text-xs font-bold text-text">Руководитель отдела</p>
           <UserPicker users={people} value={leadId} onChange={setLeadId} label="Руководителя" noneLabel="Не назначен">
             <button
               type="button"
@@ -293,6 +404,57 @@ function DepartmentDialog({
             </p>
           )}
         </div>
+
+        {chosenPeople.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-bold text-text">Должности и подчинённость</p>
+            <p className="mb-2 text-xs text-text-subtle">
+              Непосредственный руководитель передаёт сотруднику задачи в разделе «Распределение». У сотрудника он один;
+              у того, кто стоит во главе, руководителя нет. Смена руководителя задачи не переназначает.
+            </p>
+            <ul className="divide-y-2 divide-border-strong border-2 border-border-strong" aria-label="Должности и подчинённость">
+              {chosenPeople.map((person) => {
+                const place = placeOf(person.id);
+                return (
+                  <li key={person.id} className="flex flex-wrap items-center gap-2 p-2">
+                    <span className="flex min-w-0 flex-1 basis-40 items-center gap-2">
+                      <Avatar user={person} size="sm" />
+                      <span className="truncate text-sm font-bold">{person.name}</span>
+                    </span>
+                    <input
+                      value={place.position}
+                      maxLength={80}
+                      onChange={(event) => setPlace(person.id, { position: event.target.value })}
+                      placeholder="Должность"
+                      aria-label={`Должность: ${person.name}`}
+                      className="h-7 min-w-0 flex-1 basis-40 border-2 border-border-strong bg-surface px-2 text-xs focus:border-accent focus:outline-none"
+                    />
+                    <select
+                      value={memberIds.includes(place.managerId) ? place.managerId : ''}
+                      onChange={(event) => setPlace(person.id, { managerId: event.target.value })}
+                      aria-label={`Непосредственный руководитель: ${person.name}`}
+                      className="h-7 min-w-0 flex-1 basis-44 border-2 border-border-strong bg-surface px-1.5 text-xs focus:border-accent focus:outline-none"
+                    >
+                      <option value="">Без руководителя</option>
+                      {chosenPeople
+                        .filter((candidate) => candidate.id !== person.id)
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            Руководитель: {candidate.name}
+                          </option>
+                        ))}
+                    </select>
+                  </li>
+                );
+              })}
+            </ul>
+            {structureError && (
+              <p className="mt-1 text-xs font-bold text-danger" role="alert">
+                {structureError}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </Dialog>
   );

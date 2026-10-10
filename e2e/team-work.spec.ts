@@ -60,6 +60,9 @@ test.describe('распределение задач', () => {
 
     await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Распределение/ }).click();
     await expect(page).toHaveURL(/\/planning$/);
+    // The section opens on one's own pool; the tasks nobody holds are the tab next to it.
+    await page.getByRole('button', { name: 'Без исполнителя', exact: true }).click();
+    await expect(page).toHaveURL(/mode=pool/);
     const pool = page.getByRole('region', { name: 'Задачи без исполнителя' });
     const person = page.locator('main aside');
     await expect(pool.getByText('3 задачи')).toBeVisible({ timeout: 15_000 });

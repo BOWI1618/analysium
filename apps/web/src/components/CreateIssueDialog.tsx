@@ -184,7 +184,7 @@ export function CreateIssueDialog() {
     releaseImages();
     setType(seed?.parentId ? 'SUBTASK' : 'TASK');
     setPriority('MEDIUM');
-    setAssigneeId(null);
+    setAssigneeId(seed?.assigneeId ?? null);
     setLabelIds([]);
     setWatcherIds([]);
     setDueDate(seed?.dueDate ?? null);
@@ -355,8 +355,14 @@ export function CreateIssueDialog() {
   // Without a choice the form shows the status the server would pick — the
   // project's default, which need not be its first column. It used to show the
   // first one («Бэклог») and then save the task as «К выполнению».
+  // A form opened «into the backlog» takes the project's own backlog status;
+  // a project that has none keeps its default, and the form says so below
+  // rather than inventing a status.
+  const wantedCategory = defaults?.statusCategory;
+  const ofWantedCategory = wantedCategory ? statuses.find((s) => s.category === wantedCategory) : undefined;
   const selectedStatus =
-    statuses.find((s) => s.id === statusId) ?? statuses.find((s) => s.isDefault) ?? statuses[0];
+    statuses.find((s) => s.id === statusId) ?? ofWantedCategory ?? statuses.find((s) => s.isDefault) ?? statuses[0];
+  const lacksWantedStatus = Boolean(wantedCategory && statuses.length > 0 && !ofWantedCategory);
   // Another project has another circle of people: someone picked for the old
   // one may not be able to open the new one, so they are dropped, not sent.
   const allowedWatcherIds = watcherIds.filter((id) => members.some((member) => member.id === id));
@@ -378,7 +384,8 @@ export function CreateIssueDialog() {
   const dirty =
     title.trim().length > 0 ||
     !isDocEmpty(description) ||
-    Boolean(assigneeId) ||
+    // An assignee the form came with («создать себе задачу») is not the person's input.
+    (assigneeId ?? null) !== (defaults?.assigneeId ?? null) ||
     labelIds.length > 0 ||
     watcherIds.length > 0 ||
     // A date that came with the form (a calendar day's «+») is not the person's input.
@@ -607,6 +614,13 @@ export function CreateIssueDialog() {
             </StatusPicker>
           )}
         </div>
+
+        {lacksWantedStatus && selectedStatus && (
+          <p role="status" className="border-2 border-border-strong bg-marker-subtle px-2.5 py-1.5 text-xs">
+            В этом проекте нет статуса «Бэклог». Задача будет создана в статусе «{selectedStatus.name}» и появится в
+            вашем пуле под ним — или выберите другой статус.
+          </p>
+        )}
 
         {subtaskTitles.length > 0 && !isSubtask && (
           <div

@@ -74,7 +74,6 @@ export function CommandPalette() {
   const canCreateIssue = useWorkspaceCan(Permission.ISSUE_CREATE);
   const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
   // The same two conditions the sidebar shows these screens by.
-  const canAssign = useWorkspaceCan(Permission.ISSUE_ASSIGN);
   const { data: departments } = useDepartments(workspace?.id);
   const showDepartment = Boolean(departments && (departments.items.length > 0 || departments.canManage));
   const staticCommands = useMemo<Command[]>(
@@ -118,17 +117,13 @@ export function CommandPalette() {
         group: 'Навигация',
         run: () => navigate('/employee-work'),
       },
-      ...(canAssign
-        ? [
-            {
-              id: 'nav-planning',
-              label: 'Перейти к распределению задач',
-              icon: <ListTodo className="size-4" />,
-              group: 'Навигация',
-              run: () => navigate('/planning'),
-            },
-          ]
-        : []),
+      {
+        id: 'nav-planning',
+        label: 'Перейти к распределению задач',
+        icon: <ListTodo className="size-4" />,
+        group: 'Навигация',
+        run: () => navigate('/planning'),
+      },
       ...(showDepartment
         ? [
             {
@@ -180,7 +175,7 @@ export function CommandPalette() {
         (command.id !== 'action-create-issue' || canCreateIssue) &&
         (command.id !== 'action-create-project' || canCreateProject),
     ),
-    [navigate, openCreateIssue, setShortcutsOpen, canCreateIssue, canCreateProject, canAssign, showDepartment],
+    [navigate, openCreateIssue, setShortcutsOpen, canCreateIssue, canCreateProject, showDepartment],
   );
 
   // Saved views are places to go, like the screens above: «Просроченные

@@ -15,6 +15,13 @@ interface UiState {
   createIssueDefaults: {
     projectId?: string;
     statusId?: string;
+    /**
+     * «Into the backlog», whatever the chosen project calls it: the form picks
+     * that project's own status of this category, and says so when there is none.
+     */
+    statusCategory?: 'BACKLOG';
+    /** Who the task is for from the start — «создать себе задачу». */
+    assigneeId?: string;
     sprintId?: string;
     parentId?: string;
     /** ISO dates, e.g. from a calendar day or an hour slot. */

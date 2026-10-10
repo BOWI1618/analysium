@@ -1278,11 +1278,22 @@ export async function moveIssue(
   return toIssueSummary(updated);
 }
 
+const handedOnMessage = (keys: string[]) =>
+  `${keys.join(', ')}: пока вы передавали, задачу изменили или уже передали другому. Список обновлён — проверьте и повторите.`;
+
 export async function bulkUpdate(
   actor: ActorContext,
   issueIds: string[],
   patch: BulkUpdateInput['patch'],
-  options: { onlyUnassigned?: boolean } = {},
+  options: {
+    onlyUnassigned?: boolean;
+    /**
+     * Handing tasks over: the assignee — and, where given, the version — the
+     * sender saw for each task. A task that has since moved on fails the
+     * whole batch instead of having someone else's assignment overwritten.
+     */
+    expected?: Map<string, { assigneeId: string | null; updatedAt?: Date }>;
+  } = {},
 ): Promise<{ updated: number }> {
   const ids = [...new Set(issueIds)];
 
@@ -1338,6 +1349,14 @@ export async function bulkUpdate(
     const reassigns =
       nextAssignee !== undefined && issues.some((i) => i.projectId === projectId && i.assigneeId !== nextAssignee);
     if (reassigns) assertCan(projectActor, Permission.ISSUE_ASSIGN);
+  }
+
+  if (options.expected && nextAssignee !== undefined) {
+    const moved = issues.filter((i) => {
+      const seen = options.expected!.get(i.id);
+      return seen !== undefined && seen.assigneeId !== i.assigneeId;
+    });
+    if (moved.length) throw conflict(handedOnMessage(moved.map((i) => i.issueKey)));
   }
 
   if (options.onlyUnassigned && nextAssignee !== undefined) {
@@ -1429,7 +1448,20 @@ export async function bulkUpdate(
         after.priority = patch.priority;
       }
       if (nextAssignee !== undefined && nextAssignee !== issue.assigneeId) {
-        if (options.onlyUnassigned) {
+        const seen = options.expected?.get(issue.id);
+        if (seen) {
+          // Claimed under the row lock against what the sender saw: a task
+          // reassigned or edited a moment ago fails the batch, nothing is saved.
+          const claimed = await tx.issue.updateMany({
+            where: {
+              id: issue.id,
+              assigneeId: seen.assigneeId,
+              ...(seen.updatedAt ? { updatedAt: seen.updatedAt } : {}),
+            },
+            data: { assigneeId: nextAssignee },
+          });
+          if (claimed.count === 0) throw conflict(handedOnMessage([issue.issueKey]));
+        } else if (options.onlyUnassigned) {
           // Claimed under the row lock: if someone took the task after the
           // check above, nothing in this batch is saved.
           const claimed = await tx.issue.updateMany({

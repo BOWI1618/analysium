@@ -182,7 +182,7 @@ export function PlanningWeeks() {
                             </Link>
                             {/* From comparing people straight to giving one of them work. */}
                             <Link
-                              to={`/planning?user=${person.id}`}
+                              to={`/planning?mode=pool&user=${person.id}`}
                               className="text-2xs text-text-subtle underline-offset-2 hover:text-accent hover:underline"
                             >
                               дать задачи

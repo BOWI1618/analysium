@@ -30,6 +30,7 @@ import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
 import { SegmentedControl } from '~/ui/Tabs';
 import { PlanningWeeks } from './PlanningWeeks';
+import { PlanningCascade } from './PlanningCascade';
 import { EmptyState, ErrorState, SkeletonRows, StaleNotice } from '~/ui/Feedback';
 import { dueDateLabel, pluralize, shortDate } from '~/lib/format';
 
@@ -43,17 +44,29 @@ const PERIODS: { value: Period; label: string }[] = [
 
 const isPeriod = (value: string | null): value is Period => PERIODS.some((item) => item.value === value);
 
+type Mode = 'cascade' | 'pool' | 'weeks';
+
 /**
- * «Распределение задач» in its two modes: handing work out, and looking at
- * who has how much by the week. Each mode keeps its own state in the address.
+ * «Распределение задач». Its main view is one's own pool with the people
+ * right below: tasks go down the reporting line from there. The two earlier
+ * views stay next to it — the tasks nobody holds yet, and who has how much by
+ * the week — for those who may assign work across the workspace. Each view
+ * keeps its own state in the address.
  */
 export function PlanningPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const mode = searchParams.get('mode') === 'weeks' ? 'weeks' : 'pool';
-  const modes = [
-    { value: 'pool', label: 'Раздача задач' },
-    { value: 'weeks', label: 'По неделям' },
-  ] as const;
+  const canAssign = useWorkspaceCan(Permission.ISSUE_ASSIGN);
+  const asked = searchParams.get('mode');
+  const mode: Mode = canAssign && (asked === 'pool' || asked === 'weeks') ? asked : 'cascade';
+  const modes: { value: Mode; label: string }[] = [
+    { value: 'cascade', label: 'Мой пул и подчинённые' },
+    ...(canAssign
+      ? ([
+          { value: 'pool', label: 'Без исполнителя' },
+          { value: 'weeks', label: 'По неделям' },
+        ] as const)
+      : []),
+  ];
 
   return (
     <>
@@ -64,7 +77,7 @@ export function PlanningPage() {
             key={item.value}
             type="button"
             // The other mode starts clean: a chosen person or filter of one means nothing in the other.
-            onClick={() => setSearchParams(item.value === 'weeks' ? { mode: 'weeks' } : {})}
+            onClick={() => setSearchParams(item.value === 'cascade' ? {} : { mode: item.value })}
             aria-current={mode === item.value ? 'page' : undefined}
             className={clsx(
               'px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors',
@@ -78,7 +91,7 @@ export function PlanningPage() {
           </button>
         ))}
       </div>
-      {mode === 'weeks' ? <PlanningWeeks /> : <PlanningPool />}
+      {mode === 'weeks' ? <PlanningWeeks /> : mode === 'pool' ? <PlanningPool /> : <PlanningCascade />}
     </>
   );
 }
@@ -368,9 +381,14 @@ function PlanningPool() {
                 layout="PLANNING"
                 current={{
                   filters: chosen as Record<string, unknown>,
-                  display: { params: pageParams(searchParams, ['user', 'period']) },
+                  display: { params: pageParams(searchParams, ['mode', 'user', 'period']) },
                 }}
-                onApply={(saved) => setSearchParams(viewSearchParams(saved), { replace: true })}
+                onApply={(saved) => {
+                  // A view of this tab opens this tab, also one saved before the tabs had names in the address.
+                  const params = viewSearchParams(saved);
+                  params.set('mode', 'pool');
+                  setSearchParams(params, { replace: true });
+                }}
                 saves="В вид войдут выбранный сотрудник, период и фильтры очереди."
               />
             }

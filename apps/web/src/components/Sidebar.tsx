@@ -113,7 +113,6 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
   const { user, workspace, workspaces, switchWorkspace, logout } = useSession();
   const { state: connection } = useRealtime();
   const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
-  const canAssign = useWorkspaceCan(Permission.ISSUE_ASSIGN);
   // Shown to those it is for: someone who leads a department, and the
   // administrators who keep the register of departments.
   const { data: departments } = useDepartments(workspace?.id);
@@ -296,23 +295,22 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           collapsed={collapsed}
           onClick={onNavigate}
         />
-        {/* Handing out work is for those who may assign it; a guest has nothing to do there. */}
-        {canAssign && (
-          <NavItem
-            to="/planning"
-            icon={<ListTodo className="size-4" />}
-            label="Распределение"
-            index="06"
-            collapsed={collapsed}
-            onClick={onNavigate}
-          />
-        )}
+        {/* For everyone: the section opens on one's own pool of tasks. Handing
+            out work across the workspace is a tab inside it, shown to those who may. */}
+        <NavItem
+          to="/planning"
+          icon={<ListTodo className="size-4" />}
+          label="Распределение"
+          index="06"
+          collapsed={collapsed}
+          onClick={onNavigate}
+        />
         {showDepartment && (
           <NavItem
             to="/department-work"
             icon={<Network className="size-4" />}
             label="Задачи отдела"
-            index={canAssign ? '07' : '06'}
+            index="07"
             collapsed={collapsed}
             onClick={onNavigate}
           />

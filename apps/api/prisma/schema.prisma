@@ -231,12 +231,24 @@ model DepartmentMember {
   departmentId String
   /// One department per person: a workspace membership appears here at most once.
   memberId     String   @unique
+  /// What the person is in the department — «Главный специалист». Free text:
+  /// a title, not a role, and it grants nothing.
+  position     String?
+  /// The person's immediate manager: another member of the same department.
+  /// One manager per person, no cycles — both kept by the service, since the
+  /// database cannot say «same department» about a self-reference. Tasks go
+  /// down this line on the distribution screen. Changing it never reassigns a
+  /// task or rewrites its history.
+  managerId    String?
   addedAt      DateTime @default(now())
 
-  department Department      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  member     WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  department Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  member     WorkspaceMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  manager    DepartmentMember?  @relation("DepartmentReports", fields: [managerId], references: [id], onDelete: SetNull)
+  reports    DepartmentMember[] @relation("DepartmentReports")
 
   @@index([departmentId])
+  @@index([managerId])
   @@map("department_members")
 }
 

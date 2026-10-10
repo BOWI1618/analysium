@@ -176,10 +176,22 @@ export const updateMemberSchema = z.object({
  * A department is described by people, as everywhere else in the API: the ids
  * are user ids, and each must be a member of the workspace.
  */
+/**
+ * One person's place in a department: what they are and whom they report to.
+ * `userId` and `managerId` are user ids; both people must be in the department.
+ */
+export const departmentPlaceSchema = z.object({
+  userId: cuidLike,
+  position: z.string().trim().max(80).nullable().optional(),
+  managerId: cuidLike.nullable().optional(),
+});
+
 export const createDepartmentSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название отдела').max(80),
   leadId: cuidLike.nullable().optional(),
   memberIds: z.array(cuidLike).max(500).optional(),
+  /** Positions and reporting lines; people left out keep what they had. */
+  structure: z.array(departmentPlaceSchema).max(500).optional(),
 });
 export type CreateDepartmentInput = z.infer<typeof createDepartmentSchema>;
 
@@ -187,6 +199,31 @@ export const updateDepartmentSchema = createDepartmentSchema
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Нет полей для обновления');
 export type UpdateDepartmentInput = z.infer<typeof updateDepartmentSchema>;
+
+/** How many tasks one bulk action takes; the interface warns before the server refuses. */
+export const BULK_UPDATE_LIMIT = 200;
+
+/* -------------------------------------------------------------- cascade */
+
+/**
+ * Handing tasks down the reporting line. Each task comes with the assignee
+ * and the version the sender saw: if either has changed since, the whole
+ * batch is refused rather than overwriting someone else's assignment.
+ */
+export const handoffSchema = z.object({
+  toUserId: cuidLike,
+  items: z
+    .array(
+      z.object({
+        issueId: cuidLike,
+        expectedAssigneeId: cuidLike.nullable(),
+        expectedUpdatedAt: z.string().datetime().optional(),
+      }),
+    )
+    .min(1)
+    .max(BULK_UPDATE_LIMIT),
+});
+export type HandoffInput = z.infer<typeof handoffSchema>;
 
 /* ------------------------------------------------------ issue templates */
 
@@ -398,9 +435,6 @@ export const duplicateIssueSchema = z.object({
   dates: z.boolean().default(true),
 });
 export type DuplicateIssueInput = z.infer<typeof duplicateIssueSchema>;
-
-/** How many tasks one bulk action takes; the interface warns before the server refuses. */
-export const BULK_UPDATE_LIMIT = 200;
 
 export const bulkUpdateSchema = z.object({
   issueIds: z.array(cuidLike).min(1).max(BULK_UPDATE_LIMIT),

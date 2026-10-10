@@ -40,18 +40,32 @@ const departmentSelect = {
   lead: { select: { user: { select: userSummarySelect } } },
   members: {
     orderBy: { member: { user: { name: 'asc' } } },
-    select: { member: { select: { user: { select: userSummarySelect } } } },
+    select: {
+      id: true,
+      position: true,
+      managerId: true,
+      member: { select: { user: { select: userSummarySelect } } },
+    },
   },
 } satisfies Prisma.DepartmentSelect;
 
 type DepartmentRow = Prisma.DepartmentGetPayload<{ select: typeof departmentSelect }>;
 
-const toDepartment = (row: DepartmentRow): DepartmentDto => ({
-  id: row.id,
-  name: row.name,
-  lead: row.lead ? toUserSummary(row.lead.user) : null,
-  members: row.members.map((entry) => toUserSummary(entry.member.user)!),
-});
+const toDepartment = (row: DepartmentRow): DepartmentDto => {
+  // The register stores a manager as a row of the department; people are named by user id everywhere else.
+  const userOf = new Map(row.members.map((entry) => [entry.id, entry.member.user.id]));
+  return {
+    id: row.id,
+    name: row.name,
+    lead: row.lead ? toUserSummary(row.lead.user) : null,
+    members: row.members.map((entry) => toUserSummary(entry.member.user)!),
+    structure: row.members.map((entry) => ({
+      userId: entry.member.user.id,
+      position: entry.position,
+      managerId: entry.managerId ? (userOf.get(entry.managerId) ?? null) : null,
+    })),
+  };
+};
 
 const canManage = (actor: ActorContext): boolean => can(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
 
@@ -97,13 +111,83 @@ async function membershipsOf(workspaceId: string, userIds: string[]): Promise<Ma
  * another department moves here: a person is in one department at a time.
  */
 async function replaceMembers(tx: Prisma.TransactionClient, departmentId: string, memberIds: string[]): Promise<void> {
+  // Whoever reported to a person leaving the department is left without a
+  // manager by the database itself (the link is set to null).
   await tx.departmentMember.deleteMany({ where: { departmentId, memberId: { notIn: memberIds } } });
+  const existing = await tx.departmentMember.findMany({
+    where: { memberId: { in: memberIds } },
+    select: { id: true, memberId: true, departmentId: true },
+  });
+  const rowOf = new Map(existing.map((row) => [row.memberId, row]));
   for (const memberId of memberIds) {
-    await tx.departmentMember.upsert({
-      where: { memberId },
-      create: { departmentId, memberId },
-      update: { departmentId },
-    });
+    const row = rowOf.get(memberId);
+    if (!row) {
+      await tx.departmentMember.create({ data: { departmentId, memberId } });
+    } else if (row.departmentId !== departmentId) {
+      // Moving in from another department: a reporting line never crosses
+      // departments, so the links up and down stay behind. Tasks are not
+      // touched — who holds what is a fact about the tasks, not the chart.
+      await tx.departmentMember.updateMany({ where: { managerId: row.id }, data: { managerId: null } });
+      await tx.departmentMember.update({ where: { id: row.id }, data: { departmentId, managerId: null } });
+    }
+  }
+}
+
+type DepartmentPlace = NonNullable<CreateDepartmentInput['structure']>[number];
+
+/**
+ * Writes down who is what and who reports to whom.
+ *
+ * The rules the database cannot hold: a manager is another member of the same
+ * department, nobody manages themself, and the lines never close into a ring
+ * — checked over the whole department as it will be after this change, not
+ * one link at a time, so that two edits in one request cannot make a ring
+ * between them.
+ */
+async function applyStructure(tx: Prisma.TransactionClient, departmentId: string, places: DepartmentPlace[]): Promise<void> {
+  if (places.length === 0) return;
+  const rows = await tx.departmentMember.findMany({
+    where: { departmentId },
+    select: { id: true, managerId: true, member: { select: { userId: true, user: { select: { name: true } } } } },
+  });
+  const rowOf = new Map(rows.map((row) => [row.member.userId, row]));
+  const nameOf = new Map(rows.map((row) => [row.id, row.member.user.name]));
+  const managerOf = new Map<string, string | null>(rows.map((row) => [row.id, row.managerId]));
+  const refuse = (message: string) => badRequest(message, { structure: message });
+
+  const updates: { id: string; data: { position?: string | null; managerId?: string | null } }[] = [];
+  for (const place of places) {
+    const row = rowOf.get(place.userId);
+    if (!row) throw refuse('Должность и руководителя можно задать только сотруднику этого отдела');
+
+    const data: { position?: string | null; managerId?: string | null } = {};
+    if (place.position !== undefined) data.position = place.position || null;
+    if (place.managerId !== undefined) {
+      if (place.managerId === place.userId) {
+        throw refuse(`${row.member.user.name}: сотрудник не может быть руководителем самого себя`);
+      }
+      const manager = place.managerId ? rowOf.get(place.managerId) : null;
+      if (place.managerId && !manager) {
+        throw refuse(`${row.member.user.name}: руководитель должен состоять в этом же отделе`);
+      }
+      data.managerId = manager?.id ?? null;
+      managerOf.set(row.id, data.managerId);
+    }
+    updates.push({ id: row.id, data });
+  }
+
+  for (const start of managerOf.keys()) {
+    const seen = new Set([start]);
+    for (let at = managerOf.get(start) ?? null; at; at = managerOf.get(at) ?? null) {
+      if (seen.has(at)) {
+        throw refuse(`Получается круг подчинённости: ${nameOf.get(at) ?? 'сотрудник'} оказывается собственным руководителем`);
+      }
+      seen.add(at);
+    }
+  }
+
+  for (const update of updates) {
+    if (Object.keys(update.data).length) await tx.departmentMember.update({ where: { id: update.id }, data: update.data });
   }
 }
 
@@ -128,6 +212,7 @@ export async function createDepartment(actor: ActorContext, input: CreateDepartm
         select: { id: true },
       });
       await replaceMembers(tx, created.id, (input.memberIds ?? []).map((userId) => memberships.get(userId)!));
+      await applyStructure(tx, created.id, input.structure ?? []);
       return created.id;
     });
     return getDepartment(actor, id);
@@ -166,6 +251,7 @@ export async function updateDepartment(
       if (input.memberIds !== undefined) {
         await replaceMembers(tx, departmentId, input.memberIds.map((userId) => memberships.get(userId)!));
       }
+      await applyStructure(tx, departmentId, input.structure ?? []);
     });
   } catch (error) {
     if (nameTaken(error)) throw conflict('Отдел с таким названием уже есть', { name: 'Такое название уже занято' });
