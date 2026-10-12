@@ -9,8 +9,6 @@ import {
   registerUser,
   type TestUser,
 } from '../setup';
-import type { Mail } from '../../src/lib/mailer';
-import { UNREAD_DELAY_MS, sendNotificationDigests } from '../../src/jobs/notificationMailer';
 import { prisma } from '../../src/lib/prisma';
 
 let app: FastifyInstance;
@@ -87,27 +85,6 @@ describe('уведомления не раскрывают недоступну�
     await addToProject(guest.id);
     expect((await inbox(guest)).items.some((n) => n.issue?.id === issue.id)).toBe(true);
     await removeFromProject(guest.id);
-  });
-
-  it('отложенное письмо не уходит, если доступ отозвали, пока оно ждало', async () => {
-    await addToProject(guest.id);
-    const issue = await createIssue(app, owner, project.id, { title: 'Письмо, которое не уйдёт' });
-    await call(guest, 'POST', `/issues/${issue.id}/watch`, { watching: true });
-    await comment(owner, issue.id, 'Подробности для своих');
-    expect(await count(guest.id, issue.id, 'ISSUE_COMMENTED')).toBe(1);
-
-    await removeFromProject(guest.id);
-
-    const letters: Mail[] = [];
-    const later = new Date(Date.now() + UNREAD_DELAY_MS + 60_000);
-    await sendNotificationDigests(later, async (mail) => {
-      letters.push(mail);
-      return true;
-    });
-    expect(letters.filter((mail) => mail.to === guest.email)).toHaveLength(0);
-    // Marked as handled, so it does not wait for a chance to go out later.
-    const pending = await prisma.notification.count({ where: { userId: guest.id, issueId: issue.id, emailedAt: null } });
-    expect(pending).toBe(0);
   });
 
   it('упоминание человека без доступа к проекту ничего ему не присылает', async () => {

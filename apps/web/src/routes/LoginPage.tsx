@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { api, ApiError } from '~/lib/api';
+import { ApiError } from '~/lib/api';
 import { isTelegramApp } from '~/lib/telegramApp';
 import { useAuthConfig, useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
@@ -20,8 +20,6 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [needsVerification, setNeedsVerification] = useState(false);
-  const [resent, setResent] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
   // Set when an admin has reset the password: the next step is a new one.
@@ -33,9 +31,6 @@ export function LoginPage() {
     if (err instanceof ApiError) {
       setError(err.message);
       setFieldErrors(err.fields);
-      // The password was right — the address just has not been proven yet, so
-      // the useful next step is another link, not another attempt.
-      setNeedsVerification(err.code === 'EMAIL_NOT_VERIFIED');
     } else {
       setError('Сервер недоступен. API запущен?');
     }
@@ -150,7 +145,9 @@ export function LoginPage() {
       subtitle="С возвращением — продолжим с того же места."
       footer={
         <>
-          Есть код приглашения?{' '}
+          {/* Getting in is by the owner's link, which opens its own page; this
+              line is for someone who was told only the code out of it. */}
+          Вас пригласили?{' '}
           <Link to="/join" className="font-bold text-accent hover:underline">
             Присоединиться
           </Link>
@@ -176,7 +173,7 @@ export function LoginPage() {
             not connected to anyone yet — say how to make it the last time. */}
         {isTelegramApp() && (
           <div className="border-2 border-border-strong bg-marker-subtle px-3 py-2 text-sm">
-            Вы открыли Analysium из Telegram. Войдите по почте один раз и нажмите «Подключить этот Telegram» в
+            Вы открыли Analysium из Telegram. Войдите по логину и паролю один раз и нажмите «Подключить этот Telegram» в
             настройках аккаунта — дальше здесь будет открываться без пароля.
           </div>
         )}
@@ -184,33 +181,20 @@ export function LoginPage() {
         {error && (
           <div role="alert" className="rounded-md border-2 border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger font-medium">
             {error}
-            {needsVerification && (
-              <button
-                type="button"
-                className="mt-1.5 block font-bold underline hover:no-underline"
-                onClick={() => {
-                  void api
-                    .post('/auth/resend-verification', { email })
-                    .catch(() => undefined)
-                    .finally(() => setResent(true));
-                }}
-              >
-                {resent ? 'Письмо отправлено' : 'Отправить письмо ещё раз'}
-              </button>
-            )}
           </div>
         )}
 
         <Input
-          label="Почта"
-          type="email"
-          autoComplete="email"
+          label="Логин"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
           required
           inputSize="lg"
           value={email}
           error={fieldErrors.email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@company.com"
+          placeholder="Логин или почта, с которой вы входили"
         />
 
         <Input

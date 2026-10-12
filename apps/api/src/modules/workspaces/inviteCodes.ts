@@ -1,24 +1,25 @@
 /**
- * Join codes: how people get into a workspace.
+ * Access links: how people get into a workspace.
  *
- * An admin creates a code for a role and passes it on by any channel — chat,
- * phone, paper. The person enters it together with the name, e-mail and
- * password they want, and lands in the workspace with that role. Nothing here
- * depends on mail, which is the point: the team does not need SMTP to grow.
+ * The owner makes a link for a role and passes it on by any channel. The
+ * person opens it, gives the name, login and password they want, and lands in
+ * the workspace with that role. There is no other way in, and nobody but the
+ * owner makes links.
  *
- * Codes are short enough to dictate, so the safety comes from the rest: only a
- * hash is stored, each code works once, it expires, and redeeming is behind the
- * strict authentication rate limit. At 31^8 possible codes and a handful of
- * attempts per minute, guessing one is not a practical attack.
+ * What the link carries is a short code — short enough to be read out if a
+ * link cannot be sent. The safety comes from the rest: only a hash is stored,
+ * each code works once, it expires, and redeeming is behind the strict
+ * authentication rate limit. At 31^8 possible codes and a handful of attempts
+ * per minute, guessing one is not a practical attack.
  */
 import { createHash, randomInt } from 'node:crypto';
 import type { ActorContext, CreatedInviteCodeDto, InviteCodeDto } from '@flowdesk/contracts';
-import { AuditAction, Permission, WorkspaceRole, outranks } from '@flowdesk/contracts';
+import { AuditAction, WorkspaceRole } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
-import { assertCan } from '../../lib/context';
-import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { badRequest, notFound } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { env } from '../../config/env';
+import { assertGrantsAccess } from '../auth/access';
 
 /** No 0/O or 1/I/L: a code read aloud or copied by hand must not be ambiguous. */
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -37,13 +38,6 @@ export function normalizeCode(input: string): string {
 
 export function hashCode(input: string): string {
   return createHash('sha256').update(normalizeCode(input)).digest('hex');
-}
-
-function assertCanGrant(actor: ActorContext, role: WorkspaceRole): void {
-  if (role === WorkspaceRole.OWNER) throw badRequest('У пространства может быть только один владелец');
-  if (!outranks(actor.workspaceRole, role) && actor.workspaceRole !== WorkspaceRole.OWNER) {
-    throw forbidden('Нельзя выдать роль, равную вашей или выше');
-  }
 }
 
 const codeSelect = {
@@ -76,8 +70,8 @@ export async function createInviteCode(
   role: WorkspaceRole,
   ip?: string,
 ): Promise<CreatedInviteCodeDto> {
-  assertCan(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
-  assertCanGrant(actor, role);
+  assertGrantsAccess(actor);
+  if (role === WorkspaceRole.OWNER) throw badRequest('У пространства может быть только один владелец');
 
   const code = generateCode();
   const row = await prisma.invitation.create({
@@ -107,7 +101,7 @@ export async function createInviteCode(
 
 /** Codes still waiting to be used. Spent and expired ones are not worth showing. */
 export async function listInviteCodes(actor: ActorContext): Promise<InviteCodeDto[]> {
-  assertCan(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
+  assertGrantsAccess(actor);
   const rows = await prisma.invitation.findMany({
     where: { workspaceId: actor.workspaceId, acceptedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: 'desc' },
@@ -117,9 +111,9 @@ export async function listInviteCodes(actor: ActorContext): Promise<InviteCodeDt
 }
 
 export async function revokeInviteCode(actor: ActorContext, id: string): Promise<void> {
-  assertCan(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
+  assertGrantsAccess(actor);
   const { count } = await prisma.invitation.deleteMany({
     where: { id, workspaceId: actor.workspaceId, acceptedAt: null },
   });
-  if (count === 0) throw notFound('Код приглашения');
+  if (count === 0) throw notFound('Ссылка для входа');
 }

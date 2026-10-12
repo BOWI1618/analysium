@@ -1,9 +1,8 @@
 /**
- * Redeeming a join code: a new account created straight into a workspace.
+ * Opening an access link: a new account created straight into a workspace.
  *
- * This is registration with an entry ticket. It deliberately ignores
- * ALLOW_PUBLIC_REGISTRATION — once the public form is closed, a code from an
- * admin is the way in, and it must not depend on that flag.
+ * This is the way in. The link carries a one-time code made by the owner of
+ * the workspace; the person says who they are and how they will sign in.
  */
 import type { JoinWithCodeInput } from '@flowdesk/contracts';
 import { AuditAction, RealtimeEventType } from '@flowdesk/contracts';
@@ -12,14 +11,13 @@ import { prisma } from '../../lib/prisma';
 import { hashPassword } from '../../lib/password';
 import { badRequest, conflict } from '../../lib/errors';
 import { audit } from '../../lib/audit';
-import { env } from '../../config/env';
 import { hashCode } from '../workspaces/inviteCodes';
 
 export async function joinWithCode(input: JoinWithCodeInput, ip?: string) {
   // One message for wrong, spent and expired alike: which of those applies is
   // not something to tell a person trying codes at random.
-  const invalid = badRequest('Код не подходит или устарел. Попросите новый у администратора.', {
-    code: 'Код не подходит',
+  const invalid = badRequest('Ссылка не подходит или устарела. Попросите новую у владельца пространства.', {
+    code: 'Ссылка не подходит',
   });
 
   const invitation = await prisma.invitation.findUnique({
@@ -30,8 +28,8 @@ export async function joinWithCode(input: JoinWithCodeInput, ip?: string) {
 
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
   if (existing) {
-    throw conflict('Аккаунт с такой почтой уже есть. Войдите в него или укажите другую почту.', {
-      email: 'Эта почта уже зарегистрирована',
+    throw conflict('Такой логин уже занят. Придумайте другой.', {
+      email: 'Этот логин уже занят',
     });
   }
 
@@ -52,9 +50,6 @@ export async function joinWithCode(input: JoinWithCodeInput, ip?: string) {
         email: input.email,
         passwordHash,
         lastActiveAt: new Date(),
-        // Same rule as registration: without mail there is no way to prove the
-        // address, so it is not asked for.
-        emailVerifiedAt: env.MAIL_ENABLED ? null : new Date(),
       },
     });
 

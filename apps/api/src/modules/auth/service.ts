@@ -9,15 +9,13 @@ import type {
 import { AuditAction, WorkspaceRole } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
 import { generateToken, hashPassword, hashToken, verifyPassword } from '../../lib/password';
-import { AppError, badRequest, conflict, unauthorized } from '../../lib/errors';
+import { badRequest, conflict, unauthorized } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { slugify, uniqueSlug } from '../workspaces/slug';
-import { env } from '../../config/env';
-import { verificationRequired } from './verification';
 
 export async function register(input: RegisterInput, ip?: string) {
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
-  if (existing) throw conflict('Аккаунт с такой почтой уже существует', { email: 'Эта почта уже зарегистрирована' });
+  if (existing) throw conflict('Аккаунт с таким логином уже существует', { email: 'Этот логин уже занят' });
 
   const passwordHash = await hashPassword(input.password);
   const workspaceName = input.workspaceName?.trim() || `Пространство ${input.name.split(' ')[0]}`;
@@ -30,9 +28,6 @@ export async function register(input: RegisterInput, ip?: string) {
         email: input.email,
         passwordHash,
         lastActiveAt: new Date(),
-        // Without mail configured there is no way to prove the address, so it
-        // counts as verified rather than leaving an account nobody can activate.
-        emailVerifiedAt: env.MAIL_ENABLED ? null : new Date(),
       },
     });
 
@@ -57,32 +52,23 @@ export async function login(
 ): Promise<{ user: { id: string }; reset?: undefined } | { user?: undefined; reset: PasswordResetRequired }> {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
 
-  // An admin reset the password: the address alone lets the person in, but only
+  // An admin reset the password: the login alone lets the person in, but only
   // as far as choosing a new password. Whatever was typed as a password is
   // ignored — the old one no longer exists.
   const resetPending = Boolean(user?.passwordResetExpiresAt && user.passwordResetExpiresAt.getTime() > Date.now());
   if (user && resetPending && user.status !== 'DEACTIVATED') {
-    if (verificationRequired() && !user.emailVerifiedAt) {
-      throw new AppError('EMAIL_NOT_VERIFIED', 'Почта не подтверждена. Откройте ссылку из письма.');
-    }
     const { token, hash } = generateToken();
     await prisma.user.update({ where: { id: user.id }, data: { passwordResetTokenHash: hash } });
     return { reset: { passwordResetRequired: true, token } };
   }
 
-  // Always run a verification so timing does not reveal whether the email exists.
+  // Always run a verification so timing does not reveal whether the login exists.
   const ok = await verifyPassword(input.password, user?.passwordHash ?? null);
   if (user && !user.passwordHash && user.passwordResetExpiresAt) {
     throw unauthorized('Сброс пароля истёк. Попросите администратора сбросить пароль ещё раз.');
   }
-  if (!user || !ok) throw unauthorized('Неверная почта или пароль');
+  if (!user || !ok) throw unauthorized('Неверный логин или пароль');
   if (user.status === 'DEACTIVATED') throw unauthorized('Этот аккаунт отключён');
-
-  // Distinct code so the sign-in form can offer to resend the link instead of
-  // showing "wrong password" for an account whose password is perfectly right.
-  if (verificationRequired() && !user.emailVerifiedAt) {
-    throw new AppError('EMAIL_NOT_VERIFIED', 'Почта не подтверждена. Откройте ссылку из письма.');
-  }
 
   audit({ actorId: user.id, action: AuditAction.USER_LOGIN, entityType: 'User', entityId: user.id, ip });
   return { user };
@@ -100,7 +86,7 @@ export async function setNewPassword(input: SetNewPasswordInput, ip?: string): P
     !user.passwordResetExpiresAt ||
     user.passwordResetExpiresAt.getTime() <= Date.now()
   ) {
-    throw badRequest('Ссылка на смену пароля устарела. Войдите по почте ещё раз.');
+    throw badRequest('Ссылка на смену пароля устарела. Войдите по логину ещё раз.');
   }
 
   const passwordHash = await hashPassword(input.password);
@@ -126,7 +112,6 @@ export async function buildSession(userId: string): Promise<SessionDto> {
       status: true,
       timezone: true,
       lastActiveAt: true,
-      emailNotifications: true,
       telegramChatId: true,
     },
   });
@@ -173,7 +158,6 @@ export async function buildSession(userId: string): Promise<SessionDto> {
       status: user.status,
       timezone: user.timezone,
       lastActiveAt: user.lastActiveAt?.toISOString() ?? null,
-      emailNotifications: user.emailNotifications,
       telegramLinked: Boolean(user.telegramChatId),
     },
     workspaces,

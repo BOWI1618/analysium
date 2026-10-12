@@ -92,7 +92,7 @@ export function describeAuditDetails(action: string, metadata: Record<string, un
   if (typeof m.email === 'string') parts.push(m.email);
   if (m.from !== undefined && m.to !== undefined) parts.push(`${role(m.from)} → ${role(m.to)}`);
   else if (m.role !== undefined) parts.push(`роль: ${role(m.role)}`);
-  if (m.via === 'code') parts.push('по коду приглашения');
+  if (m.via === 'code') parts.push('по ссылке владельца');
   if (m.self === true) parts.push('сам(а) покинул(а)');
   if (typeof m.movedCount === 'number' && m.movedCount > 0) parts.push(`незавершённых перенесено: ${m.movedCount}`);
   return parts.join(' · ');

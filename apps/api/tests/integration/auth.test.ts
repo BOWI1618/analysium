@@ -158,110 +158,103 @@ describe('authentication guard', () => {
   });
 });
 
-describe('приглашения', () => {
-  it('приглашённый заводит пароль по ссылке и входит', async () => {
-    const owner = await registerUser(app, { workspaceName: 'Пространство приглашений' });
-
-    const invited = await app.inject({
+describe('логин', () => {
+  it('не обязан быть почтой; регистр не различается', async () => {
+    const response = await app.inject({
       method: 'POST',
-      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
-      headers: { cookie: owner.cookie },
-      payload: { email: 'invited@test.local', role: 'MEMBER' },
+      url: '/api/v1/auth/register',
+      payload: { name: 'Иван Логинов', email: 'Ivan.Loginov', password: 'password123' },
     });
-    expect(invited.statusCode).toBe(201);
+    expect(response.statusCode).toBe(201);
+    expect(response.json().user.email).toBe('ivan.loginov');
+    await expect(login(app, 'IVAN.loginov')).resolves.toContain('fd_session=');
+  });
 
-    // Until the link is opened the account has no password at all, so there is
-    // no way in — that is exactly what the invitation exists to hand over.
-    const beforeAccepting = await app.inject({
+  it('пробелы и посторонние знаки в новом логине не принимаются', async () => {
+    for (const bad of ['два слова', 'a', 'имя!']) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/register',
+        payload: { name: 'Плохой Логин', email: bad, password: 'password123' },
+      });
+      expect(response.statusCode, bad).toBe(422);
+      expect(response.json().error.fields.email, bad).toBeTruthy();
+    }
+  });
+
+  it('меняется в профиле — с паролем; занятый не отдаётся; входить дальше нужно по новому', async () => {
+    const user = await registerUser(app, { email: 'before@test.local' });
+    const other = await registerUser(app, { email: 'occupied@test.local' });
+    const change = (payload: Record<string, unknown>, cookie = user.cookie) =>
+      app.inject({ method: 'POST', url: '/api/v1/me/login', headers: { cookie }, payload });
+
+    // Without the password the name of the account does not change.
+    const guessed = await change({ login: 'after', currentPassword: 'not-the-password1' });
+    expect(guessed.statusCode).toBe(400);
+    expect(guessed.json().error.fields.currentPassword).toBeTruthy();
+
+    const taken = await change({ login: other.email, currentPassword: 'password123' });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json().error.fields.login).toBeTruthy();
+    expect((await change({ login: 'с пробелом', currentPassword: 'password123' })).statusCode).toBe(422);
+
+    const changed = await change({ login: 'After.Change', currentPassword: 'password123' });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json()).toEqual({ email: 'after.change' });
+
+    // The session that asked stays signed in and shows the new login.
+    const session = await app.inject({ method: 'GET', url: '/api/v1/auth/session', headers: { cookie: user.cookie } });
+    expect(session.json().user.email).toBe('after.change');
+    // The old login no longer opens the account; the new one does.
+    const old = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: 'invited@test.local', password: 'whatever123' },
+      payload: { email: 'before@test.local', password: 'password123' },
     });
-    expect(beforeAccepting.statusCode).toBe(401);
-
-    const { prisma } = await import('../../src/lib/prisma');
-    const token = await prisma.verificationToken.findFirst({
-      where: { purpose: 'INVITE', usedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-    expect(token).not.toBeNull();
+    expect(old.statusCode).toBe(401);
+    await expect(login(app, 'after.change')).resolves.toContain('fd_session=');
+    // And the old one is free for someone else to take.
+    expect((await change({ login: 'before@test.local', currentPassword: 'password123' }, other.cookie)).statusCode).toBe(200);
   });
+});
 
-  it('ссылка приглашения возвращается администратору и пускает человека внутрь', async () => {
-    const owner = await registerUser(app, { workspaceName: 'Ссылка' });
-    const invited = await app.inject({
+describe('человек с аккаунтом добавляется в пространство по логину', () => {
+  const add = (cookie: string, workspaceId: string, email: string, role = 'MEMBER') =>
+    app.inject({
       method: 'POST',
-      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
-      headers: { cookie: owner.cookie },
-      payload: { email: 'bylink@test.local', role: 'MEMBER' },
+      url: `/api/v1/workspaces/${workspaceId}/members`,
+      headers: { cookie },
+      payload: { email, role },
     });
-    const { invite } = invited.json();
-    // Mail is off in tests, so the link is the only way the invitation can
-    // reach anyone — exactly the case the returned URL exists for.
-    expect(invite.emailSent).toBe(false);
-    const token = new URL(invite.url).searchParams.get('token');
 
-    const accepted = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/accept-invite',
-      payload: { token, name: 'По Ссылке', password: 'bylink12345' },
-    });
-    expect(accepted.statusCode).toBe(200);
-    expect(accepted.json().workspaces.some((w: { id: string }) => w.id === owner.workspaceId)).toBe(true);
-  });
-
-  it('повторное приглашение непринявшего выдаёт новую ссылку, старая гаснет', async () => {
-    const owner = await registerUser(app, { workspaceName: 'Повтор' });
-    const inviteOnce = () =>
-      app.inject({
-        method: 'POST',
-        url: `/api/v1/workspaces/${owner.workspaceId}/members`,
-        headers: { cookie: owner.cookie },
-        payload: { email: 'again@test.local', role: 'MEMBER' },
-      });
-
-    const first = (await inviteOnce()).json().invite.url;
-    const second = await inviteOnce();
-    expect(second.statusCode).toBe(201);
-    expect(second.json().invite.url).not.toBe(first);
-
-    const stale = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/accept-invite',
-      payload: { token: new URL(first).searchParams.get('token'), name: 'Старая', password: 'stale12345' },
-    });
-    expect(stale.statusCode).toBe(400);
-  });
-
-  it('человеку с аккаунтом ссылка не выдаётся — он попадает в пространство сразу', async () => {
+  it('попадает сразу, с выданной ролью; второй раз — отказ', async () => {
     const owner = await registerUser(app, { workspaceName: 'Свои' });
     const existing = await registerUser(app, { email: 'has-account@test.local' });
-    const added = await app.inject({
-      method: 'POST',
-      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
-      headers: { cookie: owner.cookie },
-      payload: { email: existing.email, role: 'MEMBER' },
-    });
+
+    const added = await add(owner.cookie, owner.workspaceId, existing.email, 'ADMIN');
     expect(added.statusCode).toBe(201);
-    expect(added.json().invite).toBeUndefined();
+    expect(added.json()).toMatchObject({ role: 'ADMIN', user: { id: existing.id } });
+    expect((await add(owner.cookie, owner.workspaceId, existing.email)).statusCode).toBe(409);
   });
 
-  it('членство в пространстве выдаётся сразу, роль сохраняется', async () => {
-    const owner = await registerUser(app, { workspaceName: 'Роли' });
-    await app.inject({
-      method: 'POST',
-      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
-      headers: { cookie: owner.cookie },
-      payload: { email: 'admin-invite@test.local', role: 'ADMIN' },
-    });
+  it('аккаунт так не создаётся: неизвестный логин — отказ, и в базе никого нового', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Без заготовок' });
+    const { prisma } = await import('../../src/lib/prisma');
+    const before = await prisma.user.count();
 
-    const members = await app.inject({
-      method: 'GET',
-      url: `/api/v1/workspaces/${owner.workspaceId}/members`,
-      headers: { cookie: owner.cookie },
-    });
-    const invited = members.json().find((m: { user: { email: string } }) => m.user.email === 'admin-invite@test.local');
-    expect(invited?.role).toBe('ADMIN');
-    expect(invited?.user.status).toBe('INVITED');
+    const unknown = await add(owner.cookie, owner.workspaceId, 'nobody-here@test.local');
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.json().error.fields.email).toBeTruthy();
+    expect(await prisma.user.count()).toBe(before);
+  });
+
+  it('добавляет только владелец: администратору отказ', async () => {
+    const owner = await registerUser(app, { workspaceName: 'Только владелец' });
+    const admin = await registerUser(app, { email: 'admin-of-space@test.local' });
+    const someone = await registerUser(app, { email: 'someone-else@test.local' });
+    expect((await add(owner.cookie, owner.workspaceId, admin.email, 'ADMIN')).statusCode).toBe(201);
+
+    const attempt = await add(admin.cookie, owner.workspaceId, someone.email);
+    expect(attempt.statusCode).toBe(403);
   });
 });

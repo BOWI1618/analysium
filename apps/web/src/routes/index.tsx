@@ -5,8 +5,6 @@ import { AppShell } from '~/components/AppShell';
 import { Spinner } from '~/ui/Spinner';
 import { LoginPage } from './LoginPage';
 import { RegisterPage } from './RegisterPage';
-import { VerifyEmailPage } from './VerifyEmailPage';
-import { AcceptInvitePage } from './AcceptInvitePage';
 import { JoinPage } from './JoinPage';
 import { HomePage } from './HomePage';
 import { MyWorkPage } from './MyWorkPage';
@@ -85,10 +83,6 @@ export function AppRoutes() {
             </RedirectIfSignedIn>
           }
         />
-        {/* Both are reached from a link in an e-mail, so neither may require
-            a session — an invited account does not even have a password yet. */}
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
-        <Route path="/accept-invite" element={<AcceptInvitePage />} />
         <Route
           path="/join"
           element={

@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, ApiError } from '~/lib/api';
+import { ApiError } from '~/lib/api';
 import { useAuthConfig, useSession } from '~/app/session';
 import { AuthLayout } from './AuthLayout';
 import { Button } from '~/ui/Button';
 import { Input } from '~/ui/Input';
 
+/**
+ * The first account of the installation: whoever makes it owns the workspace
+ * and lets everyone else in. Once it exists there is no sign-up — the page
+ * says so and points at the two ways in that remain.
+ */
 export function RegisterPage() {
   const { register } = useSession();
   const { data: authConfig } = useAuthConfig();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ name: '', email: '', password: '', workspaceName: '' });
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
@@ -21,27 +24,19 @@ export function RegisterPage() {
   const update = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
-  const resend = async (email: string) => {
-    // Answers the same regardless of whether the address is known, so a failure
-    // here says nothing worth reporting differently.
-    await api.post('/auth/resend-verification', { email }).catch(() => undefined);
-    setResent(true);
-  };
-
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setPending(true);
     setError(null);
     setFieldErrors({});
     try {
-      const awaitingVerification = await register({
+      await register({
         name: form.name,
         email: form.email,
         password: form.password,
         ...(form.workspaceName.trim() ? { workspaceName: form.workspaceName.trim() } : {}),
       });
-      if (awaitingVerification) setSentTo(form.email);
-      else navigate('/', { replace: true });
+      navigate('/', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -54,13 +49,12 @@ export function RegisterPage() {
     }
   };
 
-  // Closed sign-up: filling in the form would only end in a refusal, so point
-  // straight at the way in that works.
+  // Filling in the form would only end in a refusal, so it is not shown.
   if (authConfig && !authConfig.registrationOpen) {
     return (
       <AuthLayout
-        title="Регистрация по приглашению"
-        subtitle="Открытая регистрация в этом пространстве выключена. Попросите у администратора код приглашения."
+        title="Регистрация закрыта"
+        subtitle="Доступ выдаёт владелец пространства: попросите у него ссылку для входа и откройте её."
         footer={
           <>
             Уже есть аккаунт?{' '}
@@ -70,40 +64,11 @@ export function RegisterPage() {
           </>
         }
       >
-        <Link to="/join">
+        <Link to="/login">
           <Button variant="primary" size="lg" fullWidth>
-            У меня есть код
+            Ко входу
           </Button>
         </Link>
-      </AuthLayout>
-    );
-  }
-
-  // The account exists but has no session yet — nothing to do here but open the
-  // message, so the form is replaced rather than left on screen half-usable.
-  if (sentTo) {
-    return (
-      <AuthLayout
-        title="Проверьте почту"
-        subtitle={`Ссылка для подтверждения отправлена на ${sentTo}. Откройте её, чтобы завершить регистрацию.`}
-        footer={
-          <>
-            Письмо не пришло?{' '}
-            <button
-              type="button"
-              onClick={() => void resend(sentTo)}
-              className="font-bold text-accent hover:underline"
-            >
-              Отправить ещё раз
-            </button>
-            {resent && <span className="ml-2 text-xs text-text-subtle">Отправлено.</span>}
-          </>
-        }
-      >
-        <p className="text-sm leading-relaxed text-text-muted">
-          Проверьте папку «Спам», если письма нет во входящих. Ссылка действует ограниченное
-          время — если она устареет, запросите новую.
-        </p>
       </AuthLayout>
     );
   }
@@ -139,15 +104,17 @@ export function RegisterPage() {
           placeholder="Ада Лавлейс"
         />
         <Input
-          label="Рабочая почта"
-          type="email"
+          label="Логин"
           required
-          autoComplete="email"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
           inputSize="lg"
           value={form.email}
           error={fieldErrors.email}
           onChange={update('email')}
-          placeholder="you@company.com"
+          placeholder="ada"
+          hint="По нему вы будете входить. Буквы, цифры и знаки . _ - @ +, без пробелов."
         />
         <Input
           label="Пароль"
@@ -168,9 +135,8 @@ export function RegisterPage() {
           error={fieldErrors.workspaceName}
           onChange={update('workspaceName')}
           placeholder="Acme (необязательно)"
-          hint="Переименовать или добавить пространства можно позже."
+          hint="Переименовать пространство можно позже."
         />
-
 
         <Button type="submit" variant="primary" size="lg" fullWidth loading={pending}>
           Создать аккаунт

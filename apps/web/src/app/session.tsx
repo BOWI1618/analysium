@@ -2,7 +2,6 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { can, type Permission } from '@flowdesk/contracts';
 import type {
-  AcceptInviteInput,
   JoinWithCodeInput,
   LoginInput,
   PasswordResetRequired,
@@ -29,12 +28,10 @@ interface SessionContextValue {
    */
   login: (input: LoginInput) => Promise<PasswordResetRequired | null>;
   setNewPassword: (input: SetNewPasswordInput) => Promise<void>;
-  /** Resolves to `true` when a verification link was sent instead of a session. */
-  register: (input: RegisterInput) => Promise<boolean>;
-  /** Redeems a join code. Resolves to `true` when a verification link was sent instead of a session. */
-  joinWithCode: (input: JoinWithCodeInput) => Promise<boolean>;
-  /** Turns an invitation link into a signed-in account. */
-  acceptInvite: (input: AcceptInviteInput) => Promise<void>;
+  /** The first account of the installation; there is no sign-up after it. */
+  register: (input: RegisterInput) => Promise<void>;
+  /** Gets in by the code an owner's access link carries. */
+  joinWithCode: (input: JoinWithCodeInput) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -42,12 +39,6 @@ interface SessionContextValue {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 type SessionResponse = SessionDto | { user: null; workspaces: []; activeWorkspaceId: null };
-
-/** What /auth/register answers when the address still has to be proven. */
-interface PendingVerification {
-  verificationRequired: true;
-  email: string;
-}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -103,29 +94,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    // Two possible answers: a session when mail is off, or a note that a
-    // verification link is on its way. Only the first one signs anybody in.
-    mutationFn: (input: RegisterInput) =>
-      api.post<SessionDto | PendingVerification>('/auth/register', input),
-    onSuccess: (result) => {
-      if ('verificationRequired' in result) return;
-      queryClient.setQueryData(qk.session, result);
-      setPreferredWorkspaceId(result.activeWorkspaceId);
+    mutationFn: (input: RegisterInput) => api.post<SessionDto>('/auth/register', input),
+    onSuccess: (session) => {
+      queryClient.setQueryData(qk.session, session);
+      setPreferredWorkspaceId(session.activeWorkspaceId);
     },
   });
 
   const joinMutation = useMutation({
-    mutationFn: (input: JoinWithCodeInput) =>
-      api.post<SessionDto | PendingVerification>('/auth/join', input),
-    onSuccess: (result) => {
-      if ('verificationRequired' in result) return;
-      queryClient.setQueryData(qk.session, result);
-      setPreferredWorkspaceId(result.activeWorkspaceId);
-    },
-  });
-
-  const acceptInviteMutation = useMutation({
-    mutationFn: (input: AcceptInviteInput) => api.post<SessionDto>('/auth/accept-invite', input),
+    mutationFn: (input: JoinWithCodeInput) => api.post<SessionDto>('/auth/join', input),
     onSuccess: (session) => {
       queryClient.setQueryData(qk.session, session);
       setPreferredWorkspaceId(session.activeWorkspaceId);
@@ -153,19 +130,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return 'passwordResetRequired' in result ? result : null;
       },
       setNewPassword: async (input) => void (await setPasswordMutation.mutateAsync(input)),
-      register: async (input) => {
-        const result = await registerMutation.mutateAsync(input);
-        return 'verificationRequired' in result;
-      },
-      joinWithCode: async (input) => {
-        const result = await joinMutation.mutateAsync(input);
-        return 'verificationRequired' in result;
-      },
-      acceptInvite: async (input) => void (await acceptInviteMutation.mutateAsync(input)),
+      register: async (input) => void (await registerMutation.mutateAsync(input)),
+      joinWithCode: async (input) => void (await joinMutation.mutateAsync(input)),
       logout: async () => void (await logoutMutation.mutateAsync()),
       refresh: async () => void (await queryClient.invalidateQueries({ queryKey: qk.session })),
     }),
-    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, setPasswordMutation, registerMutation, joinMutation, acceptInviteMutation, logoutMutation, queryClient],
+    [user, workspaces, workspace, isLoading, setPreferredWorkspaceId, loginMutation, setPasswordMutation, registerMutation, joinMutation, logoutMutation, queryClient],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -191,15 +161,15 @@ export function useWorkspace(): WorkspaceDto {
 }
 
 /**
- * Whether open sign-up is allowed. Fetched without a session, so the sign-in
- * screens can offer the path that actually works — a closed registration form
- * would otherwise be a dead end for someone holding a join code.
+ * What the sign-in screens need before anyone is signed in. `registrationOpen`
+ * is true only until the installation has its first account — and in
+ * development, where accounts are made freely.
  */
 export function useAuthConfig() {
   return useQuery({
     queryKey: ['auth-config'],
     queryFn: () =>
-      api.get<{ registrationOpen: boolean; mailEnabled: boolean; telegramEnabled: boolean }>('/auth/config'),
+      api.get<{ registrationOpen: boolean; telegramEnabled: boolean }>('/auth/config'),
     staleTime: 5 * 60_000,
   });
 }

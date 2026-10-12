@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { AuditLogDto, CreatedInviteCodeDto, WorkspaceRole } from '@flowdesk/contracts';
 import { Permission, WORKSPACE_ROLES, can, outranks } from '@flowdesk/contracts';
-import { Check, Copy, KeyRound, Link2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Check, KeyRound, Link2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
@@ -224,13 +224,15 @@ function MembersSection() {
   const resetPassword = useResetMemberPassword(workspaceId);
   const toast = useToast();
 
-  // Computed before the early return: the codes query below is a hook and has
-  // to run on every render, and only managers are allowed to list codes.
+  // Computed before the early return: the links query below is a hook and has
+  // to run on every render.
   const canManage =
     workspace && user
       ? can({ userId: user.id, workspaceId, workspaceRole: workspace.role }, Permission.WORKSPACE_MANAGE_MEMBERS)
       : false;
-  const { data: codes } = useInviteCodes(workspaceId, canManage);
+  // Letting people in is the owner's alone: nobody else makes or sees the links.
+  const grantsAccess = workspace?.role === 'OWNER';
+  const { data: codes } = useInviteCodes(workspaceId, grantsAccess);
   const createCode = useCreateInviteCode(workspaceId);
   const revokeCode = useRevokeInviteCode(workspaceId);
 
@@ -243,10 +245,10 @@ function MembersSection() {
 
   return (
     <>
-      {canManage && (
+      {grantsAccess && (
         <Card
-          title="Пригласить в команду"
-          description="Создайте код и передайте его человеку. Он введёт код на странице входа, а имя, почту и пароль задаст сам."
+          title="Выдать доступ"
+          description="Создайте ссылку и передайте её человеку. По ней он задаст себе имя, логин и пароль и попадёт в пространство. Другого способа войти нет, и ссылки создаёте только вы."
         >
           <form
             className="flex flex-wrap items-end gap-2"
@@ -268,7 +270,7 @@ function MembersSection() {
               ))}
             </Select>
             <Button type="submit" variant="secondary" iconLeft={<Plus className="size-3.5" />} loading={createCode.isPending}>
-              Создать код
+              Создать ссылку
             </Button>
           </form>
 
@@ -276,7 +278,7 @@ function MembersSection() {
 
           {codes && codes.length > 0 && (
             <div className="mt-4">
-              <p className="fd-eyebrow mb-2">Действующие коды</p>
+              <p className="fd-eyebrow mb-2">Действующие ссылки</p>
               <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
                 {codes.map((code) => (
                   <li key={code.id} className="flex flex-wrap items-center gap-2.5 p-2.5 text-xs">
@@ -300,8 +302,8 @@ function MembersSection() {
                 ))}
               </ul>
               <p className="mt-1.5 text-2xs text-text-subtle">
-                Сам код здесь не показывается — он хранится в зашифрованном виде и виден только при создании.
-                Потеряли — отзовите и создайте новый.
+                Сама ссылка здесь не показывается — она видна только при создании.
+                Потеряли — отзовите и создайте новую.
               </p>
             </div>
           )}
@@ -418,12 +420,12 @@ function MembersSection() {
             onSuccess: () =>
               toast.success(
                 'Пароль сброшен',
-                `${target.name} может в течение суток войти по почте ${target.email} с пустым паролем и задать новый. Сообщите об этом.`,
+                `${target.name} может в течение суток войти по логину ${target.email} с пустым паролем и задать новый. Сообщите об этом.`,
               ),
           });
         }}
         title={`Сбросить пароль: ${resetting?.name}?`}
-        message="Текущий пароль перестанет работать, а все входы на устройствах завершатся. В течение суток человек сможет войти только по почте, оставив пароль пустым, — и сразу задаст новый. Сообщите ему об этом сами."
+        message="Текущий пароль перестанет работать, а все входы на устройствах завершатся. В течение суток человек сможет войти только по логину, оставив пароль пустым, — и сразу задаст новый. Сообщите ему об этом сами."
         confirmLabel="Сбросить пароль"
         danger
       />
@@ -432,62 +434,61 @@ function MembersSection() {
 }
 
 /**
- * The code that was just created.
+ * The access link that was just created.
  *
- * This is the only time it can be shown: the server keeps a hash, not the code.
- * Both forms are offered — the bare code to dictate or type, and a link that
- * opens the join page with the code already filled in.
+ * This is the only time it can be shown: the server keeps a hash of the code
+ * the link carries, not the code. The code is given too, small — for the case
+ * when a link cannot be sent and has to be read out.
  */
 function InviteCodePanel({ invite, onClose }: { invite: CreatedInviteCodeDto; onClose: () => void }) {
-  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const [copied, setCopied] = useState(false);
   const link = `${window.location.origin}/join?code=${encodeURIComponent(invite.code)}`;
 
-  const copy = async (what: 'code' | 'link') => {
+  const copy = async () => {
     try {
-      await navigator.clipboard.writeText(what === 'code' ? invite.code : link);
+      await navigator.clipboard.writeText(link);
     } catch {
-      // Clipboard access can be refused; the values stay selectable on screen.
+      // Clipboard access can be refused; the link stays selectable on screen.
       return;
     }
-    setCopied(what);
-    window.setTimeout(() => setCopied(null), 2000);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <div className="mt-3 border-2 border-border-strong bg-surface-sunken p-3">
-      <p className="text-sm font-bold">Код для роли «{ROLE_LABEL[invite.role]}»</p>
+      <p className="text-sm font-bold">Ссылка для роли «{ROLE_LABEL[invite.role]}»</p>
       <p className="mt-0.5 text-xs text-text-muted">
-        Скопируйте сейчас — после закрытия код больше не покажется. Он одноразовый и действует до{' '}
+        Скопируйте сейчас — после закрытия ссылка больше не покажется. Она одноразовая и действует до{' '}
         {fullDate(invite.expiresAt)}.
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span
-          aria-label="Код приглашения"
-          className="fd-num select-all border-2 border-border-strong bg-surface px-3 py-1.5 text-xl font-bold tracking-[0.2em]"
+          aria-label="Ссылка для входа"
+          className="fd-num min-w-0 flex-1 basis-64 select-all border-2 border-border-strong bg-surface px-2.5 py-1.5 text-xs break-all"
         >
-          {invite.code}
+          {link}
         </span>
         <Button
           size="sm"
           variant="primary"
-          iconLeft={copied === 'code' ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          onClick={() => void copy('code')}
+          iconLeft={copied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
+          onClick={() => void copy()}
         >
-          {copied === 'code' ? 'Скопировано' : 'Код'}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          iconLeft={copied === 'link' ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
-          onClick={() => void copy('link')}
-        >
-          {copied === 'link' ? 'Скопировано' : 'Ссылка с кодом'}
+          {copied ? 'Скопировано' : 'Скопировать ссылку'}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose}>
           Готово
         </Button>
       </div>
+      <p className="mt-2 text-2xs text-text-subtle">
+        Если ссылку не переслать, продиктуйте код из неё:{' '}
+        <span aria-label="Код из ссылки" className="fd-num font-bold tracking-widest text-text select-all">
+          {invite.code}
+        </span>
+        . Его вводят на странице входа, по строке «Вас пригласили?».
+      </p>
     </div>
   );
 }

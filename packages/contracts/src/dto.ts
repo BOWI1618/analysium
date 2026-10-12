@@ -33,8 +33,6 @@ export type UserSummaryDto = Pick<UserDto, 'id' | 'name' | 'avatarUrl' | 'email'
 
 /** The signed-in person, with the settings only they can see. */
 export interface SessionUserDto extends UserDto {
-  /** Notifications left unread in the app are sent on by e-mail. */
-  emailNotifications: boolean;
   /** The account is connected to the Telegram bot; notifications go there at once. */
   telegramLinked: boolean;
 }
@@ -58,13 +56,6 @@ export interface MemberDto {
   role: WorkspaceRole;
   joinedAt: string;
   user: UserSummaryDto & { status: UserStatus; lastActiveAt: string | null };
-  /**
-   * Present only in the reply to an invitation, and only for a person without
-   * an account. The link is handed to the admin as well as mailed, so an
-   * invitation still works when mail is off or a message never arrives — it can
-   * be passed on through any messenger.
-   */
-  invite?: { url: string; emailSent: boolean };
   /**
    * Until when the person may sign in without a password after an admin reset
    * it. Only people who manage members see it; for everyone else it is null.

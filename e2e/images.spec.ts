@@ -11,7 +11,7 @@ const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(
 async function setup(page: Page) {
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill('Катя Скриншотова');
-  await page.getByLabel('Рабочая почта').fill(`images-${unique()}@test.local`);
+  await page.getByLabel('Логин', { exact: true }).fill(`images-${unique()}@test.local`);
   await page.getByLabel('Пароль', { exact: true }).fill('password123');
   await page.getByLabel('Название пространства').fill('Картинки');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();

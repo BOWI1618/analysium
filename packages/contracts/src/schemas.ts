@@ -8,7 +8,7 @@ import { z } from 'zod';
 /**
  * Validation messages are user-facing, so they are written in Russian here —
  * the same strings the API returns and the forms render under each field.
- * A shared error map covers the built-in checks (required, min, max, email)
+ * A shared error map covers the built-in checks (required, min, max)
  * so individual schemas only spell out messages that need extra context.
  */
 const errorMap: z.ZodErrorMap = (issue, ctx) => {
@@ -29,7 +29,6 @@ const errorMap: z.ZodErrorMap = (issue, ctx) => {
       if (issue.type === 'string') return { message: `Не больше ${issue.maximum} символов` };
       return { message: `Максимальное значение — ${issue.maximum}` };
     case z.ZodIssueCode.invalid_string:
-      if (issue.validation === 'email') return { message: 'Введите корректный адрес почты' };
       if (issue.validation === 'url') return { message: 'Введите корректную ссылку' };
       if (issue.validation === 'datetime') return { message: 'Некорректная дата' };
       return { message: 'Некорректный формат' };
@@ -64,19 +63,31 @@ export const passwordSchema = z
   .max(200)
   .refine((v) => /[a-zA-Z]/.test(v) && /[0-9]/.test(v), 'Пароль должен содержать букву и цифру');
 
+/**
+ * The name a person signs in with.
+ *
+ * It used to be an e-mail address, and for accounts made back then it still
+ * is one — which is why it is kept under `email` in requests, answers and the
+ * database. Nothing is ever sent to it, so it does not have to be an address:
+ * letters, digits and the signs an address is made of, without spaces. Case
+ * does not tell two logins apart.
+ */
+export const loginNameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, 'Логин должен быть не короче 3 символов')
+  .max(200)
+  .regex(/^[\p{L}\p{N}._@+-]+$/u, 'В логине допустимы буквы, цифры и знаки . _ - @ +');
+
 export const registerSchema = z.object({
   name: z.string().trim().min(2).max(80),
-  email: z.string().trim().toLowerCase().email().max(200),
+  email: loginNameSchema,
   password: passwordSchema,
   /** Optional: name for the workspace bootstrapped with the account. */
   workspaceName: z.string().trim().min(2).max(60).optional(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
-
-export const verifyEmailSchema = z.object({
-  token: z.string().min(10).max(200),
-});
-export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 
 export const createInviteCodeSchema = z.object({
   role: z.enum(WORKSPACE_ROLES as [string, ...string[]]),
@@ -87,26 +98,15 @@ export const joinWithCodeSchema = z.object({
   /** Typed by a person, so separators and case are forgiven server-side. */
   code: z.string().trim().min(4).max(32),
   name: z.string().trim().min(2).max(80),
-  email: z.string().trim().toLowerCase().email().max(200),
+  email: loginNameSchema,
   password: passwordSchema,
 });
 export type JoinWithCodeInput = z.infer<typeof joinWithCodeSchema>;
 
-export const acceptInviteSchema = z.object({
-  token: z.string().min(10).max(200),
-  name: z.string().trim().min(2).max(80),
-  password: passwordSchema,
-});
-export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
-
-export const resendVerificationSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(200),
-});
-export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
-
 export const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(200),
-  /** May be empty: after an admin's reset the address alone is enough. */
+  // Not held to the rules for a new login: whatever an account was given once must still open it.
+  email: z.string().trim().toLowerCase().min(1).max(200),
+  /** May be empty: after an admin's reset the login alone is enough. */
   password: z.string().max(200),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -130,9 +130,15 @@ export const updateProfileSchema = z.object({
     .nullable()
     .optional(),
   timezone: z.string().max(60).optional(),
-  emailNotifications: z.boolean().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+/** A new login, confirmed with the password: it is what the account is opened by. */
+export const changeLoginSchema = z.object({
+  login: loginNameSchema,
+  currentPassword: z.string().min(1).max(200),
+});
+export type ChangeLoginInput = z.infer<typeof changeLoginSchema>;
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(200),
@@ -160,8 +166,9 @@ export const updateWorkspaceSchema = z.object({
   carryOverTasks: z.boolean().optional(),
 });
 
+/** Adds a person who already has an account, found by their login. */
 export const inviteMemberSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(200),
+  email: z.string().trim().toLowerCase().min(1).max(200),
   role: z.enum(WORKSPACE_ROLES as [string, ...string[]]).default('MEMBER'),
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

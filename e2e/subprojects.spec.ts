@@ -14,7 +14,7 @@ const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(
 async function register(page: Page, name: string) {
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill(name);
-  await page.getByLabel('Рабочая почта').fill(`e2e-${unique()}@test.local`);
+  await page.getByLabel('Логин', { exact: true }).fill(`e2e-${unique()}@test.local`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByLabel('Название пространства').fill('Команда E2E');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();

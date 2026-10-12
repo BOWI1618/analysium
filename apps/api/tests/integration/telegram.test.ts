@@ -10,7 +10,6 @@ import {
   handleUpdate,
   linkFromApp,
 } from '../../src/modules/telegram/service';
-import { UNREAD_DELAY_MS, sendNotificationDigests } from '../../src/jobs/notificationMailer';
 import { prisma } from '../../src/lib/prisma';
 
 let app: FastifyInstance;
@@ -112,14 +111,6 @@ describe('Telegram', () => {
     expect(sent[0]!.text).toContain('Проверить &lt;b&gt;отчёт&lt;/b&gt;');
     expect(sent[0]!.text).toContain(`/issue/${issue.issueKey}">Открыть задачу</a>`);
 
-    // Seen in the messenger — the e-mail digest leaves it out.
-    const letters: unknown[] = [];
-    const later = new Date(Date.now() + UNREAD_DELAY_MS + 60_000);
-    await sendNotificationDigests(later, async (mail) => {
-      letters.push(mail);
-      return true;
-    });
-    expect(letters).toHaveLength(0);
   });
 
   it('кто заблокировал бота — отключается; /stop отключает по просьбе', async () => {

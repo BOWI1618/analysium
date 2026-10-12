@@ -5,7 +5,7 @@ import { assertCan, workspaceContext } from '../../lib/context';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { slugify, uniqueSlug } from './slug';
-import { sendInviteEmail } from '../auth/verification';
+import { assertGrantsAccess, assertMayCreateWorkspace } from '../auth/access';
 
 export async function listWorkspaces(userId: string): Promise<WorkspaceDto[]> {
   const memberships = await prisma.workspaceMember.findMany({
@@ -47,6 +47,7 @@ export async function createWorkspace(
   input: { name: string; slug?: string },
   ip?: string,
 ): Promise<WorkspaceDto> {
+  await assertMayCreateWorkspace(userId);
   const slug = input.slug ? slugify(input.slug) : await uniqueSlug(slugify(input.name));
 
   if (input.slug) {
@@ -192,32 +193,31 @@ export async function listMembers(actor: ActorContext): Promise<MemberDto[]> {
 }
 
 /**
- * Adds a member by email. In a deployment with mail configured this would send
- * an invitation; without it, an existing user is added immediately and an
- * unknown address creates an INVITED placeholder account that activates on
- * first sign-up with that address.
+ * Adds a person who already has an account, found by their login.
+ *
+ * A way to bring someone from one workspace of the installation into another.
+ * It makes no account: a person without one gets in by an access link. Like
+ * the link, it is the owner's to give.
  */
 export async function inviteMember(
   actor: ActorContext,
   input: { email: string; role: string },
   ip?: string,
 ): Promise<MemberDto> {
-  assertCan(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
+  assertGrantsAccess(actor);
 
   const role = input.role as WorkspaceRole;
   if (role === WorkspaceRole.OWNER) throw badRequest('У пространства может быть только один владелец');
-  if (!outranks(actor.workspaceRole, role) && actor.workspaceRole !== WorkspaceRole.OWNER) {
-    throw forbidden('Нельзя выдать роль, равную вашей или выше');
-  }
 
-  let user = await prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { email: input.email },
-    select: { id: true, passwordHash: true },
+    select: { id: true, passwordHash: true, passwordResetExpiresAt: true },
   });
-  if (!user) {
-    user = await prisma.user.create({
-      data: { email: input.email, name: input.email.split('@')[0] ?? input.email, status: 'INVITED' },
-      select: { id: true, passwordHash: true },
+  // An account nobody can sign in to — left from the days of invitations by
+  // mail — is not a person to add.
+  if (!user || (!user.passwordHash && !user.passwordResetExpiresAt)) {
+    throw badRequest('Аккаунта с таким логином нет. Выдайте человеку ссылку для входа.', {
+      email: 'Такого логина нет',
     });
   }
 
@@ -225,52 +225,19 @@ export async function inviteMember(
     where: { workspaceId_userId: { workspaceId: actor.workspaceId, userId: user.id } },
     select: { id: true },
   });
-  // Someone who is already a member but has never set a password is an
-  // invitation that did not arrive — a lost letter, a typo in the SMTP
-  // settings, a spam filter. Repeating the invite has to send a new link
-  // instead of refusing, otherwise the only way out is removing the person and
-  // adding them again, which nobody guesses.
-  if (existing && user.passwordHash) {
-    throw conflict('Этот человек уже участник', { email: 'Уже в пространстве' });
-  }
+  if (existing) throw conflict('Этот человек уже участник', { email: 'Уже в пространстве' });
 
-  const memberSelect = {
-    id: true,
-    role: true,
-    joinedAt: true,
-    user: {
-      select: { id: true, name: true, email: true, avatarUrl: true, status: true, lastActiveAt: true },
+  const member = await prisma.workspaceMember.create({
+    data: { workspaceId: actor.workspaceId, userId: user.id, role },
+    select: {
+      id: true,
+      role: true,
+      joinedAt: true,
+      user: {
+        select: { id: true, name: true, email: true, avatarUrl: true, status: true, lastActiveAt: true },
+      },
     },
-  } as const;
-
-  const member = existing
-    ? await prisma.workspaceMember.update({
-        where: { id: existing.id },
-        data: { role },
-        select: memberSelect,
-      })
-    : await prisma.workspaceMember.create({
-        data: { workspaceId: actor.workspaceId, userId: user.id, role },
-        select: memberSelect,
-      });
-
-  // The membership alone does not let anybody in: an account created here has
-  // no password. The link in this message is the only way to get one, so an
-  // invitation that is not delivered is not an invitation.
-  // Someone who already has an account is simply in — there is no password to
-  // set, so a "set your password" link would only confuse them.
-  let invite: { url: string; emailSent: boolean } | undefined;
-  if (!user.passwordHash) {
-    const [workspace, inviter] = await Promise.all([
-      prisma.workspace.findUniqueOrThrow({ where: { id: actor.workspaceId }, select: { name: true } }),
-      prisma.user.findUniqueOrThrow({ where: { id: actor.userId }, select: { name: true } }),
-    ]);
-    invite = await sendInviteEmail({
-      user: { id: user.id, email: input.email },
-      workspaceName: workspace.name,
-      invitedByName: inviter.name,
-    });
-  }
+  });
 
   audit({
     workspaceId: actor.workspaceId,
@@ -295,7 +262,6 @@ export async function inviteMember(
       status: member.user.status,
       lastActiveAt: member.user.lastActiveAt?.toISOString() ?? null,
     },
-    ...(invite ? { invite } : {}),
   };
 }
 
@@ -361,13 +327,13 @@ export async function removeMember(actor: ActorContext, memberId: string, ip?: s
   });
 }
 
-/** How long a reset password lets the person in with the address alone. */
+/** How long a reset password lets the person in with the login alone. */
 export const PASSWORD_RESET_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * An admin's password reset for someone who forgot theirs. The old password
  * stops working and every device is signed out; for a day the person can sign
- * in with the address alone and is made to choose a new password first.
+ * in with the login alone and is made to choose a new password first.
  *
  * The same ladder as changing roles: an owner resets anyone but themselves, an
  * admin only people below them. An account is shared across workspaces, so it

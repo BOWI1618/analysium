@@ -17,7 +17,7 @@ const wholeDay = (offset: number) => {
 async function setup(page: Page) {
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill('Календарь Командный');
-  await page.getByLabel('Рабочая почта').fill(`calendar-${unique()}@test.local`);
+  await page.getByLabel('Логин', { exact: true }).fill(`calendar-${unique()}@test.local`);
   await page.getByLabel('Пароль', { exact: true }).fill('password123');
   await page.getByLabel('Название пространства').fill('Календарь');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();

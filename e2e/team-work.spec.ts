@@ -16,7 +16,7 @@ const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(
 async function register(page: Page, name: string) {
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill(name);
-  await page.getByLabel('Рабочая почта').fill(`e2e-${unique()}@test.local`);
+  await page.getByLabel('Логин', { exact: true }).fill(`e2e-${unique()}@test.local`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByLabel('Название пространства').fill('Команда E2E');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
@@ -27,15 +27,14 @@ async function register(page: Page, name: string) {
 async function addColleague(page: Page, browser: Browser, name: string): Promise<string> {
   await page.goto('/settings/workspace');
   await page.getByRole('button', { name: 'Участники' }).click();
-  await page.getByRole('button', { name: 'Создать код' }).click();
-  const code = (await page.getByLabel('Код приглашения').textContent())!.trim();
+  await page.getByRole('button', { name: 'Создать ссылку' }).click();
+  const link = (await page.getByLabel('Ссылка для входа').textContent())!.trim();
 
   const context = await browser.newContext();
   const mate = await context.newPage();
-  await mate.goto('/join');
-  await mate.getByLabel('Код приглашения').fill(code);
+  await mate.goto(link);
   await mate.getByLabel('Ваше имя').fill(name);
-  await mate.getByLabel('Почта для входа').fill(`mate-${unique()}@test.local`);
+  await mate.getByLabel('Логин', { exact: true }).fill(`mate-${unique()}@test.local`);
   await mate.getByLabel('Пароль').fill(password);
   await mate.getByRole('button', { name: 'Присоединиться' }).click();
   await expect(mate.getByRole('heading', { level: 1 })).toContainText(name.split(' ')[0]!, { timeout: 20_000 });

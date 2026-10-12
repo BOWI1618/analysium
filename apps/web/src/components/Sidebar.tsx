@@ -21,7 +21,7 @@ import {
   Keyboard,
   Briefcase,
 } from 'lucide-react';
-import { useSession, useWorkspaceCan } from '~/app/session';
+import { useAuthConfig, useSession, useWorkspaceCan } from '~/app/session';
 import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useProjects } from '~/features/projects/hooks';
@@ -111,6 +111,9 @@ function ProjectMark({ icon, color }: { icon: string; color?: string | null }) {
 
 export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => void; inDrawer?: boolean }) {
   const { user, workspace, workspaces, switchWorkspace, logout } = useSession();
+  // A workspace of one's own is a place to let people into: only an owner starts another.
+  const { data: authConfig } = useAuthConfig();
+  const mayCreateWorkspace = Boolean(authConfig?.registrationOpen) || workspaces.some((item) => item.role === 'OWNER');
   const { state: connection } = useRealtime();
   const canCreateProject = useWorkspaceCan(Permission.PROJECT_CREATE);
   // Shown to those it is for: someone who leads a department, and the
@@ -217,9 +220,11 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
               </MenuItem>
             ))}
             <MenuSeparator />
-            <MenuItem icon={<Plus className="size-3.5" />} onSelect={() => navigate('/workspaces/new')}>
-              Создать пространство
-            </MenuItem>
+            {mayCreateWorkspace && (
+              <MenuItem icon={<Plus className="size-3.5" />} onSelect={() => navigate('/workspaces/new')}>
+                Создать пространство
+              </MenuItem>
+            )}
             <MenuItem icon={<Settings className="size-3.5" />} onSelect={() => navigate('/settings/workspace')}>
               Настройки пространства
             </MenuItem>

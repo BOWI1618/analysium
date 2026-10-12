@@ -16,6 +16,8 @@ afterAll(async () => {
 });
 
 async function addWorkspaceMember(cookie: string, workspaceId: string, email: string, role: string) {
+  // Adding by login takes a person who already has an account; it makes none.
+  await registerUser(app, { email });
   const response = await app.inject({
     method: 'POST',
     url: `/api/v1/workspaces/${workspaceId}/members`,

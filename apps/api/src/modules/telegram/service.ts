@@ -122,10 +122,10 @@ export interface TelegramNotice {
 /**
  * Sends notifications to those of their recipients who connected Telegram.
  *
- * A delivered notification is marked like a mailed one, so the e-mail digest
- * does not repeat what the person has already seen in the messenger. A chat
- * that blocked the bot is disconnected — the person can connect again, and
- * until then their notifications go by e-mail as before.
+ * A delivered notification is marked as sent — in the column named after the
+ * mail digest it was first made for. A chat that blocked the bot is
+ * disconnected; the person can connect again, and until then their
+ * notifications wait in the app.
  */
 export async function deliverToTelegram(notices: TelegramNotice[], api: TelegramApi): Promise<number> {
   if (notices.length === 0) return 0;

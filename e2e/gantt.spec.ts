@@ -11,7 +11,7 @@ const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(
 async function register(page: Page, name: string) {
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill(name);
-  await page.getByLabel('Рабочая почта').fill(`gantt-${unique()}@test.local`);
+  await page.getByLabel('Логин', { exact: true }).fill(`gantt-${unique()}@test.local`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByLabel('Название пространства').fill('Планирование');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();

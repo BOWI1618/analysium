@@ -17,7 +17,7 @@ async function register(page: Page, name: string) {
 
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill(name);
-  await page.getByLabel('Рабочая почта').fill(email);
+  await page.getByLabel('Логин', { exact: true }).fill(email);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByLabel('Название пространства').fill('Команда E2E');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
@@ -154,20 +154,20 @@ test.describe('основной сценарий', () => {
     await page.goto('/settings/workspace');
     await page.getByRole('button', { name: 'Участники' }).click();
     await page.getByLabel('Роль').first().selectOption('GUEST');
-    await page.getByRole('button', { name: 'Создать код' }).click();
+    await page.getByRole('button', { name: 'Создать ссылку' }).click();
 
-    // The code is shown once, on creation — the only moment it exists in plain.
-    const codeBox = page.getByLabel('Код приглашения');
+    // The link is shown once, on creation; the code it carries stands beside it, to be read out.
+    const codeBox = page.getByLabel('Код из ссылки');
     await expect(codeBox).toBeVisible({ timeout: 15_000 });
     const code = (await codeBox.textContent())!.trim();
 
-    // The guest joins from a browser of their own, choosing their own details.
+    // The guest was told only the code: the join page, opened bare, asks for it.
     const guestContext = await browser.newContext();
     const guest = await guestContext.newPage();
     await guest.goto('/join');
-    await guest.getByLabel('Код приглашения').fill(code);
+    await guest.getByLabel('Код из ссылки').fill(code);
     await guest.getByLabel('Ваше имя').fill('Гость Пространства');
-    await guest.getByLabel('Почта для входа').fill(guestEmail);
+    await guest.getByLabel('Логин', { exact: true }).fill(guestEmail);
     await guest.getByLabel('Пароль').fill('guest12345');
     await guest.getByRole('button', { name: 'Присоединиться' }).click();
     await expect(guest.getByRole('heading', { level: 1 })).toContainText('Гость', { timeout: 20_000 });
@@ -199,17 +199,16 @@ test.describe('первый запуск без демо-данных', () => {
     // Code for a teammate.
     await page.goto('/settings/workspace');
     await page.getByRole('button', { name: 'Участники' }).click();
-    await page.getByRole('button', { name: 'Создать код' }).click();
-    const code = (await page.getByLabel('Код приглашения').textContent())!.trim();
+    await page.getByRole('button', { name: 'Создать ссылку' }).click();
+    const link = (await page.getByLabel('Ссылка для входа').textContent())!.trim();
 
     // The teammate joins from their own browser.
     const mateEmail = `mate-${unique()}@test.local`;
     const mateContext = await browser.newContext();
     const mate = await mateContext.newPage();
-    await mate.goto('/join');
-    await mate.getByLabel('Код приглашения').fill(code);
+    await mate.goto(link);
     await mate.getByLabel('Ваше имя').fill('Коллега Второй');
-    await mate.getByLabel('Почта для входа').fill(mateEmail);
+    await mate.getByLabel('Логин', { exact: true }).fill(mateEmail);
     await mate.getByLabel('Пароль').fill(password);
     await mate.getByRole('button', { name: 'Присоединиться' }).click();
     await expect(mate.getByRole('heading', { level: 1 })).toContainText('Коллега', { timeout: 20_000 });
@@ -288,16 +287,15 @@ test.describe('сброс пароля', () => {
     await register(page, 'Админ Сброса');
     await page.goto('/settings/workspace');
     await page.getByRole('button', { name: 'Участники' }).click();
-    await page.getByRole('button', { name: 'Создать код' }).click();
-    const code = (await page.getByLabel('Код приглашения').textContent())!.trim();
+    await page.getByRole('button', { name: 'Создать ссылку' }).click();
+    const link = (await page.getByLabel('Ссылка для входа').textContent())!.trim();
 
     const mateEmail = `forgot-${unique()}@test.local`;
     const mateContext = await browser.newContext();
     const mate = await mateContext.newPage();
-    await mate.goto('/join');
-    await mate.getByLabel('Код приглашения').fill(code);
+    await mate.goto(link);
     await mate.getByLabel('Ваше имя').fill('Забыл Пароль');
-    await mate.getByLabel('Почта для входа').fill(mateEmail);
+    await mate.getByLabel('Логин', { exact: true }).fill(mateEmail);
     await mate.getByLabel('Пароль').fill(password);
     await mate.getByRole('button', { name: 'Присоединиться' }).click();
     await expect(mate.getByRole('heading', { level: 1 })).toContainText('Забыл', { timeout: 20_000 });
@@ -310,7 +308,7 @@ test.describe('сброс пароля', () => {
 
     // Signed out on their device; the address alone gets them in.
     await mate.goto('/login');
-    await mate.getByLabel('Почта').fill(mateEmail);
+    await mate.getByLabel('Логин', { exact: true }).fill(mateEmail);
     await mate.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(mate.getByRole('heading', { name: 'Новый пароль' })).toBeVisible({ timeout: 15_000 });
     await mate.getByLabel('Новый пароль').fill('fresh12345');
@@ -322,7 +320,7 @@ test.describe('сброс пароля', () => {
     const fresh = await browser.newContext();
     const again = await fresh.newPage();
     await again.goto('/login');
-    await again.getByLabel('Почта').fill(mateEmail);
+    await again.getByLabel('Логин', { exact: true }).fill(mateEmail);
     await again.getByLabel('Пароль').fill('fresh12345');
     await again.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(again.getByRole('heading', { level: 1 })).toContainText('Забыл', { timeout: 20_000 });
@@ -595,14 +593,13 @@ test.describe('задачи сотрудника', () => {
     // A colleague joins by code from their own browser.
     await page.goto('/settings/workspace');
     await page.getByRole('button', { name: 'Участники' }).click();
-    await page.getByRole('button', { name: 'Создать код' }).click();
-    const code = (await page.getByLabel('Код приглашения').textContent())!.trim();
+    await page.getByRole('button', { name: 'Создать ссылку' }).click();
+    const link = (await page.getByLabel('Ссылка для входа').textContent())!.trim();
     const mateContext = await browser.newContext();
     const mate = await mateContext.newPage();
-    await mate.goto('/join');
-    await mate.getByLabel('Код приглашения').fill(code);
+    await mate.goto(link);
     await mate.getByLabel('Ваше имя').fill('Коллега Занятой');
-    await mate.getByLabel('Почта для входа').fill(`mate-${unique()}@test.local`);
+    await mate.getByLabel('Логин', { exact: true }).fill(`mate-${unique()}@test.local`);
     await mate.getByLabel('Пароль').fill(password);
     await mate.getByRole('button', { name: 'Присоединиться' }).click();
     await expect(mate.getByRole('heading', { level: 1 })).toContainText('Коллега', { timeout: 20_000 });

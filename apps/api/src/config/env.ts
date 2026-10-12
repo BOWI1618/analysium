@@ -32,32 +32,6 @@ const schema = z.object({
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   UPLOAD_DIR: z.string().default('./uploads'),
   /**
-   * Whether strangers can create an account.
-   *
-   * Defaults to open, which is what a local or self-hosted first run needs —
-   * somebody has to create the first workspace. On a public domain turn it off
-   * once the team is onboarded: existing members keep inviting each other, and
-   * the sign-up form stops being an open door.
-   */
-  /**
-   * Outgoing mail. Off by default: a fresh checkout and the test suite must
-   * work without an SMTP server, and with it off registration simply skips
-   * verification instead of stranding accounts nobody can activate.
-   */
-  MAIL_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
-  SMTP_HOST: z.string().default('localhost'),
-  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASSWORD: z.string().optional(),
-  MAIL_FROM: z.string().default('Analysium <no-reply@localhost>'),
-  /**
-   * Messages per day the server allows itself. Kept under the mailbox's own
-   * limit — Yandex allows 300 a day over SMTP for a personal box, and one
-   * sent past it gets the mailbox blocked as a spammer.
-   */
-  MAIL_DAILY_LIMIT: z.coerce.number().int().min(1).default(250),
-
-  /**
    * Token of the Telegram bot, from @BotFather. With it set, people can connect
    * Telegram in their account settings and notifications reach them there;
    * without it the feature is simply absent. One bot is polled by one server:
@@ -65,14 +39,15 @@ const schema = z.object({
    */
   TELEGRAM_BOT_TOKEN: z.string().optional(),
 
-  /** Hours a verification link stays valid. */
-  EMAIL_TOKEN_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(48),
-
-  /** Days an invitation stays open. Longer than a verification link: the
-   *  invited person may simply be away when it arrives. */
+  /** Days an access link stays open: the invited person may simply be away when it arrives. */
   INVITE_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(14),
 
-
+  /**
+   * Sign-up without an invitation — for development and the test suites only,
+   * where accounts are made by the dozen. In production it is not read at
+   * all: the installation is closed, and a line left in an .env file must not
+   * be what opens it (see modules/auth/access.ts).
+   */
   ALLOW_PUBLIC_REGISTRATION: z
     .enum(['true', 'false'])
     .default('true')
@@ -132,7 +107,7 @@ const configuredOrigins = env.WEB_ORIGIN.split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
-/** Where the web app lives — the base of every link put into an e-mail. */
+/** Where the web app lives — the base of every link sent out to a person. */
 export const appOrigin = configuredOrigins[0] ?? '';
 
 export const allowedOrigins: (string | RegExp)[] = isProd

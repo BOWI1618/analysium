@@ -32,8 +32,8 @@ async function join(code: string, email: string, name = 'Новый Участн
   });
 }
 
-describe('коды приглашения', () => {
-  it('человек входит по коду и сам задаёт имя, почту и пароль', async () => {
+describe('ссылки для входа', () => {
+  it('человек входит по коду из ссылки и сам задаёт имя, логин и пароль', async () => {
     const owner = await registerUser(app, { workspaceName: 'По коду' });
     const created = await createCode(owner.cookie, owner.workspaceId, 'ADMIN');
     expect(created.statusCode).toBe(201);
@@ -97,7 +97,7 @@ describe('коды приглашения', () => {
     expect(list.body).not.toContain(waiting.code);
   });
 
-  it('занятая почта даёт понятный отказ, а код не сгорает', async () => {
+  it('занятый логин даёт понятный отказ, а код не сгорает', async () => {
     const owner = await registerUser(app, { workspaceName: 'Занято' });
     const taken = await registerUser(app, { email: 'taken@test.local' });
     const { code } = (await createCode(owner.cookie, owner.workspaceId)).json();
@@ -110,14 +110,32 @@ describe('коды приглашения', () => {
     expect((await join(code, 'free@test.local')).statusCode).toBe(201);
   });
 
-  it('обычный участник не может выпускать коды', async () => {
+  it('ссылки выдаёт только владелец: ни участник, ни администратор их не создают, не видят и не отзывают', async () => {
     const owner = await registerUser(app, { workspaceName: 'Права' });
-    const { code } = (await createCode(owner.cookie, owner.workspaceId, 'MEMBER')).json();
-    await join(code, 'plain@test.local');
-    const memberCookie = await login(app, 'plain@test.local', 'joiner12345');
+    const waiting = (await createCode(owner.cookie, owner.workspaceId, 'GUEST')).json();
 
-    const attempt = await createCode(memberCookie, owner.workspaceId);
-    expect(attempt.statusCode).toBe(403);
+    for (const role of ['MEMBER', 'ADMIN']) {
+      const { code } = (await createCode(owner.cookie, owner.workspaceId, role)).json();
+      const login_ = `${role.toLowerCase()}-of-rights`;
+      await join(code, login_);
+      const cookie = await login(app, login_, 'joiner12345');
+
+      expect((await createCode(cookie, owner.workspaceId, 'GUEST')).statusCode, role).toBe(403);
+      const list = await app.inject({
+        method: 'GET',
+        url: `/api/v1/workspaces/${owner.workspaceId}/invite-codes`,
+        headers: { cookie },
+      });
+      expect(list.statusCode, role).toBe(403);
+      const revoke = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/workspaces/${owner.workspaceId}/invite-codes/${waiting.id}`,
+        headers: { cookie },
+      });
+      expect(revoke.statusCode, role).toBe(403);
+    }
+    // The link the owner made is still good.
+    expect((await join(waiting.code, 'guest-of-rights')).statusCode).toBe(201);
   });
 
   it('роль владельца кодом не выдаётся', async () => {

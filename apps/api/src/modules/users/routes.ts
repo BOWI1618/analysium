@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
-import { changePasswordSchema, telegramLoginSchema, updateProfileSchema } from '@flowdesk/contracts';
+import { changeLoginSchema, changePasswordSchema, telegramLoginSchema, updateProfileSchema } from '@flowdesk/contracts';
 import { env } from '../../config/env';
 import { parse } from '../../lib/validate';
 import { prisma } from '../../lib/prisma';
 import { workspaceContext, visibleProjectIds } from '../../lib/context';
 import { currentUser, requireAuth } from '../../plugins/auth';
 import { hashPassword, verifyPassword } from '../../lib/password';
-import { badRequest, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
 import { issueSummarySelect, toIssueSummary } from '../../lib/serialize';
 import { storage } from '../../lib/storage';
 import { telegram, telegramEnabled } from '../../lib/telegram';
@@ -39,11 +39,34 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         avatarUrl: true,
         timezone: true,
         status: true,
-        emailNotifications: true,
       },
     });
     if (replacedPhoto) await storage.remove(replacedPhoto);
     return updated;
+  });
+
+  /**
+   * A new login. It is what the account is opened by, so the password is asked
+   * for — an unattended screen must not be enough to take an account away.
+   * Signed-in devices stay signed in: the person has not changed, only the name.
+   */
+  app.post('/me/login', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req) => {
+    const user = currentUser(req);
+    const { login, currentPassword } = parse(changeLoginSchema, req.body);
+
+    const record = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { email: true, passwordHash: true },
+    });
+    const ok = await verifyPassword(currentPassword, record.passwordHash);
+    if (!ok) throw badRequest('Текущий пароль неверен', { currentPassword: 'Неверный пароль' });
+    if (login === record.email) return { email: record.email };
+
+    const taken = await prisma.user.findUnique({ where: { email: login }, select: { id: true } });
+    if (taken) throw conflict('Такой логин уже занят', { login: 'Этот логин уже занят' });
+
+    await prisma.user.update({ where: { id: user.id }, data: { email: login } });
+    return { email: login };
   });
 
   /**

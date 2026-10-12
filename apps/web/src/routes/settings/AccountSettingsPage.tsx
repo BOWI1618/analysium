@@ -10,7 +10,7 @@ import { Topbar } from '~/components/Topbar';
 import { Marker, Masthead } from '~/ui/Masthead';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
-import { Checkbox, Input, Select } from '~/ui/Input';
+import { Input, Select } from '~/ui/Input';
 
 /** Every Russian zone first, by its city; then a few common foreign ones. */
 const TIMEZONES: { value: string; label: string }[] = [
@@ -46,6 +46,10 @@ export function AccountSettingsPage() {
   });
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '' });
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  // The login is changed apart from the rest of the profile: it is what the
+  // account is opened by, so the password is asked for.
+  const [loginForm, setLoginForm] = useState<{ login: string; currentPassword: string } | null>(null);
+  const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const updateProfile = useMutation({
@@ -80,13 +84,18 @@ export function AccountSettingsPage() {
   });
 
   const { data: config } = useAuthConfig();
-  const updateNotifications = useMutation({
-    mutationFn: (emailNotifications: boolean) => api.patch('/me', { emailNotifications }),
-    onSuccess: async (_, emailNotifications) => {
+  const changeLogin = useMutation({
+    mutationFn: (input: { login: string; currentPassword: string }) => api.post<{ email: string }>('/me/login', input),
+    onSuccess: async ({ email }) => {
+      setLoginForm(null);
+      setLoginErrors({});
       await queryClient.invalidateQueries({ queryKey: qk.session });
-      toast.success(emailNotifications ? 'Письма включены' : 'Письма выключены');
+      toast.success('Логин изменён', `Теперь вы входите как «${email}». Пароль прежний.`);
     },
-    onError: (error) => toast.error(error, 'Не удалось сохранить настройку'),
+    onError: (error) => {
+      if (error instanceof ApiError) setLoginErrors(error.fields);
+      toast.error(error, 'Не удалось изменить логин');
+    },
   });
 
   // Connecting Telegram happens in the bot, outside this page: the link opens
@@ -125,7 +134,7 @@ export function AccountSettingsPage() {
     mutationFn: () => api.delete<void>('/me/telegram'),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.session });
-      toast.success('Telegram отключён', 'Уведомления снова будут приходить на почту.');
+      toast.success('Telegram отключён', 'Уведомления остаются в приложении, во «Входящих».');
     },
     onError: (error) => toast.error(error, 'Не удалось отключить Telegram'),
   });
@@ -225,7 +234,6 @@ export function AccountSettingsPage() {
                 onChange={(event) => setProfile((p) => ({ ...p, name: event.target.value }))}
               />
 
-              <Input label="Почта" value={user.email} disabled hint="Чтобы сменить почту, обратитесь к администратору." />
 
               <Select
                 label="Часовой пояс"
@@ -256,28 +264,85 @@ export function AccountSettingsPage() {
           </section>
 
           <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
-            <h2 className="fd-eyebrow">Уведомления</h2>
-            <div className="mt-3">
-              <Checkbox
-                checked={user.emailNotifications}
-                disabled={config?.mailEnabled === false || updateNotifications.isPending}
-                onChange={(event) => updateNotifications.mutate(event.target.checked)}
-                label="Присылать непрочитанные уведомления на почту"
-              />
-              <p className="mt-1 pl-6 text-xs text-text-subtle">
-                {config?.mailEnabled === false
-                  ? 'На этом сервере почта выключена — письма начнут приходить, когда администратор её включит.'
-                  : `Письмо на ${user.email} приходит, только если уведомление пролежало непрочитанным 10 минут. Несколько уведомлений собираются в одно письмо — не чаще раза в полчаса.`}
-              </p>
-            </div>
+            <h2 className="fd-eyebrow">Логин</h2>
+            {loginForm ? (
+              <form
+                className="mt-3 space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setLoginErrors({});
+                  changeLogin.mutate(loginForm);
+                }}
+              >
+                <Input
+                  label="Новый логин"
+                  autoFocus
+                  required
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={loginForm.login}
+                  error={loginErrors.login}
+                  hint="Буквы, цифры и знаки . _ - @ +, без пробелов. Большие и маленькие буквы не различаются."
+                  onChange={(event) => setLoginForm((form) => form && { ...form, login: event.target.value })}
+                />
+                <Input
+                  label="Пароль — для подтверждения"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={loginForm.currentPassword}
+                  error={loginErrors.currentPassword}
+                  onChange={(event) => setLoginForm((form) => form && { ...form, currentPassword: event.target.value })}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    loading={changeLogin.isPending}
+                    disabled={!loginForm.login.trim() || !loginForm.currentPassword}
+                  >
+                    Сохранить логин
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setLoginForm(null);
+                      setLoginErrors({});
+                    }}
+                  >
+                    Отмена
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <p className="min-w-0 flex-1 text-sm">
+                  <span className="fd-num font-bold break-all" aria-label="Текущий логин">
+                    {user.email}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-text-subtle">
+                    По нему вы входите. Сменить можно в любой момент — пароль и всё остальное останутся как есть.
+                  </span>
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => setLoginForm({ login: user.email, currentPassword: '' })}>
+                  Изменить логин
+                </Button>
+              </div>
+            )}
+          </section>
 
-            {config?.telegramEnabled && (
-              <div className="mt-4 border-t-2 border-border-strong pt-3">
+          {config?.telegramEnabled && (
+          <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
+            <h2 className="fd-eyebrow">Уведомления</h2>
+              <div className="mt-3">
                 <p className="text-sm font-bold">Telegram</p>
                 {telegramLinked ? (
                   <>
                     <p className="mt-1 text-xs text-text-subtle">
-                      Подключён. Уведомления приходят в Telegram сразу, со ссылкой на задачу; письма их не повторяют.
+                      Подключён. Уведомления приходят в Telegram сразу, со ссылкой на задачу.
                     </p>
                     <Button
                       size="sm"
@@ -351,8 +416,8 @@ export function AccountSettingsPage() {
                   </>
                 )}
               </div>
-            )}
           </section>
+          )}
 
           <section className="border-2 border-border-strong bg-surface p-4 shadow-md">
             <h2 className="fd-eyebrow">Пароль</h2>

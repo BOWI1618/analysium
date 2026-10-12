@@ -12,7 +12,7 @@ const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(
 async function setup(page: Page) {
   await page.goto('/register');
   await page.getByLabel('Ваше имя').fill('Работа Командная');
-  await page.getByLabel('Рабочая почта').fill(`work-${unique()}@test.local`);
+  await page.getByLabel('Логин', { exact: true }).fill(`work-${unique()}@test.local`);
   await page.getByLabel('Пароль', { exact: true }).fill('password123');
   await page.getByLabel('Название пространства').fill('Работа');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();

@@ -18,6 +18,7 @@ afterAll(async () => {
 describe('задачи без проекта', () => {
   it('создаются в пространстве без единого проекта и назначаются любому участнику', async () => {
     const owner = await registerUser(app, { workspaceName: 'Без проектов' });
+    await registerUser(app, { email: 'teammate-np@test.local' });
     const invited = await app.inject({
       method: 'POST',
       url: `/api/v1/workspaces/${owner.workspaceId}/members`,
