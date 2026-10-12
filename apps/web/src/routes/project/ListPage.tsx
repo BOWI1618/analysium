@@ -105,7 +105,10 @@ export function ListPage() {
   const bulkUpdate = useBulkUpdate(workspace?.id ?? '');
   const patchIssue = usePatchIssue();
 
-  const query = useIssueList({ projectId }, filters);
+  // The list of a project takes in its subprojects; the bar above and a
+  // saved view hold only what the person chose.
+  const scoped = useMemo(() => ({ ...filters, withSubprojects: true }), [filters]);
+  const query = useIssueList({ projectId }, scoped);
   const issues = useMemo(() => flattenPages(query.data), [query.data]);
 
   // Only what the list still shows stays selected. A task that a new filter
@@ -224,7 +227,7 @@ export function ListPage() {
               title="Выгрузить задачи с этими фильтрами в таблицу для Excel"
               onClick={() =>
                 window.location.assign(
-                  `${API_BASE}/projects/${projectId}/issues/export${buildQuery(filtersToQuery(filters))}`,
+                  `${API_BASE}/projects/${projectId}/issues/export${buildQuery(filtersToQuery(scoped))}`,
                 )
               }
             >

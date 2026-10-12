@@ -115,4 +115,10 @@ describe('ordering', () => {
   it('sends issues with no due date to the end', () => {
     expect(JSON.stringify(orderByFor('dueDate', 'asc'))).toContain('"nulls":"last"');
   });
+
+  it('puts open issues before finished ones when asked, keeping the sort inside each', () => {
+    const order = orderByFor('dueDate', 'asc', true);
+    expect(order[0]).toEqual({ completedAt: { sort: 'desc', nulls: 'first' } });
+    expect(order.slice(1)).toEqual(orderByFor('dueDate', 'asc'));
+  });
 });

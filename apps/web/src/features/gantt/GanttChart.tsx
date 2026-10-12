@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { SubprojectMark } from '~/components/SubprojectMark';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { ChevronDown, ChevronRight, Link2, Plus, Unlink } from 'lucide-react';
@@ -407,6 +408,7 @@ function TreeRow({
         {/* On a phone the tree column is 160px; with the key and the avatar
             beside it the title was cut to two or three letters. There the title
             alone identifies the bar. */}
+        <SubprojectMark project={row.project} />
         <span className="fd-key hidden shrink-0 sm:inline">{row.issueKey}</span>
         <span
           className={clsx(

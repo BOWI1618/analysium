@@ -17,6 +17,7 @@ import { Permission } from '@flowdesk/contracts';
 import { useSession, useWorkspaceCan } from '~/app/session';
 import { useProject, useProjects, useToggleFavorite } from '~/features/projects/hooks';
 import { Topbar } from '~/components/Topbar';
+import { HomeProjectProvider } from '~/components/SubprojectMark';
 import { RouteTabs, type TabItem } from '~/ui/Tabs';
 import { ErrorState, Skeleton } from '~/ui/Feedback';
 import { Button, IconButton } from '~/ui/Button';
@@ -138,7 +139,9 @@ export function ProjectLayout() {
         <RouteTabs items={tabs} />
       </div>
 
-      <Outlet />
+      <HomeProjectProvider value={project.id}>
+        <Outlet />
+      </HomeProjectProvider>
     </>
   );
 }

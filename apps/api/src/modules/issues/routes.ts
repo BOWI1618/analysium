@@ -22,6 +22,7 @@ import { transferIssue } from './transfer';
 import { duplicateIssue } from './duplicate';
 import { exportIssuesCsv } from './exportCsv';
 import { parseBounds, workload } from './workload';
+import { withinFamily } from '../projects/family';
 import { badRequest } from '../../lib/errors';
 
 type IssueParams = { issueId: string };
@@ -73,7 +74,7 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const user = currentUser(req);
     const { actor } = await projectContext(user.id, req.params.projectId);
     const filter = parse(issueFilterSchema, { ...(req.query as object), projectId: req.params.projectId });
-    return service.listIssues(actor, filter, user.viewerTimezone);
+    return service.listIssues(actor, await withinFamily(actor, req.params.projectId, filter), user.viewerTimezone);
   });
 
   /** The list as a table file: every task matching the filters, subtasks included. */
@@ -81,7 +82,8 @@ export async function issueRoutes(app: FastifyInstance): Promise<void> {
     const user = currentUser(req);
     const { actor, project } = await projectContext(user.id, req.params.projectId);
     const filter = parse(issueFilterSchema, { ...(req.query as object), projectId: req.params.projectId });
-    const csv = await exportIssuesCsv(actor, filter, user.viewerTimezone);
+    // The file holds what the list on the screen holds, subprojects included.
+    const csv = await exportIssuesCsv(actor, await withinFamily(actor, req.params.projectId, filter), user.viewerTimezone);
     const filename = `${project.key}-задачи-${new Date().toISOString().slice(0, 10)}.csv`;
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')

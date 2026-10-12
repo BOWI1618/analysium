@@ -6,6 +6,7 @@ import { Avatar } from '~/ui/Avatar';
 import { pluralize } from '~/lib/format';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import { DueDateChip, IssueTypeIcon, LabelChip, PriorityIcon } from './IssueMeta';
+import { SubprojectMark } from './SubprojectMark';
 import { DoneToggle, isClosedStatus } from './DoneToggle';
 
 /** What a board card shows, chosen in the board settings. */
@@ -87,6 +88,7 @@ export const IssueCard = memo(function IssueCard({
       {/* Header: the key leads, because a column is read as an index */}
       <div className="flex items-center gap-1.5">
         {onToggleDone && <DoneToggle done={done} issueKey={issue.issueKey} onToggle={onToggleDone} />}
+        <SubprojectMark project={issue.project} />
         <span className="fd-key font-bold text-text">{issue.issueKey}</span>
         {showProject && (
           <span className="truncate text-2xs text-text-subtle" title={issue.project.name}>

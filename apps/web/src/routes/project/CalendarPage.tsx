@@ -121,6 +121,8 @@ export function CalendarPage() {
     { projectId },
     {
       ...filters,
+      // With the subprojects' tasks, like the board and the list.
+      withSubprojects: true,
       overlapsFrom: startOfDay(rangeStart).toISOString(),
       overlapsTo: new Date(startOfDay(rangeEnd).getTime() + 24 * 60 * 60 * 1000 - 1).toISOString(),
       sort: 'dueDate',
@@ -130,7 +132,7 @@ export function CalendarPage() {
   );
   const unscheduledQuery = useIssueList(
     { projectId },
-    { ...filters, noDates: true, sort: 'updated', order: 'desc' },
+    { ...filters, withSubprojects: true, noDates: true, sort: 'updated', order: 'desc' },
     { limit: 100, enabled: unscheduledOpen },
   );
 

@@ -52,6 +52,7 @@ import {
 } from '../../domain/issueRules';
 import { issueSummarySelect, toIssueSummary, toAttachment, attachmentSelect, toSprint, sprintInclude } from '../../lib/serialize';
 import { filterWorkspaceMembers, issueWatchers, notify } from '../notifications/service';
+import { equivalentStatus, projectFamily, statusStandIns, withStandIns } from '../projects/family';
 
 /* ----------------------------------------------------------------- read */
 
@@ -68,7 +69,7 @@ export async function listIssues(
     timezone,
   }, { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES });
 
-  const orderBy = orderByFor(filter.sort, filter.order);
+  const orderBy = orderByFor(filter.sort, filter.order, filter.openFirst);
 
   const rows = await prisma.issue.findMany({
     where,
@@ -164,6 +165,12 @@ export interface BoardColumn {
   status: { id: string; name: string; category: string; color: string; position: number; wipLimit: number | null };
   issues: IssueSummaryDto[];
   total: number;
+  /**
+   * How many of them are the project's own — what the column's limit is
+   * counted against. Differs from `total` only with subprojects' tasks in the
+   * column: each of those answers to the limit of its own project's status.
+   */
+  ownTotal: number;
   hasMore: boolean;
 }
 
@@ -185,16 +192,30 @@ export async function getBoard(
   });
 
   const perColumn = Math.min(filter.perColumn ?? 60, 200);
+  // With its subprojects, where asked: their tasks stand in this project's
+  // columns, each status of theirs in the one column that stands for it.
+  const family = filter.withSubprojects ? await projectFamily(actor, projectId) : [projectId];
+  const standIns = await statusStandIns(projectId, family);
   const baseWhere = buildIssueWhere(
-    { ...filter, projectId, sort: 'rank', order: 'asc', limit: perColumn },
+    {
+      ...filter,
+      projectId: family,
+      statusId: withStandIns(filter.statusId, standIns),
+      sort: 'rank',
+      order: 'asc',
+      limit: perColumn,
+    },
     { workspaceId: actor.workspaceId, allowedProjectIds: 'ALL', currentUserId: actor.userId, timezone },
     { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES },
   );
 
   const columns = await Promise.all(
     statuses.map(async (status) => {
-      const where: Prisma.IssueWhereInput = { AND: [baseWhere, { statusId: status.id }] };
-      const [rows, total] = await Promise.all([
+      const where: Prisma.IssueWhereInput = {
+        AND: [baseWhere, { statusId: { in: [status.id, ...(standIns.get(status.id) ?? [])] } }],
+      };
+      const shared = (standIns.get(status.id) ?? []).length > 0;
+      const [rows, total, own] = await Promise.all([
         prisma.issue.findMany({
           where,
           orderBy: [{ rank: 'asc' }, { id: 'asc' }],
@@ -202,12 +223,14 @@ export async function getBoard(
           select: issueSummarySelect,
         }),
         prisma.issue.count({ where }),
+        shared ? prisma.issue.count({ where: { AND: [baseWhere, { statusId: status.id }] } }) : null,
       ]);
       const hasMore = rows.length > perColumn;
       return {
         status,
         issues: (hasMore ? rows.slice(0, perColumn) : rows).map(toIssueSummary),
         total,
+        ownTotal: own ?? total,
         hasMore,
       };
     }),
@@ -312,8 +335,10 @@ async function resolveStatus(projectId: string, statusId?: string) {
       where: { id: statusId, projectId },
       select: { id: true, category: true, name: true, wipLimit: true },
     });
-    if (!status) throw badRequest('Неизвестный статус для этого проекта');
-    return status;
+    if (status) return status;
+    const standIn = await standInStatus(projectId, statusId);
+    if (!standIn) throw badRequest('Неизвестный статус для этого проекта');
+    return standIn;
   }
   const fallback = await prisma.workflowStatus.findFirst({
     where: { projectId },
@@ -322,6 +347,32 @@ async function resolveStatus(projectId: string, statusId?: string) {
   });
   if (!fallback) throw badRequest('В проекте не настроены статусы');
   return fallback;
+}
+
+/**
+ * A status of the project above or below, turned into the task's own.
+ *
+ * On a project's board the tasks of its subprojects stand in its columns, and
+ * a card dropped into a column — or a status picked from the project's list —
+ * names a status of that project. The task keeps to its own project's
+ * workflow: it gets the status there that stands for the one named. A status
+ * of an unrelated project is not translated — it is simply unknown.
+ */
+async function standInStatus(projectId: string, statusId: string) {
+  const foreign = await prisma.workflowStatus.findUnique({
+    where: { id: statusId },
+    select: { name: true, category: true, projectId: true, project: { select: { parentId: true } } },
+  });
+  if (!foreign) return null;
+  const own = await prisma.project.findUnique({ where: { id: projectId }, select: { parentId: true } });
+  const related = own?.parentId === foreign.projectId || foreign.project.parentId === projectId;
+  if (!related) return null;
+  const targets = await prisma.workflowStatus.findMany({
+    where: { projectId },
+    orderBy: { position: 'asc' },
+    select: { id: true, category: true, name: true, wipLimit: true, isDefault: true },
+  });
+  return equivalentStatus(targets, foreign) ?? null;
 }
 
 /** Validates parent/epic references, loading their types in one query. */
@@ -834,10 +885,13 @@ export async function updateIssue(
   let newStatus: { id: string; name: string; category: string } | null = null;
   if (patch.statusId !== undefined && patch.statusId !== before.statusId) {
     const status = await resolveStatus(before.projectId, patch.statusId);
-    newStatus = status;
-    data.status = { connect: { id: status.id } };
-    data.completedAt = nextCompletedAt(status.category as never, before.completedAt);
-    after.statusId = status.id;
+    // A status of the parent project may stand for the one the task already has.
+    if (status.id !== before.statusId) {
+      newStatus = status;
+      data.status = { connect: { id: status.id } };
+      data.completedAt = nextCompletedAt(status.category as never, before.completedAt);
+      after.statusId = status.id;
+    }
   }
 
   const changes = diffIssue(before as never, after as never);
@@ -1159,7 +1213,13 @@ export async function moveIssue(
 
   const targetStatusId = input.statusId ?? issue.statusId;
   const status = await resolveStatus(issue.projectId, targetStatusId);
-  const isEntering = targetStatusId !== issue.statusId;
+  // Compared by the status the task really gets: on the parent's board a
+  // subproject's task is dropped into the parent's column, whose id is never
+  // the task's own — reordering inside a column must not read as a change.
+  const isEntering = status.id !== issue.statusId;
+  // The column named was another project's: the task took its own project's
+  // stand-in, and its neighbours on that board hold statuses of their own.
+  const acrossProjects = status.id !== targetStatusId;
 
   if (isEntering) {
     const count = await prisma.issue.count({
@@ -1195,7 +1255,11 @@ export async function moveIssue(
         id: { in: [input.beforeId, input.afterId].filter((v): v is string => Boolean(v)) },
         // Neighbours must belong to the target column; a neighbour from
         // another column (or a stale id) is ignored, falling back to the edge.
-        statusId: status.id,
+        // On a board that mixes a project with its subprojects the column
+        // holds tasks of several statuses, so there the neighbours are taken
+        // as given — ranks compare across projects — and only kept to the
+        // workspace.
+        ...(acrossProjects ? { project: { workspaceId: actor.workspaceId } } : { statusId: status.id }),
       },
       select: { id: true, rank: true },
     });
@@ -1368,11 +1432,23 @@ export async function bulkUpdate(
     }
   }
 
-  if (patch.statusId && projectIds.length > 1) {
-    throw badRequest('Массово менять статус можно только в пределах одного проекта');
+  // One status for tasks of several projects makes sense inside a family
+  // only: in a project's list the tasks of its subprojects are selected along
+  // with its own, and each takes the status of its own project that stands for
+  // the chosen one.
+  const statusOf = new Map<string, Awaited<ReturnType<typeof resolveStatus>>>();
+  if (patch.statusId) {
+    for (const projectId of projectIds) {
+      try {
+        statusOf.set(projectId, await resolveStatus(projectId, patch.statusId));
+      } catch (error) {
+        if (projectIds.length > 1 && error instanceof AppError) {
+          throw badRequest('Массово менять статус можно только в пределах одного проекта и его подпроектов');
+        }
+        throw error;
+      }
+    }
   }
-
-  const status = patch.statusId ? await resolveStatus(projectIds[0]!, patch.statusId) : null;
   // Per project: a guest may belong to one of the selected issues' projects and not another.
   if (nextAssignee) {
     await Promise.all(projectIds.map((pid) => validateAssignee(actor.workspaceId, pid, nextAssignee)));
@@ -1404,11 +1480,11 @@ export async function bulkUpdate(
 
   // WIP limits are enforced on entry, like moveIssue. The count is not atomic
   // against concurrent moves — a known, accepted limitation (same as moveIssue).
-  if (status) {
-    const entering = issues.filter((i) => i.statusId !== status.id).length;
+  for (const [projectId, status] of statusOf) {
+    const entering = issues.filter((i) => i.projectId === projectId && i.statusId !== status.id).length;
     if (entering > 0) {
       const current = await prisma.issue.count({
-        where: { projectId: projectIds[0]!, statusId: status.id, archivedAt: null, parentId: null },
+        where: { projectId, statusId: status.id, archivedAt: null, parentId: null },
       });
       if (
         exceedsWipLimit(
@@ -1436,6 +1512,7 @@ export async function bulkUpdate(
       // depend on whether it was changed alone or together with others.
       const after: Record<string, unknown> = {};
       const changes: IssueChanges = {};
+      const status = statusOf.get(issue.projectId) ?? null;
 
       if (status && status.id !== issue.statusId) {
         data.status = { connect: { id: status.id } };
@@ -1550,9 +1627,11 @@ export async function bulkUpdate(
     }
   }
 
-  if (status?.category === 'COMPLETED') {
-    for (const { issue } of announcements) {
-      if (issue.status.category !== 'COMPLETED') await continueRecurrenceSafely(actor, issue.id);
+  for (const { issue } of announcements) {
+    // Finished by the status its own project gave it; a recurring task then comes back.
+    const closedBy = statusOf.get(issue.projectId);
+    if (closedBy?.category === 'COMPLETED' && issue.status.category !== 'COMPLETED') {
+      await continueRecurrenceSafely(actor, issue.id);
     }
   }
 

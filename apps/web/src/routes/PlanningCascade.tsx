@@ -38,19 +38,24 @@ import { pluralize } from '~/lib/format';
 
 /* ------------------------------------------------------------------ states */
 
-type StateKey = 'backlog' | 'todo' | 'doing' | 'done' | 'all';
+type StateKey = 'all' | 'backlog' | 'todo' | 'doing' | 'done';
 
 /**
  * The states a pool is looked at by. They are status categories, not status
  * names: every project calls its columns its own way, and the card shows the
  * project's own name. Switching changes what is listed, never a task.
+ *
+ * Everything is listed first: a pool is what a person holds, and a task that
+ * has left the backlog is still theirs to see and to hand on. In that list the
+ * finished ones stand after the open ones, so it does not open with what was
+ * closed long ago. A single state is a way to narrow it.
  */
 const STATES: { value: StateKey; label: string; filters: IssueFilters; empty: string }[] = [
+  { value: 'all', label: 'Все', filters: { openFirst: true }, empty: 'Задач нет' },
   { value: 'backlog', label: 'Бэклог', filters: { statusCategory: ['BACKLOG'] }, empty: 'В бэклоге пусто' },
   { value: 'todo', label: 'К выполнению', filters: { statusCategory: ['UNSTARTED'] }, empty: 'Нет задач к выполнению' },
   { value: 'doing', label: 'В работе', filters: { statusCategory: ['STARTED'] }, empty: 'В работе ничего нет' },
   { value: 'done', label: 'Завершённые', filters: { statusCategory: ['COMPLETED'] }, empty: 'Завершённых задач нет' },
-  { value: 'all', label: 'Все', filters: {}, empty: 'Задач нет' },
 ];
 const stateOf = (value: string | null) => STATES.find((item) => item.value === value) ?? STATES[0]!;
 
@@ -371,7 +376,7 @@ export function PlanningCascade() {
                   <SegmentedControl
                     label="Состояние задач"
                     value={state.value}
-                    onChange={(next) => setParams({ state: next === 'backlog' ? null : next })}
+                    onChange={(next) => setParams({ state: next === 'all' ? null : next })}
                     options={STATES.map((item) => ({ value: item.value, label: item.label }))}
                   />
                 </div>
@@ -411,12 +416,12 @@ export function PlanningCascade() {
                 compact
                 title={state.empty}
                 description={
-                  acting && state.value === 'backlog'
+                  acting && (state.value === 'all' || state.value === 'backlog')
                     ? 'Сюда попадают задачи, которые передали вам, и те, что вы создали себе.'
                     : undefined
                 }
                 action={
-                  acting && state.value === 'backlog' ? (
+                  acting && (state.value === 'all' || state.value === 'backlog') ? (
                     <Button
                       size="sm"
                       variant="primary"
@@ -588,9 +593,9 @@ function PoolHeader({
 }
 
 /**
- * One direct report: their own backlog by default, other states on request,
- * and — apart from that — what the people below them hold: the tasks they
- * passed on, and whatever those people took or made themselves.
+ * One direct report: all of their own tasks by default, a single state on
+ * request, and — apart from that — what the people below them hold: the tasks
+ * they passed on, and whatever those people took or made themselves.
  */
 function PersonColumn({
   workspaceId,
@@ -619,7 +624,7 @@ function PersonColumn({
   actions: (issue: IssueSummaryDto) => ReactNode;
 }) {
   const [scope, setScope] = useState<'own' | 'below'>('own');
-  const [stateKey, setStateKey] = useState<StateKey>('backlog');
+  const [stateKey, setStateKey] = useState<StateKey>('all');
   const state = stateOf(stateKey);
   const hasBranch = report.belowUserIds.length > 0;
 

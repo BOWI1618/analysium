@@ -4,6 +4,7 @@ import { ISSUE_PRIORITIES, ISSUE_TYPES, StatusCategory } from '@flowdesk/contrac
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { toSprint, sprintInclude, toUserSummary } from '../../lib/serialize';
+import { projectFamily, statusStandIns } from '../projects/family';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -20,13 +21,21 @@ export async function projectDashboard(
   // `projectContext`, which throws when they cannot see the project. The actor
   // is kept in the signature so the boundary stays visible and so a future
   // per-widget check has it to hand.
-  _actor: ActorContext,
+  actor: ActorContext,
   projectId: string,
   days = 30,
   timezone?: string,
 ): Promise<DashboardDto> {
   const since = new Date(Date.now() - days * DAY_MS);
-  const base = { projectId, archivedAt: null };
+  // The project's figures take in its subprojects — the ones the viewer may
+  // open — exactly like its board and its list: a figure here opens a list
+  // there, and the two have to count the same tasks. Sprints stay the
+  // project's own.
+  const family = await projectFamily(actor, projectId);
+  const standIns = await statusStandIns(projectId, family);
+  const columnOf = new Map<string, string>();
+  for (const [column, ids] of standIns) for (const id of ids) columnOf.set(id, column);
+  const base = { projectId: { in: family }, archivedAt: null };
   // Work still to be done: neither finished nor called off. «Открыто» used
   // to be «all minus completed», which counted cancelled tasks as open, and
   // «без исполнителя» counted tasks closed long ago — a single finished task
@@ -37,7 +46,7 @@ export async function projectDashboard(
   };
   const late = overdueWhere(new Date(), timezone);
 
-  const [statuses, byStatus, byPriority, byType, totals, overdue, unassigned, members, activeSprint, recentSprints] =
+  const [statuses, byStatusRows, byPriority, byType, totals, overdue, unassigned, members, activeSprint, recentSprints] =
     await Promise.all([
       prisma.workflowStatus.findMany({
         where: { projectId },
@@ -61,10 +70,19 @@ export async function projectDashboard(
     ]);
 
   const statusById = new Map(statuses.map((s) => [s.id, s]));
-  const completedStatusIds = statuses.filter((s) => s.category === 'COMPLETED').map((s) => s.id);
-  const completed = byStatus
-    .filter((s) => completedStatusIds.includes(s.statusId))
-    .reduce((sum, s) => sum + s._count._all, 0);
+  // A subproject's status is counted in the column of this project it stands in.
+  const perColumn = new Map<string, number>();
+  for (const row of byStatusRows) {
+    const column = columnOf.get(row.statusId) ?? row.statusId;
+    perColumn.set(column, (perColumn.get(column) ?? 0) + row._count._all);
+  }
+  const byStatus = [...perColumn].map(([statusId, count]) => ({ statusId, _count: { _all: count } }));
+  // Finished and called off are counted by what the status means in the
+  // task's own project, not by the column it is drawn in.
+  const [completed, canceled] = await Promise.all([
+    prisma.issue.count({ where: { ...base, status: { category: StatusCategory.COMPLETED } } }),
+    prisma.issue.count({ where: { ...base, status: { category: StatusCategory.CANCELED } } }),
+  ]);
 
   // Assignee breakdown needs both totals and completed counts per person.
   const completedByAssignee = await prisma.issue.groupBy({
@@ -81,9 +99,6 @@ export async function projectDashboard(
   ]);
   const activeMap = new Map(activeByAssignee.map((c) => [c.assigneeId, c._count._all]));
   const overdueMap = new Map(overdueByAssignee.map((c) => [c.assigneeId, c._count._all]));
-  const canceled = byStatus
-    .filter((s) => statusById.get(s.statusId)?.category === 'CANCELED')
-    .reduce((sum, s) => sum + s._count._all, 0);
 
   const assigneeIds = members.map((m) => m.assigneeId).filter((id): id is string => Boolean(id));
   const users = assigneeIds.length

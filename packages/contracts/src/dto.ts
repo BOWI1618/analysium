@@ -292,6 +292,8 @@ export interface IssueLinksDto {
 export interface GanttRowDto {
   id: string;
   issueKey: string;
+  /** The task's own project: on a chart that takes in subprojects, a row says which one it is from. */
+  project: { id: string; name: string; icon: string; color: string };
   title: string;
   type: IssueType;
   priority: IssuePriority;

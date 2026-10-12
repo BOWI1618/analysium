@@ -170,7 +170,14 @@ export function buildIssueWhere(
 }
 
 /** Prisma ordering matching `compareIssues`, with `id` as a stable tiebreaker. */
-export function orderByFor(sort: SortKey, order: 'asc' | 'desc'): Prisma.IssueOrderByWithRelationInput[] {
+export function orderByFor(
+  sort: SortKey,
+  order: 'asc' | 'desc',
+  openFirst = false,
+): Prisma.IssueOrderByWithRelationInput[] {
+  // An open task has no completion date: those lead, then the finished ones,
+  // the latest closed first.
+  if (openFirst) return [{ completedAt: { sort: 'desc', nulls: 'first' } }, ...orderByFor(sort, order)];
   const dir = order;
   switch (sort) {
     case 'created':

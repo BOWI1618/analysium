@@ -56,7 +56,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         case RealtimeEventType.ISSUE_STATUS_CHANGED:
         case RealtimeEventType.ISSUE_MOVED: {
           if (isOwnEcho) break;
-          void queryClient.invalidateQueries({ queryKey: ['project', event.payload.projectId] });
+          // Every project: the one above shows this task on its board as well.
+          void queryClient.invalidateQueries({ queryKey: ['project'] });
           void queryClient.invalidateQueries({ queryKey: ['issues'] });
           void queryClient.invalidateQueries({ queryKey: qk.issue(event.payload.issueId) });
           void queryClient.invalidateQueries({ queryKey: qk.issuesByKey });

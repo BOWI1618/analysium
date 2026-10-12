@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   DndContext,
@@ -69,10 +69,13 @@ export function BoardPage() {
   const [filters, setFilters] = useFilterState();
   const { data: project } = useProject(projectId);
   const { data: sprints } = useSprints(project?.projectType === 'SCRUM' ? projectId : undefined);
-  const boardQuery = useBoard(projectId, filters);
+  // The board of a project takes in its subprojects. The bar above still
+  // shows only what the person chose.
+  const scoped = useMemo(() => ({ ...filters, withSubprojects: true }), [filters]);
+  const boardQuery = useBoard(projectId, scoped);
   const { data: board, isLoading, error, refetch, isFetching } = boardQuery;
 
-  const moveIssue = useMoveIssue(projectId, filters);
+  const moveIssue = useMoveIssue(projectId, scoped);
   const patchIssue = usePatchIssue();
   const [storedSettings, setSettings] = useLocalStorage<BoardSettings>('flowdesk.board-settings', DEFAULT_BOARD_SETTINGS);
   const settings: BoardSettings = {
@@ -281,11 +284,14 @@ function BoardColumn({
   // The whole column takes the drop, header included, not only its card list.
   const { setNodeRef } = useDroppable({ id: column.status.id, data: { type: 'column' } });
 
+  // The limit is the project's own: a subproject's task in this column
+  // answers to the limit of its own project, so it is not counted here.
   const overLimit =
     column.status.wipLimit !== null &&
     column.status.wipLimit !== undefined &&
     column.status.wipLimit > 0 &&
-    column.total > column.status.wipLimit;
+    column.ownTotal > column.status.wipLimit;
+  const withSubprojects = column.total > column.ownTotal;
 
   // The column where work is actually happening is the one the board is about,
   // so it is printed in the accent and lifted a step above its neighbours.
@@ -329,9 +335,10 @@ function BoardColumn({
         {column.status.wipLimit ? (
           <Tooltip
             content={
-              overLimit
+              (overLimit
                 ? `Превышен лимит задач: ${column.status.wipLimit}`
-                : `Лимит задач: ${column.status.wipLimit}`
+                : `Лимит задач: ${column.status.wipLimit}`) +
+              (withSubprojects ? ' — считаются задачи самого проекта, без подпроектов' : '')
             }
           >
             <span
@@ -345,7 +352,7 @@ function BoardColumn({
               )}
             >
               {overLimit && <AlertTriangle className="size-2.5" />}
-              {column.total}/{column.status.wipLimit}
+              {column.ownTotal}/{column.status.wipLimit}
             </span>
           </Tooltip>
         ) : null}

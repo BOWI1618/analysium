@@ -50,6 +50,7 @@ import {
   DateField,
   LabelPicker,
   PriorityPicker,
+  ProjectPicker,
   StatusPicker,
   TypePicker,
   UserPicker,
@@ -672,27 +673,24 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
             <Field label="Проект">
               {canEdit && workspaceProjects && workspaceProjects.length > 1 ? (
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
-                  <select
-                    value={issue.projectId}
-                    aria-label="Перенести в проект"
-                    disabled={transferIssue.isPending}
-                    onChange={(event) => {
-                      const next = workspaceProjects.find((p) => p.id === event.target.value);
-                      if (next && next.id !== issue.projectId) setTransferTo(next);
-                    }}
-                    className="h-7 min-w-0 flex-1 border-2 border-transparent bg-transparent text-sm hover:border-border-strong hover:bg-surface-hover focus:border-accent focus:outline-none"
-                  >
-                    {/* The current project stays listed even if archived, so the value shows. */}
-                    {!workspaceProjects.some((p) => p.id === issue.projectId) && (
-                      <option value={issue.projectId}>{issue.project.name}</option>
-                    )}
-                    {workspaceProjects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  {/* The same picker as in the create form: search, and subprojects under their project. */}
+                  <div className="min-w-0 flex-1">
+                    <ProjectPicker
+                      projects={workspaceProjects.filter((p) => !p.isSystem)}
+                      value={workspaceProjects.some((p) => p.isSystem && p.id === issue.projectId) ? '' : issue.projectId}
+                      // The list of tasks without a project is offered under its own name, where it exists.
+                      noneLabel={workspaceProjects.some((p) => p.isSystem) ? 'Без проекта' : null}
+                      onChange={(nextId) => {
+                        const next = workspaceProjects.find((p) => (nextId ? p.id === nextId : p.isSystem));
+                        if (next && next.id !== issue.projectId) setTransferTo(next);
+                      }}
+                    >
+                      <FieldButton disabled={transferIssue.isPending} label="Перенести в проект">
+                        <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
+                        <span className="truncate">{issue.project.name}</span>
+                      </FieldButton>
+                    </ProjectPicker>
+                  </div>
                   <Link
                     to={`/projects/${issue.projectId}`}
                     aria-label="Открыть проект"

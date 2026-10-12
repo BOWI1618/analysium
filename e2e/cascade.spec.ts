@@ -73,7 +73,7 @@ test.describe('распределение по подчинённости', () =
     await register(page, 'Главный Специалист');
     const firstId = await addColleague(page, browser, 'Ведущий Первый');
     await addColleague(page, browser, 'Ведущий Второй');
-    const { me, pooled } = await setUpProject(page);
+    const { me, project, pooled } = await setUpProject(page);
 
     /* ---------------------------------------------- the register of departments */
     await page.goto('/settings/workspace');
@@ -195,12 +195,33 @@ test.describe('распределение по подчинённости', () =
     await expect(form).toBeHidden({ timeout: 15_000 });
     await expect(card(pool, 'Создал себе сам')).toBeVisible({ timeout: 15_000 });
 
-    // The other states are a way of looking, not a change: the task is still in the backlog.
+    // A single state is a way of looking, not a change: the task is still in the backlog.
     await pool.getByRole('radio', { name: 'В работе' }).click();
     await expect(card(pool, 'Создал себе сам')).toHaveCount(0);
     await expect(pool.getByText('В работе ничего нет')).toBeVisible({ timeout: 15_000 });
     await pool.getByRole('radio', { name: 'Бэклог' }).click();
     await expect(card(pool, 'Создал себе сам')).toBeVisible({ timeout: 15_000 });
+
+    /* ------------------------------------------------- everything, by default */
+    // A task that has left the backlog stays in the pool: the screen opens with every state.
+    const started = await pooled('Уже в работе', me);
+    const closed = await pooled('Закрыта раньше всех', me);
+    const statuses = project.statuses as { id: string; category: string }[];
+    const statusOf = (category: string) => statuses.find((status) => status.category === category)!.id;
+    await page.request.patch(`/api/v1/issues/${started.id}`, { data: { statusId: statusOf('STARTED') } });
+    await page.request.patch(`/api/v1/issues/${closed.id}`, {
+      data: { statusId: statusOf('COMPLETED'), dueDate: '2020-01-10T12:00:00.000Z' },
+    });
+    await page.goto('/planning');
+    await expect(pool.getByRole('radio', { name: 'Все' })).toBeChecked({ timeout: 15_000 });
+    await expect(card(pool, 'Уже в работе')).toBeVisible({ timeout: 15_000 });
+    await expect(card(pool, 'Создал себе сам')).toBeVisible();
+    // Finished tasks are there too — crossed out, and after the open ones, however old their date.
+    await expect(card(pool, 'Закрыта раньше всех')).toBeVisible();
+    await expect(pool.getByRole('article').last()).toContainText('Закрыта раньше всех');
+    await expect(card(pool, 'Закрыта раньше всех').getByText('Закрыта раньше всех')).toHaveCSS('text-decoration-line', 'line-through');
+    // The people on the sides are shown the same way.
+    await expect(first.getByLabel('Состояние задач: Ведущий Первый')).toHaveValue('all');
   });
 });
 

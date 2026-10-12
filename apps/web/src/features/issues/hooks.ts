@@ -155,14 +155,15 @@ export function useIssueActivity(issueId: string | null | undefined) {
 /* ----------------------------------------------------------------- write */
 
 /** Invalidates everything that can display an issue. */
-function invalidateIssueViews(queryClient: ReturnType<typeof useQueryClient>, projectId?: string) {
+function invalidateIssueViews(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ['issues'] });
   // The /issue/:key page hangs off its own root and is easy to forget; without
   // this the tab that made the change is the one left showing stale data,
   // because it skips its own realtime echo by design.
   void queryClient.invalidateQueries({ queryKey: qk.issuesByKey });
-  if (projectId) void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-  else void queryClient.invalidateQueries({ queryKey: ['project'] });
+  // Every project, not only the task's own: the board and the figures of the
+  // project above show this task too, and they hang off that project's key.
+  void queryClient.invalidateQueries({ queryKey: ['project'] });
   invalidateProjectFigures(queryClient);
 }
 
@@ -185,7 +186,7 @@ export function useCreateIssue() {
     mutationFn: (input: CreateIssueRequest) => api.post<IssueDetailDto>('/issues', input),
     onSuccess: (issue) => {
       queryClient.setQueryData(qk.issue(issue.id), issue);
-      invalidateIssueViews(queryClient, issue.projectId);
+      invalidateIssueViews(queryClient);
       if (issue.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(issue.parent.id), exact: true });
       // The first task without a project creates that list on the server; the
       // sidebar learns about it (and its count moves) through the project list.
@@ -205,10 +206,8 @@ export function useTransferIssue(issueId: string) {
   return useMutation({
     mutationFn: (projectId: string) => api.post<IssueDetailDto>(`/issues/${issueId}/transfer`, { projectId }),
     onSuccess: (issue) => {
-      const before = queryClient.getQueryData<IssueDetailDto>(qk.issue(issueId));
       queryClient.setQueryData(qk.issue(issueId), issue);
-      if (before) invalidateIssueViews(queryClient, before.projectId);
-      invalidateIssueViews(queryClient, issue.projectId);
+      invalidateIssueViews(queryClient);
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issueId) });
       // Open-issue counts in the sidebar move with it.
       void queryClient.invalidateQueries({
@@ -253,7 +252,7 @@ export function useDuplicateIssue(issueId: string) {
     mutationFn: (input: DuplicateIssueInput) => api.post<IssueDetailDto>(`/issues/${issueId}/duplicate`, input),
     onSuccess: (copy) => {
       queryClient.setQueryData(qk.issue(copy.id), copy);
-      invalidateIssueViews(queryClient, copy.projectId);
+      invalidateIssueViews(queryClient);
       if (copy.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(copy.parent.id), exact: true });
       toast.success('Задача продублирована', `Копия: ${copy.issueKey}`);
     },
@@ -299,7 +298,7 @@ export function useUpdateIssue(issueId: string) {
     },
     onSuccess: (issue, _patch, context) => {
       queryClient.setQueryData(qk.issue(issue.id), issue);
-      invalidateIssueViews(queryClient, issue.projectId);
+      invalidateIssueViews(queryClient);
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issue.id) });
       // The parent's detail lists this subtask — in its panel and unfolded in
       // lists. Both parents when it was moved or detached.
@@ -333,6 +332,9 @@ export function useMoveIssue(projectId: string, filters: IssueFilters) {
       if (!issue || !source) return { previous };
 
       const targetStatusId = statusId ?? issue.statusId;
+      // A subproject's task on this board moves the column's count but not
+      // the count its limit is held against.
+      const own = issue.projectId === projectId ? 1 : 0;
 
       const columns = previous.columns.map((column) => {
         if (column.status.id === source.status.id && column.status.id !== targetStatusId) {
@@ -340,6 +342,7 @@ export function useMoveIssue(projectId: string, filters: IssueFilters) {
             ...column,
             issues: column.issues.filter((i) => i.id !== issueId),
             total: column.total - 1,
+            ownTotal: column.ownTotal - own,
           };
         }
         if (column.status.id !== targetStatusId) return column;
@@ -365,6 +368,7 @@ export function useMoveIssue(projectId: string, filters: IssueFilters) {
           ...column,
           issues: next,
           total: column.status.id === source.status.id ? column.total : column.total + 1,
+          ownTotal: column.status.id === source.status.id ? column.ownTotal : column.ownTotal + own,
         };
       });
 
@@ -377,11 +381,22 @@ export function useMoveIssue(projectId: string, filters: IssueFilters) {
       toast.error(error, 'Не удалось переместить задачу');
     },
 
-    onSuccess: (issue) => {
+    onSuccess: (issue, variables, context) => {
       queryClient.setQueryData(qk.issue(issue.id), (old: IssueDetailDto | undefined) =>
         old ? { ...old, ...issue } : old,
       );
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issue.id) });
+      // A subproject's task dropped into a column its own project has no
+      // status for takes the nearest one, and the card then stands in that
+      // column — said in words, or it looks as if the drop missed.
+      const column = context?.previous?.columns.find((candidate) => candidate.status.id === variables.statusId);
+      if (column && issue.projectId !== projectId && issue.status.name !== column.status.name) {
+        toast.toast({
+          tone: 'info',
+          title: `${issue.issueKey}: статус «${issue.status.name}»`,
+          description: `В подпроекте «${issue.project.name}» нет статуса «${column.status.name}» — задача получила ближайший свой.`,
+        });
+      }
     },
 
     onSettled: () => {
@@ -407,7 +422,7 @@ export function usePatchIssue() {
       api.patch<IssueDetailDto>(`/issues/${issueId}`, patch),
     onSuccess: (issue) => {
       queryClient.setQueryData(qk.issue(issue.id), issue);
-      invalidateIssueViews(queryClient, issue.projectId);
+      invalidateIssueViews(queryClient);
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issue.id) });
       // The parent's detail lists this subtask — in its panel and unfolded in lists.
       if (issue.parent) void queryClient.invalidateQueries({ queryKey: qk.issue(issue.parent.id), exact: true });
@@ -449,7 +464,7 @@ export function useDeleteIssue() {
       api.delete<void>(`/issues/${issue.id}`),
     onSuccess: (_data, issue) => {
       queryClient.removeQueries({ queryKey: qk.issue(issue.id) });
-      invalidateIssueViews(queryClient, issue.projectId);
+      invalidateIssueViews(queryClient);
       toast.success(`${issue.issueKey} удалена`);
     },
     onError: (error) => toast.error(error, 'Не удалось удалить задачу'),

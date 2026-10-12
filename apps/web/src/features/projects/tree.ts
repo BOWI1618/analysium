@@ -33,17 +33,3 @@ export function projectTree<T extends Nested>(projects: T[]): ProjectBranch<T>[]
   }
   return roots;
 }
-
-/** The same tree as a flat list in reading order, each project with its depth and its parent. */
-export function projectsInTreeOrder<T extends Nested>(projects: T[]): { project: T; parent: T | null }[] {
-  return projectTree(projects).flatMap(({ project, children }) => [
-    { project, parent: null },
-    ...children.map((child) => ({ project: child, parent: project })),
-  ]);
-}
-
-/** «Основной проект › Подпроект» for places that name a project in one line. */
-export function projectPathName<T extends Nested & { name: string }>(project: T, projects: T[]): string {
-  const parent = project.parentId ? projects.find((candidate) => candidate.id === project.parentId) : undefined;
-  return parent ? `${parent.name} › ${project.name}` : project.name;
-}

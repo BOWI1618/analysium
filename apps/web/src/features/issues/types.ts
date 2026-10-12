@@ -4,6 +4,8 @@ export interface BoardColumnDto {
   status: StatusDto;
   issues: IssueSummaryDto[];
   total: number;
+  /** The project's own tasks among them: the column's limit is counted against these. */
+  ownTotal: number;
   hasMore: boolean;
 }
 
@@ -36,6 +38,13 @@ export interface IssueFilters {
   noDueDate?: boolean;
   /** Only tasks nobody has estimated yet. */
   noEstimate?: boolean;
+  /**
+   * Set by a project's own screens, never by the person: the project's tasks
+   * together with those of its subprojects.
+   */
+  withSubprojects?: boolean;
+  /** Finished tasks after the open ones — for a list of every state at once. */
+  openFirst?: boolean;
   sort?: IssueFilterInput['sort'];
   order?: IssueFilterInput['order'];
 }
@@ -45,7 +54,8 @@ export interface IssueFilters {
 export function activeFilterCount(filters: IssueFilters): number {
   let count = 0;
   for (const [key, value] of Object.entries(filters)) {
-    if (key === 'sort' || key === 'order' || key === 'search') continue;
+    // `withSubprojects` and `openFirst` are how a screen asks, not something the person filtered by.
+    if (key === 'sort' || key === 'order' || key === 'search' || key === 'withSubprojects' || key === 'openFirst') continue;
     if (Array.isArray(value) ? value.length > 0 : value !== undefined && value !== false) count += 1;
   }
   return count;

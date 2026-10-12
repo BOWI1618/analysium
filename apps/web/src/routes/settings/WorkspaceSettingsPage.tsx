@@ -32,6 +32,7 @@ import { ProjectIcon } from '~/ui/ProjectIcon';
 import { fullDate, pluralize, relativeTime } from '~/lib/format';
 import { AUDIT_ACTION_LABEL, ROLE_LABEL, describeAuditDetails } from '~/lib/labels';
 import { DepartmentsSection } from './DepartmentsSection';
+import { projectTree } from '~/features/projects/tree';
 import { TemplatesSection } from './TemplatesSection';
 
 const SECTIONS = ['general', 'members', 'departments', 'templates', 'roles', 'projects', 'audit'] as const;
@@ -567,18 +568,33 @@ function ProjectsSection() {
         <Skeleton className="h-32" />
       ) : projects && projects.length > 0 ? (
         <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
-          {projects.map((project) => (
-            <li key={project.id} className="flex items-center gap-2.5 p-2.5">
-              <ProjectIcon icon={project.icon} color={project.color} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{project.name}</span>
-              <span className="fd-key">{project.key}</span>
-              {project.projectType === 'SCRUM' && <Badge>спринты</Badge>}
-              {project.isArchived && <Badge tone="warning">в архиве</Badge>}
-              <span className="fd-num text-2xs text-text-subtle">
-                {pluralize(project.totalIssueCount ?? 0, ['задача', 'задачи', 'задач'])}
+          {/* Subprojects under their project, as everywhere else. */}
+          {projectTree(projects).map(({ project, children }) => {
+            const line = (item: typeof project) => (
+              <span className="flex items-center gap-2.5 p-2.5">
+                <ProjectIcon icon={item.icon} color={item.color} size="sm" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+                <span className="fd-key">{item.key}</span>
+                {item.projectType === 'SCRUM' && <Badge>спринты</Badge>}
+                {item.isArchived && <Badge tone="warning">в архиве</Badge>}
+                <span className="fd-num text-2xs text-text-subtle">
+                  {pluralize(item.totalIssueCount ?? 0, ['задача', 'задачи', 'задач'])}
+                </span>
               </span>
-            </li>
-          ))}
+            );
+            return (
+              <li key={project.id}>
+                {line(project)}
+                {children.length > 0 && (
+                  <ul className="mb-1.5 ml-4 border-l-2 border-border-strong" aria-label={`Подпроекты «${project.name}»`}>
+                    {children.map((child) => (
+                      <li key={child.id}>{line(child)}</li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <EmptyState compact title="Проектов пока нет" />

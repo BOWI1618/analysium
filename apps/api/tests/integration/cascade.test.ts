@@ -443,3 +443,40 @@ describe('передача задач по подчинённости', () => {
     expect((await hand(gs, vs1, [{ issueId: edited.id, expectedAssigneeId: gs.id, expectedUpdatedAt: fresh.updatedAt }])).statusCode).toBe(200);
   });
 });
+
+describe('пул целиком', () => {
+  it('в списке всех состояний завершённые стоят после незакрытых — с любым сроком', async () => {
+    const project = await createProject(app, owner, { name: 'Порядок в пуле' });
+    const done = ((await call(owner, 'GET', `/projects/${project.id}`)).json().statuses as { id: string; category: string }[]).find(
+      (status) => status.category === 'COMPLETED',
+    )!.id;
+    const task = (title: string, extra: Record<string, unknown>) =>
+      createIssue(app, owner, project.id, { title, assigneeId: owner.id, ...extra });
+    // Closed long ago: by due date alone it would lead the list.
+    await task('Закрыта давно', { dueDate: '2020-01-10T12:00:00.000Z', statusId: done });
+    await task('Открыта, срок позже', { dueDate: '2031-05-20T12:00:00.000Z' });
+    await task('Открыта, срок раньше', { dueDate: '2031-05-10T12:00:00.000Z' });
+    await task('Открыта, без срока', {});
+
+    const titles = async (query: string) =>
+      (
+        (await call(owner, 'GET', `/workspaces/${owner.workspaceId}/issues?projectId=${project.id}&assigneeId=${owner.id}&sort=dueDate&order=asc${query}`)).json()
+          .items as { title: string }[]
+      ).map((issue) => issue.title);
+
+    expect(await titles('&openFirst=true')).toEqual(['Открыта, срок раньше', 'Открыта, срок позже', 'Открыта, без срока', 'Закрыта давно']);
+    // Asked for nothing, the list is by due date as before.
+    expect((await titles(''))[0]).toBe('Закрыта давно');
+    // The order holds across pages: nothing is skipped or repeated at the seam.
+    const first = (await call(owner, 'GET', `/workspaces/${owner.workspaceId}/issues?projectId=${project.id}&sort=dueDate&order=asc&openFirst=true&limit=2`)).json();
+    const second = (
+      await call(owner, 'GET', `/workspaces/${owner.workspaceId}/issues?projectId=${project.id}&sort=dueDate&order=asc&openFirst=true&limit=2&cursor=${first.nextCursor}`)
+    ).json();
+    expect([...first.items, ...second.items].map((issue: { title: string }) => issue.title)).toEqual([
+      'Открыта, срок раньше',
+      'Открыта, срок позже',
+      'Открыта, без срока',
+      'Закрыта давно',
+    ]);
+  });
+});

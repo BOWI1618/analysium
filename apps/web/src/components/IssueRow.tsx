@@ -21,6 +21,7 @@ import {
 } from './IssueMeta';
 import { PriorityPicker, StatusPicker, UserPicker } from './Pickers';
 import { isClosedStatus } from './DoneToggle';
+import { SubprojectMark } from './SubprojectMark';
 
 export type ListColumn =
   | 'status'
@@ -296,6 +297,7 @@ export const IssueRow = memo(function IssueRow({
               {issue.parent.issueKey} ›
             </span>
           )}
+          <SubprojectMark project={issue.project} className="mr-1.5" />
           {/* A long name is cut to one line here; the pointer shows all of it.
               A closed task is crossed out, as on the board and in the calendar:
               what is done reads as done without looking at the status column. */}

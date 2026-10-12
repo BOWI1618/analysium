@@ -503,11 +503,23 @@ export const issueFilterSchema = z.object({
   noDueDate: queryBoolean.optional(),
   /** Only tasks nobody has estimated yet. */
   noEstimate: queryBoolean.optional(),
+  /**
+   * In a project's own views: its tasks together with those of its
+   * subprojects. Means nothing outside a project, and nothing in a project
+   * that has no subprojects.
+   */
+  withSubprojects: queryBoolean.optional(),
   /** `true` → only issues with no sprint; used by the backlog view. */
   noSprint: queryBoolean.optional(),
   includeSubtasks: queryBoolean.optional(),
   includeDone: queryBoolean.optional(),
   isOverdue: queryBoolean.optional(),
+  /**
+   * Finished tasks after the open ones, whatever the sort — for a list that
+   * shows every state at once. Without it a list by due date opens with what
+   * was closed long ago.
+   */
+  openFirst: queryBoolean.optional(),
   sort: z
     .enum(['rank', 'created', 'updated', 'priority', 'dueDate', 'title', 'status'])
     .default('rank'),
@@ -565,6 +577,7 @@ export const ganttQuerySchema = issueFilterSchema
     epicId: true,
     search: true,
     isOverdue: true,
+    withSubprojects: true,
   })
   .extend({
     /** Optional window: scheduled issues are clipped to those overlapping [from, to]; unscheduled ones are always returned for planning. */

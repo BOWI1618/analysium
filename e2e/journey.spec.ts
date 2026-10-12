@@ -349,7 +349,8 @@ test.describe('перенос задачи', () => {
     await page.goto(`/projects/${task.projectId}/list`);
     await page.getByText('Потом разберёмся куда').click();
     const panel = page.getByRole('dialog', { name: 'Детали задачи' });
-    await panel.getByLabel('Перенести в проект').selectOption({ label: 'Алабуга Старт' });
+    await panel.getByRole('button', { name: 'Перенести в проект' }).click();
+    await page.getByRole('menuitem', { name: /Алабуга Старт/ }).click();
 
     const ask = page.getByRole('dialog', { name: /Перенести .* в «Алабуга Старт»\?/ });
     await expect(ask).toContainText('Старая ссылка на задачу продолжит работать');
@@ -359,7 +360,7 @@ test.describe('перенос задачи', () => {
     expect(reply.status(), await reply.text()).toBe(200);
 
     await expect(page.getByText('Новый номер: AS-1')).toBeVisible({ timeout: 15_000 });
-    await expect(panel.getByLabel('Перенести в проект')).toHaveValue(projectId);
+    await expect(panel.getByRole('button', { name: 'Перенести в проект' })).toContainText('Алабуга Старт');
     await expect(panel.getByText('AS-1').first()).toBeVisible();
 
     // It lives in the project now, and the old key still opens it.

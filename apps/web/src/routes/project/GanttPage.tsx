@@ -63,7 +63,8 @@ export function GanttPage() {
     shifts: ScheduleShiftDto[];
   } | null>(null);
 
-  const ganttQuery = useGantt(projectId, filters);
+  // One timeline for the project and its subprojects.
+  const ganttQuery = useGantt(projectId, useMemo(() => ({ ...filters, withSubprojects: true }), [filters]));
   const { data, isLoading, error, refetch, isFetching } = ganttQuery;
 
   const reschedule = useRescheduleIssue(projectId);

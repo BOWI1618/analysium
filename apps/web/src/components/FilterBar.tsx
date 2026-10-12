@@ -19,7 +19,6 @@ import { MultiSelect } from './Pickers';
 import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 import { Avatar } from '~/ui/Avatar';
 import { ProjectIcon } from '~/ui/ProjectIcon';
-import { projectPathName, projectsInTreeOrder } from '~/features/projects/tree';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Button } from '~/ui/Button';
 import { Badge } from '~/ui/Badge';
@@ -189,12 +188,18 @@ export function FilterBar({
         {projects.length > 0 && (
           <MultiSelect
             title="Проект"
-            // A subproject is named with its project: two subprojects may share a name.
-            options={projectsInTreeOrder(projects).map(({ project: p }) => ({
-              value: p.id,
-              label: projectPathName(p, projects),
-              icon: <ProjectIcon icon={p.icon} color={p.color} size="sm" />,
-            }))}
+            // Laid out as in the sidebar: a subproject under its project.
+            options={projects.map((p) => {
+              const parent = p.parentId ? projects.find((candidate) => candidate.id === p.parentId) : undefined;
+              return {
+                value: p.id,
+                label: p.name,
+                icon: <ProjectIcon icon={p.icon} color={p.color} size="sm" />,
+                parent: parent?.id,
+                keywords: parent?.name,
+              };
+            })}
+            width={280}
             value={filters.projectId ?? []}
             // A status belongs to one project: it cannot outlive the choice of projects.
             onChange={(projectId) => patch({ projectId: projectId.length ? projectId : undefined, statusId: undefined })}

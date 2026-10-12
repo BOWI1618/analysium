@@ -26,7 +26,8 @@ import {
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { buildIssueWhere, isPastDue } from '../../domain/filters';
-import { assertCan } from '../../lib/context';
+import { assertCan, projectContext } from '../../lib/context';
+import { projectFamily, statusStandIns, withStandIns } from '../projects/family';
 import { badRequest, notFound } from '../../lib/errors';
 import { emit } from '../../realtime/eventBus';
 import { statusSelect, toStatus, toUserSummary } from '../../lib/serialize';
@@ -46,6 +47,7 @@ const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 const ganttIssueSelect = {
   id: true,
   issueKey: true,
+  project: { select: { id: true, name: true, icon: true, color: true } },
   title: true,
   type: true,
   priority: true,
@@ -81,11 +83,20 @@ export async function getGantt(
   // The same filters as the board and the list; subtasks stay, since the
   // chart draws them under their parents.
   const { from: _from, to: _to, includeDone, ...filters } = query;
+  // With the subprojects, where asked: one timeline for the whole of the work.
+  const family = filters.withSubprojects ? await projectFamily(actor, projectId) : [projectId];
+  const standIns = await statusStandIns(projectId, family);
   const where: Prisma.IssueWhereInput = {
-    projectId,
+    projectId: { in: family },
     AND: [
       buildIssueWhere(
-        { ...filters, projectId, includeSubtasks: true, includeDone },
+        {
+          ...filters,
+          projectId: family,
+          statusId: withStandIns(filters.statusId, standIns),
+          includeSubtasks: true,
+          includeDone,
+        },
         { workspaceId: actor.workspaceId, allowedProjectIds: 'ALL', currentUserId: actor.userId, timezone },
         { priorities: ISSUE_PRIORITIES, types: ISSUE_TYPES },
       ),
@@ -176,6 +187,7 @@ export async function getGantt(
     return {
       id: issue.id,
       issueKey: issue.issueKey,
+      project: issue.project,
       title: issue.title,
       type: issue.type,
       priority: issue.priority,
@@ -517,11 +529,23 @@ export async function createDependency(
     throw badRequest('Задача не может зависеть сама от себя');
   }
 
+  // A link is drawn on the chart of a project, which may show its
+  // subprojects too. The two tasks still have to share a project — the one
+  // of the chart or one of its subprojects — and the right to change tasks is
+  // asked of that project, not of the one whose chart it was drawn on.
+  const family = await projectFamily(actor, projectId);
   const issues = await prisma.issue.findMany({
-    where: { id: { in: [input.predecessorId, input.successorId] }, projectId },
-    select: { id: true, issueKey: true },
+    where: { id: { in: [input.predecessorId, input.successorId] }, projectId: { in: family } },
+    select: { id: true, issueKey: true, projectId: true },
   });
-  if (issues.length !== 2) throw badRequest('Обе задачи должны быть в одном проекте');
+  if (issues.length !== 2 || issues[0]!.projectId !== issues[1]!.projectId) {
+    throw badRequest('Обе задачи должны быть в одном проекте');
+  }
+  const homeProjectId = issues[0]!.projectId;
+  if (homeProjectId !== projectId) {
+    const home = await projectContext(actor.userId, homeProjectId);
+    assertCan(home.actor, Permission.ISSUE_UPDATE);
+  }
 
   // Check and insert in one transaction: the row locks on both issues
   // serialize concurrent creates, so the cycle re-check inside the transaction
@@ -531,7 +555,7 @@ export async function createDependency(
     await tx.$queryRaw`SELECT id FROM "issues" WHERE id IN (${first}, ${second}) FOR UPDATE`;
 
     const existing = await tx.issueDependency.findMany({
-      where: { predecessor: { projectId } },
+      where: { predecessor: { projectId: homeProjectId } },
       select: { predecessorId: true, successorId: true, type: true, lagDays: true },
     });
 

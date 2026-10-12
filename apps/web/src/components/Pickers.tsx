@@ -1,5 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { projectsInTreeOrder } from '~/features/projects/tree';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import {
   addDays,
@@ -219,6 +218,89 @@ export function UserPicker({
  * being usable somewhere past a dozen projects. The empty value means
  * «without a project».
  */
+/**
+ * Rows of a menu laid out the way the sidebar lays out projects: a subproject
+ * under its project, on a rule, behind the project's arrow.
+ *
+ * The same picture everywhere a project is chosen — it used to be a path in
+ * words («Career Start › CRM») in one menu and a bare «↳» in another, and a
+ * long path was cut off before the name it led to.
+ *
+ * Open by default: a menu is for choosing, and a choice behind one more click
+ * is a slower one. A row whose parent is not listed — filtered out by a
+ * search — stands on its own.
+ */
+function MenuTree<T>({
+  items,
+  idOf,
+  parentOf,
+  nameOf,
+  row,
+}: {
+  items: T[];
+  idOf: (item: T) => string;
+  parentOf: (item: T) => string | null | undefined;
+  nameOf: (item: T) => string;
+  row: (item: T) => ReactNode;
+}) {
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const listed = new Set(items.map(idOf));
+  const isChild = (item: T) => {
+    const parent = parentOf(item);
+    return Boolean(parent && listed.has(parent));
+  };
+
+  return (
+    <>
+      {items
+        .filter((item) => !isChild(item))
+        .map((root) => {
+          const id = idOf(root);
+          const children = items.filter((item) => isChild(item) && parentOf(item) === id);
+          const open = !folded.has(id);
+          return (
+            <div key={id}>
+              <div className="flex items-stretch">
+                <div className="min-w-0 flex-1">{row(root)}</div>
+                {children.length > 0 && (
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-label={open ? `Свернуть подпроекты «${nameOf(root)}»` : `Показать подпроекты «${nameOf(root)}»`}
+                    title={open ? 'Свернуть подпроекты' : `Подпроекты: ${children.length}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setFolded((current) => {
+                        const next = new Set(current);
+                        if (next.has(id)) next.delete(id);
+                        else next.add(id);
+                        return next;
+                      });
+                    }}
+                    className="flex w-6 shrink-0 items-center justify-center text-text-subtle hover:bg-surface-active hover:text-text"
+                  >
+                    <ChevronRight className={clsx('size-3.5 transition-transform', open && 'rotate-90')} />
+                  </button>
+                )}
+              </div>
+              {open && children.length > 0 && (
+                <div
+                  role="group"
+                  aria-label={`Подпроекты «${nameOf(root)}»`}
+                  className="my-0.5 ml-3.5 border-l-2 border-border-strong pl-1"
+                >
+                  {children.map((child) => (
+                    <Fragment key={idOf(child)}>{row(child)}</Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+    </>
+  );
+}
+
 export function ProjectPicker({
   projects,
   value,
@@ -237,14 +319,16 @@ export function ProjectPicker({
 }) {
   const [term, setTerm] = useState('');
 
-  // Subprojects follow their project, as in the sidebar. A search result
-  // whose project did not match stands on its own.
+  // A subproject is found by its own name and by its project's: typing
+  // «career» brings the project with everything under it.
   const filtered = useMemo(() => {
     const q = term.trim().toLowerCase();
-    const matching = q
-      ? projects.filter((p) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().startsWith(q))
-      : projects;
-    return projectsInTreeOrder(matching);
+    if (!q) return projects;
+    const matches = (p: (typeof projects)[number]) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().startsWith(q);
+    return projects.filter((p) => {
+      const parent = p.parentId ? projects.find((candidate) => candidate.id === p.parentId) : undefined;
+      return matches(p) || Boolean(parent && matches(parent));
+    });
   }, [projects, term]);
 
   return (
@@ -270,18 +354,22 @@ export function ProjectPicker({
         {filtered.length === 0 ? (
           <p className="px-2 py-3 text-center text-xs text-text-subtle">Проектов не найдено</p>
         ) : (
-          filtered.map(({ project, parent }) => (
-            <MenuItem
-              key={project.id}
-              icon={<ProjectIcon icon={project.icon} color={project.color} size="sm" />}
-              selected={project.id === value}
-              onSelect={() => onChange(project.id)}
-              shortcut={<span className="fd-key">{project.key}</span>}
-            >
-              {parent && <span className="text-text-subtle">↳ </span>}
-              {project.name}
-            </MenuItem>
-          ))
+          <MenuTree
+            items={filtered}
+            idOf={(project) => project.id}
+            parentOf={(project) => project.parentId}
+            nameOf={(project) => project.name}
+            row={(project) => (
+              <MenuItem
+                icon={<ProjectIcon icon={project.icon} color={project.color} size="sm" />}
+                selected={project.id === value}
+                onSelect={() => onChange(project.id)}
+                shortcut={<span className="fd-key">{project.key}</span>}
+              >
+                {project.name}
+              </MenuItem>
+            )}
+          />
         )}
       </MenuContent>
     </Menu>
@@ -386,6 +474,10 @@ export interface MultiSelectOption {
   value: string;
   label: string;
   icon?: ReactNode;
+  /** The option this one stands under — a subproject under its project. */
+  parent?: string;
+  /** Found by these words too, not only by the label — a subproject by its project's name. */
+  keywords?: string;
 }
 
 export function MultiSelect({
@@ -396,6 +488,7 @@ export function MultiSelect({
   title,
   align = 'start',
   searchable = true,
+  width = 230,
 }: {
   options: MultiSelectOption[];
   value: string[];
@@ -404,19 +497,34 @@ export function MultiSelect({
   title: string;
   align?: 'start' | 'end';
   searchable?: boolean;
+  width?: number;
 }) {
   const [term, setTerm] = useState('');
   const selected = new Set(value);
 
   const filtered = useMemo(() => {
     const q = term.trim().toLowerCase();
-    return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+    return q ? options.filter((o) => `${o.label} ${o.keywords ?? ''}`.toLowerCase().includes(q)) : options;
   }, [options, term]);
+
+  const row = (option: MultiSelectOption) => (
+    <MenuItem
+      key={option.value}
+      keepOpen
+      icon={option.icon}
+      selected={selected.has(option.value)}
+      onSelect={() =>
+        onChange(selected.has(option.value) ? value.filter((v) => v !== option.value) : [...value, option.value])
+      }
+    >
+      {option.label}
+    </MenuItem>
+  );
 
   return (
     <Menu onOpenChange={(open) => !open && setTerm('')}>
       <MenuTrigger>{children}</MenuTrigger>
-      <MenuContent align={align} label={title} width={230}>
+      <MenuContent align={align} label={title} width={width}>
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-2xs font-bold tracking-wide text-text-subtle uppercase">{title}</span>
           {value.length > 0 && (
@@ -442,23 +550,17 @@ export function MultiSelect({
             />
           </div>
         )}
-        {filtered.map((option) => (
-          <MenuItem
-            key={option.value}
-            keepOpen
-            icon={option.icon}
-            selected={selected.has(option.value)}
-            onSelect={() =>
-              onChange(
-                selected.has(option.value)
-                  ? value.filter((v) => v !== option.value)
-                  : [...value, option.value],
-              )
-            }
-          >
-            {option.label}
-          </MenuItem>
-        ))}
+        {options.some((option) => option.parent) ? (
+          <MenuTree
+            items={filtered}
+            idOf={(option) => option.value}
+            parentOf={(option) => option.parent}
+            nameOf={(option) => option.label}
+            row={row}
+          />
+        ) : (
+          filtered.map(row)
+        )}
         {filtered.length === 0 && <p className="px-2 py-3 text-center text-xs text-text-subtle">Ничего не найдено</p>}
       </MenuContent>
     </Menu>

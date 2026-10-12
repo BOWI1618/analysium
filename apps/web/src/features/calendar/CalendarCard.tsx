@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { SubprojectMark } from '~/components/SubprojectMark';
 import { DoneToggle } from '~/components/DoneToggle';
 import { IssueTypeIcon, LabelChip, PriorityIcon } from '~/components/IssueMeta';
 import { Avatar } from '~/ui/Avatar';
@@ -95,6 +96,7 @@ export function CalendarCard({
             item.done && 'text-text-subtle line-through',
           )}
         >
+          <SubprojectMark project={issue.project} className="mr-1" />
           {issue.title}
         </span>
         {!compact && fields.labels && issue.labels.length > 0 && (

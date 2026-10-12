@@ -61,13 +61,14 @@ describe('подпроекты', () => {
     expect(list.find((project) => project.id === sub.id)?.parentId).toBe(main.id);
     expect(list.find((project) => project.id === main.id)?.parentId).toBeNull();
 
-    // A task of the subproject is not a task of the main project: each has its own analytics.
+    // A task of the subproject stays the subproject's: the figure next to each project counts its own.
     await createIssue(app, owner, sub.id, { title: 'Задача подпроекта' });
     const again = await projectsFor(owner);
     expect(again.find((project) => project.id === sub.id)).toMatchObject({ openIssueCount: 1, totalIssueCount: 1 });
     expect(again.find((project) => project.id === main.id)).toMatchObject({ openIssueCount: 0, totalIssueCount: 0 });
-    const analytics = (await call(owner, 'GET', `/projects/${main.id}/dashboard`)).json();
-    expect(analytics.totals.total).toBe(0);
+    // The subproject has its own analytics; the project above sees the whole of the work.
+    expect((await call(owner, 'GET', `/projects/${sub.id}/dashboard`)).json().totals.total).toBe(1);
+    expect((await call(owner, 'GET', `/projects/${main.id}/dashboard`)).json().totals.total).toBe(1);
   });
 
   it('вложенность — один уровень, в пределах пространства; сам в себя проект не входит', async () => {
