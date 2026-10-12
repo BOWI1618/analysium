@@ -308,12 +308,15 @@ export function ProjectPicker({
   children,
   align = 'start',
   noneLabel = 'Без проекта',
+  triggerClassName,
 }: {
   projects: (Pick<ProjectDto, 'id' | 'name' | 'key' | 'icon' | 'color'> & { parentId?: string | null })[];
   value: string;
   onChange: (projectId: string) => void;
   children: ReactNode;
   align?: 'start' | 'end';
+  /** For a trigger that has to give way in a crowded row: the wrapper shrink-wraps by default. */
+  triggerClassName?: string;
   /** Shown as the first choice; `null` leaves the choice out. */
   noneLabel?: string | null;
 }) {
@@ -333,7 +336,7 @@ export function ProjectPicker({
 
   return (
     <Menu onOpenChange={(open) => !open && setTerm('')}>
-      <MenuTrigger>{children}</MenuTrigger>
+      <MenuTrigger className={triggerClassName}>{children}</MenuTrigger>
       <MenuContent align={align} label="Выбрать проект" width={280}>
         <div className="mb-1 flex items-center gap-1.5 rounded-md border-2 border-border-strong bg-surface-sunken px-2 py-1">
           <Search className="size-3.5 shrink-0 text-text-subtle" />

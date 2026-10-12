@@ -347,7 +347,8 @@ test.describe('перенос задачи', () => {
     await page.goto(`/projects/${task.projectId}/list`);
     await page.getByText('Потом разберёмся куда').click();
     const panel = page.getByRole('dialog', { name: 'Детали задачи' });
-    await panel.getByRole('button', { name: 'Перенести в проект' }).click();
+    // The project stands at the top of the card, and its name there opens the picker.
+    await panel.getByRole('button', { name: /^Проект: / }).click();
     await page.getByRole('menuitem', { name: /Алабуга Старт/ }).click();
 
     const ask = page.getByRole('dialog', { name: /Перенести .* в «Алабуга Старт»\?/ });
@@ -358,6 +359,8 @@ test.describe('перенос задачи', () => {
     expect(reply.status(), await reply.text()).toBe(200);
 
     await expect(page.getByText('Новый номер: AS-1')).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByRole('button', { name: 'Проект: Алабуга Старт' })).toBeVisible();
+    // The field further down names the project in full and moves the task the same way.
     await expect(panel.getByRole('button', { name: 'Перенести в проект' })).toContainText('Алабуга Старт');
     await expect(panel.getByText('AS-1').first()).toBeVisible();
 

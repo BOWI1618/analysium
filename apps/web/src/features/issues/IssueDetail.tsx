@@ -159,6 +159,20 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   };
 
   const patch = (values: Parameters<typeof updateIssue.mutate>[0]) => updateIssue.mutate(values);
+
+  // The project is chosen in two places — at the top of the card and in its
+  // field — by the same picker: search, and subprojects under their project.
+  const canTransfer = canEdit && Boolean(workspaceProjects && workspaceProjects.length > 1);
+  const projectPicker = {
+    projects: (workspaceProjects ?? []).filter((p) => !p.isSystem),
+    value: workspaceProjects?.some((p) => p.isSystem && p.id === issue.projectId) ? '' : issue.projectId,
+    // The list of tasks without a project is offered under its own name, where it exists.
+    noneLabel: workspaceProjects?.some((p) => p.isSystem) ? 'Без проекта' : null,
+    onChange: (nextId: string) => {
+      const next = workspaceProjects?.find((p) => (nextId ? p.id === nextId : p.isSystem));
+      if (next && next.id !== issue.projectId) setTransferTo(next);
+    },
+  };
   const impliedStart = impliedStartDate(issue);
 
   const createLabel = useCreateLabel(issue.projectId);
@@ -201,7 +215,10 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
         <IssueTypeIcon type={issue.type} className="size-4" />
         <Link
           to={`/issue/${issue.issueKey}`}
-          className="fd-key text-xs hover:text-accent"
+          // Not broken at its hyphen where the project's name can give way
+          // instead. A phone has no such name in the row, and there a long
+          // key still folds rather than push the close button off the screen.
+          className="fd-key text-xs hover:text-accent sm:whitespace-nowrap"
         >
           {issue.issueKey}
         </Link>
@@ -229,12 +246,40 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
           <button
             type="button"
             disabled={!canEdit}
-            className="inline-flex items-center gap-1 rounded-sm px-1 py-0.5 text-xs text-text-muted hover:bg-surface-hover disabled:cursor-default"
+            className="inline-flex items-center gap-1 rounded-sm px-1 py-0.5 text-xs whitespace-nowrap text-text-muted hover:bg-surface-hover disabled:cursor-default"
           >
             <PriorityIcon priority={issue.priority} withTooltip={false} className="size-3.5" />
             <span className="hidden sm:inline">{PRIORITY_META[issue.priority].label}</span>
           </button>
         </PriorityPicker>
+
+        {/* Which project the task is in reads at the top, without scrolling to
+            the field; where it may be moved, the name opens the picker. It is
+            the one thing in the row that gives way when the card is narrow,
+            and on a phone it is left out: the field is right below there. */}
+        {canTransfer ? (
+          <ProjectPicker {...projectPicker} triggerClassName="hidden min-w-0 sm:inline-flex">
+            <button
+              type="button"
+              disabled={transferIssue.isPending}
+              aria-label={`Проект: ${issue.project.name}`}
+              title={`${issue.project.name} — перенести в другой проект`}
+              className="inline-flex max-w-52 min-w-0 items-center gap-1 rounded-sm px-1 py-0.5 text-xs text-text-muted hover:bg-surface-hover"
+            >
+              <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
+              <span className="truncate">{issue.project.name}</span>
+              <ChevronDown className="size-3 shrink-0 text-text-subtle" />
+            </button>
+          </ProjectPicker>
+        ) : (
+          <span
+            className="hidden max-w-52 min-w-0 items-center gap-1 text-xs text-text-muted sm:inline-flex"
+            title={issue.project.name}
+          >
+            <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
+            <span className="truncate">{issue.project.name}</span>
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-0.5">
           <Tooltip
@@ -672,20 +717,13 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
             </Field>
 
             <Field label="Проект">
-              {canEdit && workspaceProjects && workspaceProjects.length > 1 ? (
+              {canTransfer ? (
                 <div className="flex min-w-0 items-center gap-1.5">
-                  {/* The same picker as in the create form: search, and subprojects under their project. */}
-                  <div className="min-w-0 flex-1">
-                    <ProjectPicker
-                      projects={workspaceProjects.filter((p) => !p.isSystem)}
-                      value={workspaceProjects.some((p) => p.isSystem && p.id === issue.projectId) ? '' : issue.projectId}
-                      // The list of tasks without a project is offered under its own name, where it exists.
-                      noneLabel={workspaceProjects.some((p) => p.isSystem) ? 'Без проекта' : null}
-                      onChange={(nextId) => {
-                        const next = workspaceProjects.find((p) => (nextId ? p.id === nextId : p.isSystem));
-                        if (next && next.id !== issue.projectId) setTransferTo(next);
-                      }}
-                    >
+                  {/* The picker's trigger shrink-wraps to the name; stretched like
+                      this it takes the row, and a long name is not cut short
+                      with half the row empty. */}
+                  <div className="flex min-w-0 flex-1 flex-col items-stretch">
+                    <ProjectPicker {...projectPicker}>
                       <FieldButton disabled={transferIssue.isPending} label="Перенести в проект">
                         <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
                         <span className="truncate">{issue.project.name}</span>

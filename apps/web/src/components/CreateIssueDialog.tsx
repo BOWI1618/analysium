@@ -170,13 +170,20 @@ export function CreateIssueDialog() {
   // The first pass of the saving effect after opening still sees the fields
   // of the previous opening; it must neither save nor erase anything.
   const settled = useRef(false);
+  // The project the form was opened from, while the list of projects does not have it yet.
+  const awaitedProjectId = useRef<string | null>(null);
 
   /** The form as it opens from where it was called, with nothing typed. */
   const seedForm = () => {
     const { defaults: seed, projects: list } = latest.current;
     // From a project page the task belongs there; from anywhere else it starts
     // without a project, and a project can be picked if wanted.
-    setProjectId(seed?.projectId && list?.some((p) => p.id === seed.projectId && !p.isSystem) ? seed.projectId : '');
+    const known = Boolean(seed?.projectId && list?.some((p) => p.id === seed.projectId && !p.isSystem));
+    setProjectId(known ? seed!.projectId! : '');
+    // A project made a moment ago may not be in the list yet. It is taken as
+    // soon as the list has it — otherwise the task would quietly be created
+    // without a project.
+    awaitedProjectId.current = !known && seed?.projectId ? seed.projectId : null;
     setStatusId(seed?.statusId);
     setSprintId(seed?.sprintId ?? null);
     setTitle('');
@@ -250,6 +257,7 @@ export function CreateIssueDialog() {
   useEffect(() => {
     if (!open) {
       wasOpen.current = false;
+      awaitedProjectId.current = null;
       return;
     }
     if (wasOpen.current) return;
@@ -263,8 +271,22 @@ export function CreateIssueDialog() {
     if (draft && draft.parentId === (seed?.parentId ?? null) && (draft.title.trim() || !isDocEmpty(draft.description))) {
       restoreDraft(draft);
       ownsDraft.current = true;
+      // A draft says where its task belongs; the place the form was opened from no longer does.
+      awaitedProjectId.current = null;
     }
   }, [open]);
+
+  // The project the form was opened from, arriving in the list after the form did.
+  useEffect(() => {
+    const awaited = awaitedProjectId.current;
+    if (!open || !awaited || !projects?.some((p) => p.id === awaited && !p.isSystem)) return;
+    awaitedProjectId.current = null;
+    setProjectId(awaited);
+    // What was offered for «без проекта» means nothing in a project.
+    setStatusId(latest.current.defaults?.statusId);
+    setSprintId(latest.current.defaults?.sprintId ?? null);
+    setLabelIds([]);
+  }, [open, projects]);
 
   // While there is text in the form it is kept in the browser: a reload or a
   // phone that put the tab to sleep must not cost what was typed.
@@ -540,6 +562,8 @@ export function CreateIssueDialog() {
             projects={regularProjects}
             value={projectId}
             onChange={(next) => {
+              // Chosen by hand: the project the form was opened from is not waited for any more.
+              awaitedProjectId.current = null;
               // Statuses, labels and sprints belong to a project: a choice
               // made for one means nothing in another.
               if (next !== projectId) {
