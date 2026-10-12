@@ -4,6 +4,18 @@ import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useToast } from '~/app/toast';
 
+/** A role as it is sent: a built-in one by its name, or one of the workspace's own by its id. */
+export type RoleChoice = { role: string } | { roleId: string };
+
+/**
+ * The value of a role in a list of choices, and back. The built-in roles are
+ * known by their names; anything else in the list is the id of a role of the
+ * workspace's own.
+ */
+export function roleChoice(value: string, builtIn: readonly string[]): RoleChoice {
+  return builtIn.includes(value) ? { role: value } : { roleId: value };
+}
+
 export function useMembers(workspaceId: string | undefined) {
   return useQuery({
     queryKey: qk.members(workspaceId ?? ''),
@@ -26,10 +38,10 @@ export function useCreateInviteCode(workspaceId: string) {
   const toast = useToast();
 
   return useMutation({
-    mutationFn: (role: string) =>
-      api.post<CreatedInviteCodeDto>(`/workspaces/${workspaceId}/invite-codes`, { role }),
+    mutationFn: (role: RoleChoice) =>
+      api.post<CreatedInviteCodeDto>(`/workspaces/${workspaceId}/invite-codes`, role),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.inviteCodes(workspaceId) }),
-    onError: (error) => toast.error(error, 'Не удалось создать код'),
+    onError: (error) => toast.error(error, 'Не удалось создать ссылку'),
   });
 }
 
@@ -52,10 +64,11 @@ export function useUpdateMemberRole(workspaceId: string) {
   const toast = useToast();
 
   return useMutation({
-    mutationFn: ({ memberId, role }: { memberId: string; role: string }) =>
-      api.patch<void>(`/workspaces/${workspaceId}/members/${memberId}`, { role }),
+    mutationFn: ({ memberId, role }: { memberId: string; role: RoleChoice }) =>
+      api.patch<void>(`/workspaces/${workspaceId}/members/${memberId}`, role),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
+      void queryClient.invalidateQueries({ queryKey: qk.roles(workspaceId) });
       toast.success('Роль обновлена');
     },
     onError: (error) => toast.error(error, 'Не удалось изменить роль'),

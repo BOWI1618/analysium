@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { RoleChoice } from '~/features/members/hooks';
 import type {
   CreateProjectInput,
   CreateStatusInput,
@@ -248,10 +249,26 @@ export function useAddProjectMember(projectId: string) {
   const toast = useToast();
 
   return useMutation({
-    mutationFn: (input: { userId: string; role: string }) =>
-      api.post<void>(`/projects/${projectId}/members`, input),
+    mutationFn: ({ userId, role }: { userId: string; role: RoleChoice }) =>
+      api.post<void>(`/projects/${projectId}/members`, { userId, ...role }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: qk.project(projectId) }),
     onError: (error) => toast.error(error, 'Не удалось добавить участника'),
+  });
+}
+
+/** Another role for someone already in the project. */
+export function useUpdateProjectMemberRole(projectId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: RoleChoice }) =>
+      api.patch<void>(`/projects/${projectId}/members/${userId}`, role),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.project(projectId) });
+      toast.success('Роль в проекте обновлена');
+    },
+    onError: (error) => toast.error(error, 'Не удалось изменить роль'),
   });
 }
 

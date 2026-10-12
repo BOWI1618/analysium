@@ -34,7 +34,7 @@ import {
 } from '@flowdesk/contracts';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { assertCan, usersWithProjectAccess, visibleProjectIds } from '../../lib/context';
+import { assertCan, grantsOf, grantsSelect, usersWithProjectAccess, visibleProjectIds } from '../../lib/context';
 import { badRequest, conflict, notFound, AppError } from '../../lib/errors';
 import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
@@ -1404,11 +1404,16 @@ export async function bulkUpdate(
   // here while the card let them make the very same change.
   const projectRoles = await prisma.projectMember.findMany({
     where: { userId: actor.userId, projectId: { in: projectIds } },
-    select: { projectId: true, role: true },
+    select: { projectId: true, role: true, customRole: grantsSelect },
   });
-  const roleIn = new Map(projectRoles.map((r) => [r.projectId, r.role]));
+  const roleIn = new Map(projectRoles.map((r) => [r.projectId, r]));
   for (const projectId of projectIds) {
-    const projectActor: ActorContext = { ...actor, projectRole: (roleIn.get(projectId) ?? null) as never };
+    const held = roleIn.get(projectId);
+    const projectActor: ActorContext = {
+      ...actor,
+      projectRole: held?.role ?? null,
+      projectGrants: grantsOf(held?.customRole),
+    };
     assertCan(projectActor, Permission.ISSUE_UPDATE);
     const reassigns =
       nextAssignee !== undefined && issues.some((i) => i.projectId === projectId && i.assigneeId !== nextAssignee);

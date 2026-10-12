@@ -6,12 +6,13 @@ import type {
   SetNewPasswordInput,
   WorkspaceDto,
 } from '@flowdesk/contracts';
-import { AuditAction, WorkspaceRole } from '@flowdesk/contracts';
+import { AuditAction, WorkspaceRole, permissionsFor } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
 import { generateToken, hashPassword, hashToken, verifyPassword } from '../../lib/password';
 import { badRequest, conflict, unauthorized } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { slugify, uniqueSlug } from '../workspaces/slug';
+import { grantsOf } from '../../lib/context';
 
 export async function register(input: RegisterInput, ip?: string) {
   const existing = await prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
@@ -121,6 +122,7 @@ export async function buildSession(userId: string): Promise<SessionDto> {
     orderBy: { joinedAt: 'asc' },
     select: {
       role: true,
+      customRole: { select: { id: true, name: true, scope: true, permissions: true } },
       workspace: {
         select: {
           id: true,
@@ -144,6 +146,14 @@ export async function buildSession(userId: string): Promise<SessionDto> {
     carryOverTasks: m.workspace.carryOverTasks,
     ownerId: m.workspace.ownerId,
     role: m.role,
+    customRole: m.customRole ? { id: m.customRole.id, name: m.customRole.name } : null,
+    // The page decides what to offer by this list, so it is the same answer the server gives.
+    permissions: permissionsFor({
+      userId,
+      workspaceId: m.workspace.id,
+      workspaceRole: m.role,
+      workspaceGrants: grantsOf(m.customRole),
+    }),
     memberCount: m.workspace._count.members,
     projectCount: m.workspace._count.projects,
     createdAt: m.workspace.createdAt.toISOString(),

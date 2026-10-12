@@ -57,6 +57,9 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   ISSUE_DELETED: 'удалил(а) задачу',
   SPRINT_STARTED: 'запустил(а) спринт',
   SPRINT_COMPLETED: 'завершил(а) спринт',
+  ROLE_CREATED: 'создал(а) роль',
+  ROLE_UPDATED: 'изменил(а) роль',
+  ROLE_DELETED: 'удалил(а) роль',
 };
 
 const AUDIT_FIELD_LABEL: Record<string, string> = {

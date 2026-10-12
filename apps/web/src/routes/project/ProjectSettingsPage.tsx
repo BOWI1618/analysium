@@ -4,7 +4,8 @@ import clsx from 'clsx';
 import { PROJECT_ROLES, STATUS_CATEGORIES, Permission, type StatusCategory } from '@flowdesk/contracts';
 import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
 import { useSession } from '~/app/session';
-import { useMembers } from '~/features/members/hooks';
+import { roleChoice, useMembers } from '~/features/members/hooks';
+import { useRoles } from '~/features/roles/hooks';
 import {
   useAddProjectMember,
   useCreateLabel,
@@ -15,6 +16,7 @@ import {
   useProject,
   useProjects,
   useRemoveProjectMember,
+  useUpdateProjectMemberRole,
   useReorderStatuses,
   useUpdateLabel,
   useUpdateProject,
@@ -119,7 +121,13 @@ export function ProjectSettingsPage() {
           {section === 'general' && <GeneralSection project={project} workspaceId={workspace?.id ?? ''} />}
           {section === 'workflow' && <WorkflowSection project={project} canManage={canManageWorkflow} />}
           {section === 'labels' && <LabelsSection project={project} />}
-          {section === 'members' && <MembersSection project={project} workspaceId={workspace?.id ?? ''} />}
+          {section === 'members' && (
+            <MembersSection
+              project={project}
+              workspaceId={workspace?.id ?? ''}
+              canManage={project.permissions.includes(Permission.PROJECT_MANAGE_MEMBERS)}
+            />
+          )}
           {section === 'danger' && canDelete && (
             <DangerSection
               project={project}
@@ -659,40 +667,89 @@ function LabelsSection({ project }: { project: Project }) {
 
 /* --------------------------------------------------------------- members */
 
-function MembersSection({ project, workspaceId }: { project: Project; workspaceId: string }) {
+function MembersSection({
+  project,
+  workspaceId,
+  canManage,
+}: {
+  project: Project;
+  workspaceId: string;
+  /** May add people, take them out and change their roles. Everyone else reads the list. */
+  canManage: boolean;
+}) {
   const { data: workspaceMembers } = useMembers(workspaceId);
   const addMember = useAddProjectMember(project.id);
   const removeMember = useRemoveProjectMember(project.id);
+  const updateRole = useUpdateProjectMemberRole(project.id);
 
   const projectMemberIds = new Set(project.members.map((m) => m.userId));
   const available = (workspaceMembers ?? []).filter((m) => !projectMemberIds.has(m.user.id));
 
+  // Roles of the workspace's own made for projects stand after the built-in ones.
+  const { data: roles } = useRoles(workspaceId);
+  const ownRoles = (roles ?? []).filter((role) => role.scope === 'PROJECT');
+  const roleOptions = (
+    <>
+      {PROJECT_ROLES.map((role) => (
+        <option key={role} value={role}>
+          {PROJECT_ROLE_LABEL[role]}
+        </option>
+      ))}
+      {ownRoles.length > 0 && (
+        <optgroup label="Свои роли">
+          {ownRoles.map((role) => (
+            <option key={role.id} value={role.id}>
+              {role.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
+  );
+
   return (
     <Card
       title="Участники проекта"
-      description="Гости видят только те проекты, куда их добавили. Остальные видят все проекты пространства."
+      description="Роль в проекте добавляет права к роли человека в пространстве — только в этом проекте. Гости видят лишь те проекты, куда их добавили; остальные видят все."
     >
       <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
         {project.members.map((member) => (
-          <li key={member.userId} className="flex items-center gap-2.5 p-2">
+          <li key={member.userId} className="flex flex-wrap items-center gap-2.5 p-2">
             <Avatar user={member.user} size="lg" />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-40">
               <p className="truncate text-sm font-medium">{member.user.name}</p>
               <p className="truncate text-2xs text-text-subtle">{member.user.email}</p>
             </div>
-            <Badge tone={member.role === 'LEAD' ? 'accent' : 'neutral'}>{PROJECT_ROLE_LABEL[member.role]}</Badge>
-            <IconButton
-              label={`Убрать ${member.user.name}`}
-              size="xs"
-              onClick={() => removeMember.mutate(member.userId)}
-            >
-              <X className="size-3.5" />
-            </IconButton>
+            {canManage ? (
+              <>
+                <select
+                  value={member.customRole?.id ?? member.role}
+                  onChange={(event) =>
+                    updateRole.mutate({ userId: member.userId, role: roleChoice(event.target.value, PROJECT_ROLES) })
+                  }
+                  aria-label={`Роль в проекте: ${member.user.name}`}
+                  className="h-7 max-w-44 border-2 border-border-strong bg-surface px-1.5 text-xs"
+                >
+                  {roleOptions}
+                </select>
+                <IconButton
+                  label={`Убрать ${member.user.name}`}
+                  size="xs"
+                  onClick={() => removeMember.mutate(member.userId)}
+                >
+                  <X className="size-3.5" />
+                </IconButton>
+              </>
+            ) : (
+              <Badge tone={member.role === 'LEAD' && !member.customRole ? 'accent' : 'neutral'}>
+                {member.customRole?.name ?? PROJECT_ROLE_LABEL[member.role]}
+              </Badge>
+            )}
           </li>
         ))}
       </ul>
 
-      {available.length > 0 && (
+      {canManage && available.length > 0 && (
         <form
           className="mt-3 flex flex-wrap items-end gap-2"
           onSubmit={(event) => {
@@ -700,7 +757,7 @@ function MembersSection({ project, workspaceId }: { project: Project; workspaceI
             const form = new FormData(event.currentTarget);
             const userId = String(form.get('userId') ?? '');
             const role = String(form.get('role') ?? 'CONTRIBUTOR');
-            if (userId) addMember.mutate({ userId, role });
+            if (userId) addMember.mutate({ userId, role: roleChoice(role, PROJECT_ROLES) });
           }}
         >
           <div className="min-w-44 flex-1">
@@ -712,12 +769,8 @@ function MembersSection({ project, workspaceId }: { project: Project; workspaceI
               ))}
             </Select>
           </div>
-          <Select name="role" label="Роль" className="w-36" defaultValue="CONTRIBUTOR">
-            {PROJECT_ROLES.map((role) => (
-              <option key={role} value={role}>
-                {PROJECT_ROLE_LABEL[role]}
-              </option>
-            ))}
+          <Select name="role" label="Роль" className="w-44" defaultValue="CONTRIBUTOR">
+            {roleOptions}
           </Select>
           <Button type="submit" variant="secondary" loading={addMember.isPending}>
             Добавить

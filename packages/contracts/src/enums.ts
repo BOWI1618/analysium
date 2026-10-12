@@ -184,6 +184,9 @@ export const AuditAction = {
   ISSUE_DELETED: 'ISSUE_DELETED',
   SPRINT_STARTED: 'SPRINT_STARTED',
   SPRINT_COMPLETED: 'SPRINT_COMPLETED',
+  ROLE_CREATED: 'ROLE_CREATED',
+  ROLE_UPDATED: 'ROLE_UPDATED',
+  ROLE_DELETED: 'ROLE_DELETED',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 

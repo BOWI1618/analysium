@@ -3,7 +3,6 @@ import type {
   CreateProjectInput,
   ProjectDetailDto,
   ProjectDto,
-  ProjectRole,
 } from '@flowdesk/contracts';
 import { AuditAction, Permission, RealtimeEventType, permissionsFor } from '@flowdesk/contracts';
 import { Prisma } from '@prisma/client';
@@ -12,6 +11,7 @@ import { assertCan, projectContext, visibleProjectIds } from '../../lib/context'
 import { conflict, forbidden, notFound, badRequest } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { emit } from '../../realtime/eventBus';
+import { assertMayGive, resolveProjectRole, type RoleRef } from '../roles/service';
 import { DEFAULT_STATUSES, isDoneCategory, nextCompletedAt } from '../../domain/issueRules';
 import { uniqueProjectKey } from './key';
 import { labelSelect, statusSelect, toLabel, toSprint, toStatus, toUserSummary, sprintInclude } from '../../lib/serialize';
@@ -229,7 +229,12 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
       statuses: { orderBy: { position: 'asc' }, select: statusSelect },
       labels: { orderBy: { name: 'asc' }, select: labelSelect },
       members: {
-        select: { userId: true, role: true, user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        select: {
+          userId: true,
+          role: true,
+          customRole: { select: { id: true, name: true } },
+          user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        },
       },
       sprints: {
         where: { status: 'ACTIVE' },
@@ -290,6 +295,7 @@ export async function getProject(actor: ActorContext, projectId: string): Promis
     members: project.members.map((m) => ({
       userId: m.userId,
       role: m.role,
+      customRole: m.customRole,
       user: toUserSummary(m.user)!,
     })),
     assignees: await projectAssignees(project.workspaceId, project.id),
@@ -616,10 +622,15 @@ async function assertLeadIsMember(workspaceId: string, leadId: string): Promise<
   if (!member) throw badRequest('Этот пользователь не состоит в пространстве');
 }
 
+/**
+ * Adds a person to a project with a role — a built-in one or one of the
+ * workspace's own. Nobody hands out a role that allows more in the project
+ * than they may do there themselves.
+ */
 export async function addProjectMember(
   actor: ActorContext,
   projectId: string,
-  input: { userId: string; role: ProjectRole },
+  input: { userId: string } & RoleRef,
 ) {
   assertCan(actor, Permission.PROJECT_MANAGE_MEMBERS);
   const member = await prisma.workspaceMember.findUnique({
@@ -628,16 +639,51 @@ export async function addProjectMember(
   });
   if (!member) throw badRequest('Этот пользователь не состоит в пространстве');
 
+  const given = await resolveProjectRole(actor.workspaceId, input);
+  assertMayGive(actor, given.permissions);
+  const data = { role: given.role as never, customRoleId: given.customRoleId };
   await prisma.projectMember.upsert({
     where: { projectId_userId: { projectId, userId: input.userId } },
-    create: { projectId, userId: input.userId, role: input.role as never },
-    update: { role: input.role as never },
+    create: { projectId, userId: input.userId, ...data },
+    update: data,
+  });
+  announceMembers(actor, projectId, input.userId);
+}
+
+/** Another role for someone already in the project. */
+export async function updateProjectMemberRole(actor: ActorContext, projectId: string, userId: string, ref: RoleRef) {
+  assertCan(actor, Permission.PROJECT_MANAGE_MEMBERS);
+  const given = await resolveProjectRole(actor.workspaceId, ref);
+  assertMayGive(actor, given.permissions);
+  const { count } = await prisma.projectMember.updateMany({
+    where: { projectId, userId },
+    data: { role: given.role as never, customRoleId: given.customRoleId },
+  });
+  if (count === 0) throw notFound('Участник проекта');
+  announceMembers(actor, projectId, userId);
+}
+
+/**
+ * What a person may do in a project is part of what their open pages hold;
+ * a change of role tells those pages to ask again.
+ */
+function announceMembers(actor: ActorContext, projectId: string, userId: string): void {
+  emit(RealtimeEventType.PROJECT_UPDATED, {
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    payload: { projectId },
+  });
+  emit(RealtimeEventType.MEMBER_UPDATED, {
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    payload: { memberId: '', userId },
   });
 }
 
 export async function removeProjectMember(actor: ActorContext, projectId: string, userId: string) {
   assertCan(actor, Permission.PROJECT_MANAGE_MEMBERS);
   await prisma.projectMember.deleteMany({ where: { projectId, userId } });
+  announceMembers(actor, projectId, userId);
 }
 
 /* ------------------------------------------------------------- favorites */

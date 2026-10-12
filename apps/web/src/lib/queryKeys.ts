@@ -11,6 +11,7 @@ export const qk = {
   workspaces: ['workspaces'] as const,
   workspace: (id: string) => ['workspace', id] as const,
   members: (workspaceId: string) => ['workspace', workspaceId, 'members'] as const,
+  roles: (workspaceId: string) => ['workspace', workspaceId, 'roles'] as const,
   departments: (workspaceId: string) => ['workspace', workspaceId, 'departments'] as const,
   issueTemplates: (workspaceId: string) => ['workspace', workspaceId, 'issue-templates'] as const,
   inviteCodes: (workspaceId: string) => ['workspace', workspaceId, 'invite-codes'] as const,

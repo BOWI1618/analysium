@@ -92,6 +92,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         }
         case RealtimeEventType.MEMBER_UPDATED: {
           void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
+          // A role may have been given or changed — possibly this person's own:
+          // what they may do, here and in each project, is asked again.
+          void queryClient.invalidateQueries({ queryKey: qk.roles(workspaceId) });
+          void queryClient.invalidateQueries({ queryKey: qk.session });
+          void queryClient.invalidateQueries({ queryKey: ['project'] });
           break;
         }
         case RealtimeEventType.PRESENCE_CHANGED: {

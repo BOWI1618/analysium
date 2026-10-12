@@ -6,3 +6,4 @@ export * from './dto';
 export * from './rank';
 export * from './richtext';
 export * from './schedule';
+export * from './roles';

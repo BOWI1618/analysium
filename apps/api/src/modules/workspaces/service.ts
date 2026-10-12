@@ -1,7 +1,9 @@
 import type { ActorContext, MemberDto, WorkspaceDto } from '@flowdesk/contracts';
-import { AuditAction, Permission, WorkspaceRole, can, outranks } from '@flowdesk/contracts';
+import { AuditAction, Permission, RealtimeEventType, WorkspaceRole, can, outranks, permissionsFor } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
-import { assertCan, workspaceContext } from '../../lib/context';
+import { assertCan, grantsOf, workspaceContext } from '../../lib/context';
+import { emit } from '../../realtime/eventBus';
+import { assertMayGive, resolveWorkspaceRole, type RoleRef } from '../roles/service';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { slugify, uniqueSlug } from './slug';
@@ -13,6 +15,7 @@ export async function listWorkspaces(userId: string): Promise<WorkspaceDto[]> {
     orderBy: { joinedAt: 'asc' },
     select: {
       role: true,
+      customRole: { select: { id: true, name: true, scope: true, permissions: true } },
       workspace: {
         select: {
           id: true,
@@ -36,6 +39,13 @@ export async function listWorkspaces(userId: string): Promise<WorkspaceDto[]> {
     carryOverTasks: m.workspace.carryOverTasks,
     ownerId: m.workspace.ownerId,
     role: m.role,
+    customRole: m.customRole ? { id: m.customRole.id, name: m.customRole.name } : null,
+    permissions: permissionsFor({
+      userId,
+      workspaceId: m.workspace.id,
+      workspaceRole: m.role,
+      workspaceGrants: grantsOf(m.customRole),
+    }),
     memberCount: m.workspace._count.members,
     projectCount: m.workspace._count.projects,
     createdAt: m.workspace.createdAt.toISOString(),
@@ -81,6 +91,8 @@ export async function createWorkspace(
     carryOverTasks: workspace.carryOverTasks,
     ownerId: workspace.ownerId,
     role: WorkspaceRole.OWNER,
+    customRole: null,
+    permissions: permissionsFor({ userId, workspaceId: workspace.id, workspaceRole: WorkspaceRole.OWNER }),
     memberCount: 1,
     projectCount: 0,
     createdAt: workspace.createdAt.toISOString(),
@@ -110,6 +122,13 @@ export async function getWorkspace(actor: ActorContext): Promise<WorkspaceDto> {
     carryOverTasks: ws.carryOverTasks,
     ownerId: ws.ownerId,
     role: actor.workspaceRole,
+    customRole: await prisma.workspaceMember
+      .findUnique({
+        where: { workspaceId_userId: { workspaceId: actor.workspaceId, userId: actor.userId } },
+        select: { customRole: { select: { id: true, name: true } } },
+      })
+      .then((member) => member?.customRole ?? null),
+    permissions: permissionsFor(actor),
     memberCount: ws._count.members,
     projectCount: ws._count.projects,
     createdAt: ws.createdAt.toISOString(),
@@ -157,6 +176,7 @@ export async function listMembers(actor: ActorContext): Promise<MemberDto[]> {
     select: {
       id: true,
       role: true,
+      customRole: { select: { id: true, name: true } },
       joinedAt: true,
       user: {
         select: {
@@ -176,6 +196,7 @@ export async function listMembers(actor: ActorContext): Promise<MemberDto[]> {
   return members.map((m) => ({
     id: m.id,
     role: m.role,
+    customRole: m.customRole,
     joinedAt: m.joinedAt.toISOString(),
     user: {
       id: m.user.id,
@@ -252,6 +273,7 @@ export async function inviteMember(
   return {
     id: member.id,
     role: member.role,
+    customRole: null,
     joinedAt: member.joinedAt.toISOString(),
     passwordResetExpiresAt: null,
     user: {
@@ -265,22 +287,33 @@ export async function inviteMember(
   };
 }
 
+/**
+ * Gives a member another role: a built-in one, or one of the workspace's own.
+ *
+ * The ladder is the same for both. A role of the workspace's own stands on the
+ * rung of what lies beneath it — «участник» when its holder sees every
+ * project, «гость» when only their own — and, on top of the ladder, nobody
+ * hands out a role that allows more than they may do themselves.
+ */
 export async function updateMemberRole(
   actor: ActorContext,
   memberId: string,
-  role: WorkspaceRole,
+  ref: RoleRef,
   ip?: string,
 ): Promise<void> {
   assertCan(actor, Permission.WORKSPACE_MANAGE_MEMBERS);
 
   const member = await prisma.workspaceMember.findFirst({
     where: { id: memberId, workspaceId: actor.workspaceId },
-    select: { id: true, role: true, userId: true },
+    select: { id: true, role: true, customRoleId: true, userId: true },
   });
   if (!member) throw notFound('Участник');
 
   if (member.role === WorkspaceRole.OWNER) throw forbidden('Роль владельца здесь изменить нельзя');
-  if (role === WorkspaceRole.OWNER) throw badRequest('Передайте владение в настройках пространства');
+  if (ref.role === WorkspaceRole.OWNER) throw badRequest('Передайте владение в настройках пространства');
+  const given = await resolveWorkspaceRole(actor.workspaceId, ref);
+  const role = given.role;
+  assertMayGive(actor, given.permissions);
   // An admin must not be able to promote someone to their own level or above.
   if (!outranks(actor.workspaceRole, role) && actor.workspaceRole !== WorkspaceRole.OWNER) {
     throw forbidden('Нельзя выдать роль, равную вашей или выше');
@@ -289,14 +322,23 @@ export async function updateMemberRole(
     throw forbidden('Нельзя менять роль участника вашего уровня');
   }
 
-  await prisma.workspaceMember.update({ where: { id: memberId }, data: { role } });
+  await prisma.workspaceMember.update({
+    where: { id: memberId },
+    data: { role, customRoleId: given.customRoleId },
+  });
+  // The person's open pages hold what they may do; this tells them to ask again.
+  emit(RealtimeEventType.MEMBER_UPDATED, {
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    payload: { memberId, userId: member.userId },
+  });
   audit({
     workspaceId: actor.workspaceId,
     actorId: actor.userId,
     action: AuditAction.MEMBER_ROLE_CHANGED,
     entityType: 'WorkspaceMember',
     entityId: memberId,
-    metadata: { from: member.role, to: role, userId: member.userId },
+    metadata: { from: member.role, to: role, userId: member.userId, ...(given.customRoleId ? { roleId: given.customRoleId } : {}) },
     ip,
   });
 }

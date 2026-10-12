@@ -151,25 +151,26 @@ model Session {
  */
 
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logo      String?
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  logo           String?
   /// Open tasks whose day has passed move to today, as Weeek's «Переносить задачи на следующий день».
-  carryOverTasks Boolean @default(false)
-  ownerId   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  carryOverTasks Boolean  @default(false)
+  ownerId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  owner         User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members       WorkspaceMember[]
-  projects      Project[]
-  invitations   Invitation[]
-  notifications Notification[]
-  auditLogs     AuditLog[]
-  savedViews    SavedView[]
-  departments   Department[]
+  owner          User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members        WorkspaceMember[]
+  projects       Project[]
+  invitations    Invitation[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  savedViews     SavedView[]
+  departments    Department[]
   issueTemplates IssueTemplate[]
+  roles          Role[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -182,15 +183,57 @@ enum WorkspaceRole {
   GUEST
 }
 
-model WorkspaceMember {
-  id          String        @id @default(cuid())
-  workspaceId String
-  userId      String
-  role        WorkspaceRole @default(MEMBER)
-  joinedAt    DateTime      @default(now())
+enum RoleScope {
+  WORKSPACE
+  PROJECT
+}
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// A role made by the owner of a workspace: a name and what it lets a person
+/// do. The built-in roles are not stored — they are the enums on the
+/// memberships. A membership that points here takes its permissions from this
+/// row instead of its enum, which then only says how far the person sees.
+model Role {
+  id          String    @id @default(cuid())
+  workspaceId String
+  /// Where the role is given: to a member of the workspace, or of a project.
+  scope       RoleScope
+  name        String
+  /// Permission slugs from packages/contracts (permissions.ts).
+  permissions String[]
+  /// Workspace roles only: the person sees every project, or only the
+  /// projects they were added to.
+  allProjects Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceMembers WorkspaceMember[]
+  projectMembers   ProjectMember[]
+  invitations      Invitation[]
+
+  @@unique([workspaceId, scope, name])
+  @@map("roles")
+}
+
+model WorkspaceMember {
+  id           String        @id @default(cuid())
+  workspaceId  String
+  userId       String
+  /// With a role of the workspace's own (`customRoleId`) this is MEMBER or
+  /// GUEST — whether the person sees every project or only their own.
+  role         WorkspaceRole @default(MEMBER)
+  /// SetNull, so that a workspace can be deleted: its roles and its
+  /// memberships go together, in an order the database does not promise, and
+  /// anything stricter fails when the roles happen to go first. That a role
+  /// people hold is never deleted from under them is the service's rule
+  /// (roles/service.ts) — falling back to the enum could hand out more than
+  /// the role allowed.
+  customRoleId String?
+  joinedAt     DateTime      @default(now())
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customRole Role?     @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   ledDepartments Department[]      @relation("DepartmentLead")
   department     DepartmentMember?
@@ -198,6 +241,7 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   @@index([userId])
   @@index([workspaceId, role])
+  @@index([customRoleId])
   @@map("workspace_members")
 }
 
@@ -264,6 +308,9 @@ model Invitation {
   /// Legacy: codes carry no address. Kept nullable so the column can stay.
   email        String?
   role         WorkspaceRole @default(MEMBER)
+  /// The link lets a person in with a role of the workspace's own. Cascade:
+  /// a link for a role that no longer exists must not let anyone in.
+  customRoleId String?
   tokenHash    String        @unique
   invitedById  String
   acceptedAt   DateTime?
@@ -271,7 +318,8 @@ model Invitation {
   expiresAt    DateTime
   createdAt    DateTime      @default(now())
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  customRole Role?     @relation(fields: [customRoleId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, email])
   @@index([email])
@@ -342,17 +390,21 @@ enum ProjectRole {
 }
 
 model ProjectMember {
-  id        String      @id @default(cuid())
-  projectId String
-  userId    String
-  role      ProjectRole @default(CONTRIBUTOR)
-  addedAt   DateTime    @default(now())
+  id           String      @id @default(cuid())
+  projectId    String
+  userId       String
+  /// VIEWER when the person holds a role of the workspace's own here.
+  role         ProjectRole @default(CONTRIBUTOR)
+  customRoleId String?
+  addedAt      DateTime    @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customRole Role?   @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, userId])
   @@index([userId])
+  @@index([customRoleId])
   @@map("project_members")
 }
 
@@ -453,25 +505,25 @@ enum IssuePriority {
 }
 
 model Issue {
-  id                String        @id @default(cuid())
+  id                String           @id @default(cuid())
   projectId         String
   /// A task's number in its project (WEB-4). A subtask shares its parent's
   /// number and is told apart by `subNumber` (WEB-4.1, WEB-4.2), so subtasks
   /// never use up the project's task numbers.
   number            Int
   /// 0 for a task; 1, 2, … for the subtasks of one parent.
-  subNumber         Int           @default(0)
+  subNumber         Int              @default(0)
   /// Counter behind the `subNumber` of this issue's subtasks.
-  subtaskCounter    Int           @default(0)
+  subtaskCounter    Int              @default(0)
   issueKey          String
   title             String
   /// TipTap/ProseMirror JSON, sanitized server-side before storage.
   description       Json?
   /// Plain-text projection of `description`, kept for search.
   descriptionText   String?
-  type              IssueType     @default(TASK)
+  type              IssueType        @default(TASK)
   statusId          String
-  priority          IssuePriority @default(MEDIUM)
+  priority          IssuePriority    @default(MEDIUM)
   reporterId        String?
   assigneeId        String?
   parentId          String?
@@ -485,12 +537,12 @@ model Issue {
   /// Whether a time of day was given. Without one a date means the whole day
   /// (stored at noon UTC, so it reads as the same date in any Russian zone)
   /// and is overdue only once that day is over; with one it is an instant.
-  startHasTime      Boolean       @default(false)
-  dueHasTime        Boolean       @default(false)
+  startHasTime      Boolean          @default(false)
+  dueHasTime        Boolean          @default(false)
   /// Days a task was carried over to the next day; cleared when its due date is set by hand.
-  carriedOverDays   Int           @default(0)
+  carriedOverDays   Int              @default(0)
   /// A milestone has no duration and renders as a diamond on the timeline.
-  isMilestone       Boolean       @default(false)
+  isMilestone       Boolean          @default(false)
   /// A recurring task: closing it creates the next one with its dates moved
   /// forward, and the rule moves over to that copy.
   recurrence        IssueRecurrence?
@@ -498,24 +550,24 @@ model Issue {
   baselineStartDate DateTime?
   baselineDueDate   DateTime?
   /// Fractional ordering key within a status column / backlog.
-  rank              String        @default("U")
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  rank              String           @default("U")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   completedAt       DateTime?
   archivedAt        DateTime?
 
-  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status        WorkflowStatus    @relation(fields: [statusId], references: [id], onDelete: Restrict)
-  reporter      User?             @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
-  assignee      User?             @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  parent        Issue?            @relation("IssueSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
-  subtasks      Issue[]           @relation("IssueSubtasks")
-  epic          Issue?            @relation("EpicIssues", fields: [epicId], references: [id], onDelete: SetNull)
-  epicIssues    Issue[]           @relation("EpicIssues")
-  sprint        Sprint?           @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status        WorkflowStatus      @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  reporter      User?               @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  assignee      User?               @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  parent        Issue?              @relation("IssueSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks      Issue[]             @relation("IssueSubtasks")
+  epic          Issue?              @relation("EpicIssues", fields: [epicId], references: [id], onDelete: SetNull)
+  epicIssues    Issue[]             @relation("EpicIssues")
+  sprint        Sprint?             @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   labels        IssueLabel[]
-  dependsOn     IssueDependency[] @relation("DependencySuccessor")
-  blocks        IssueDependency[] @relation("DependencyPredecessor")
+  dependsOn     IssueDependency[]   @relation("DependencySuccessor")
+  blocks        IssueDependency[]   @relation("DependencyPredecessor")
   comments      Comment[]
   attachments   Attachment[]
   activity      ActivityEvent[]

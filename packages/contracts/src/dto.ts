@@ -18,6 +18,7 @@ import type {
   WorkspaceRole,
 } from './enums';
 import type { Permission } from './permissions';
+import type { RoleScope } from './roles';
 
 export interface UserDto {
   id: string;
@@ -37,13 +38,39 @@ export interface SessionUserDto extends UserDto {
   telegramLinked: boolean;
 }
 
+/** A role of the workspace's own, as a membership names it. */
+export interface RoleRefDto {
+  id: string;
+  name: string;
+}
+
+/** A role made by the owner of a workspace: a name and the ticks of the permission table. */
+export interface RoleDto {
+  id: string;
+  scope: RoleScope;
+  name: string;
+  permissions: Permission[];
+  /** Workspace roles: every project is seen, or only the ones the person was added to. */
+  allProjects: boolean;
+  /** How many people hold it now. A role somebody holds cannot be deleted. */
+  memberCount: number;
+}
+
 export interface WorkspaceDto {
   id: string;
   name: string;
   slug: string;
   logo: string | null;
   ownerId: string;
+  /**
+   * The built-in role. With `customRole` set it only says how far the person
+   * sees (MEMBER — every project, GUEST — their own), and what they may do is
+   * in `permissions`.
+   */
   role: WorkspaceRole;
+  customRole: RoleRefDto | null;
+  /** What the viewer may do anywhere in the workspace; a project can add to it. */
+  permissions: Permission[];
   memberCount: number;
   projectCount: number;
   createdAt: string;
@@ -54,6 +81,8 @@ export interface WorkspaceDto {
 export interface MemberDto {
   id: string;
   role: WorkspaceRole;
+  /** Set when the person holds a role of the workspace's own instead of a built-in one. */
+  customRole: RoleRefDto | null;
   joinedAt: string;
   user: UserSummaryDto & { status: UserStatus; lastActiveAt: string | null };
   /**
@@ -75,6 +104,7 @@ export interface PasswordResetRequired {
 export interface InviteCodeDto {
   id: string;
   role: WorkspaceRole;
+  customRole: RoleRefDto | null;
   createdAt: string;
   expiresAt: string;
   createdBy: { id: string; name: string } | null;
@@ -131,7 +161,7 @@ export interface ProjectDetailDto extends ProjectDto {
   statuses: StatusDto[];
   labels: LabelDto[];
   /** Explicit project roles (lead, member). Not the list of people who can work here — see `assignees`. */
-  members: { userId: string; role: ProjectRole; user: UserSummaryDto }[];
+  members: { userId: string; role: ProjectRole; customRole: RoleRefDto | null; user: UserSummaryDto }[];
   /**
    * Everyone who can see this project and so can be assigned or mentioned:
    * every non-guest member of the workspace, plus guests added to the project.

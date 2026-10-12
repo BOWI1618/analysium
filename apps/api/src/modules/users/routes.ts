@@ -171,6 +171,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         where: { workspaceId_userId: { workspaceId: actor.workspaceId, userId: req.params.userId } },
         select: {
           role: true,
+          customRole: { select: { id: true, name: true } },
           joinedAt: true,
           user: {
             select: {
@@ -241,6 +242,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
           createdAt: member.user.createdAt.toISOString(),
         },
         role: member.role,
+        customRole: member.customRole,
         joinedAt: member.joinedAt.toISOString(),
         stats: { assigned: assignedCount, created: createdCount, completed: completedCount },
         assignedIssues: assigned.map(toIssueSummary),

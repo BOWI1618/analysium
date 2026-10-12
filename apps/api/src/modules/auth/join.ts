@@ -22,7 +22,7 @@ export async function joinWithCode(input: JoinWithCodeInput, ip?: string) {
 
   const invitation = await prisma.invitation.findUnique({
     where: { tokenHash: hashCode(input.code) },
-    select: { id: true, workspaceId: true, role: true, acceptedAt: true, expiresAt: true },
+    select: { id: true, workspaceId: true, role: true, customRoleId: true, acceptedAt: true, expiresAt: true },
   });
   if (!invitation || invitation.acceptedAt || invitation.expiresAt < new Date()) throw invalid;
 
@@ -54,7 +54,12 @@ export async function joinWithCode(input: JoinWithCodeInput, ip?: string) {
     });
 
     const member = await tx.workspaceMember.create({
-      data: { workspaceId: invitation.workspaceId, userId: created.id, role: invitation.role },
+      data: {
+        workspaceId: invitation.workspaceId,
+        userId: created.id,
+        role: invitation.role,
+        customRoleId: invitation.customRoleId,
+      },
       select: { id: true },
     });
     await tx.invitation.update({ where: { id: invitation.id }, data: { acceptedById: created.id } });

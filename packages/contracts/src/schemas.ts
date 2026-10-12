@@ -89,9 +89,20 @@ export const registerSchema = z.object({
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
-export const createInviteCodeSchema = z.object({
-  role: z.enum(WORKSPACE_ROLES as [string, ...string[]]),
-});
+/**
+ * Which role is meant: a built-in one by its name, or one of the workspace's
+ * own by its id. Exactly one of the two.
+ */
+const oneRole = <T extends { role?: unknown; roleId?: unknown }>(value: T) =>
+  (value.role === undefined) !== (value.roleId === undefined);
+const ONE_ROLE = { message: 'Укажите роль', path: ['role'] };
+
+export const createInviteCodeSchema = z
+  .object({
+    role: z.enum(WORKSPACE_ROLES as [string, ...string[]]).optional(),
+    roleId: z.string().min(6).max(40).optional(),
+  })
+  .refine(oneRole, ONE_ROLE);
 export type CreateInviteCodeInput = z.infer<typeof createInviteCodeSchema>;
 
 export const joinWithCodeSchema = z.object({
@@ -173,9 +184,31 @@ export const inviteMemberSchema = z.object({
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 
-export const updateMemberSchema = z.object({
-  role: z.enum(WORKSPACE_ROLES as [string, ...string[]]),
+export const updateMemberSchema = z
+  .object({
+    role: z.enum(WORKSPACE_ROLES as [string, ...string[]]).optional(),
+    roleId: z.string().min(6).max(40).optional(),
+  })
+  .refine(oneRole, ONE_ROLE);
+
+/* ------------------------------------------------------------------ roles */
+
+/** A role of the workspace's own: a name and the ticks of the permission table. */
+export const createRoleSchema = z.object({
+  scope: z.enum(['WORKSPACE', 'PROJECT']),
+  name: z.string().trim().min(2).max(40),
+  permissions: z.array(z.string().max(60)).max(60),
+  /** Workspace roles: sees every project (default) or only the ones they were added to. */
+  allProjects: z.boolean().optional(),
 });
+export type CreateRoleInput = z.infer<typeof createRoleSchema>;
+
+export const updateRoleSchema = z.object({
+  name: z.string().trim().min(2).max(40).optional(),
+  permissions: z.array(z.string().max(60)).max(60).optional(),
+  allProjects: z.boolean().optional(),
+});
+export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 
 /* ----------------------------------------------------------- departments */
 
@@ -295,10 +328,23 @@ export const updateProjectSchema = z.object({
   parentId: cuidLike.nullable().optional(),
 });
 
-export const projectMemberSchema = z.object({
-  userId: cuidLike,
-  role: z.enum(PROJECT_ROLES as [string, ...string[]]).default('CONTRIBUTOR'),
-});
+export const projectMemberSchema = z
+  .object({
+    userId: cuidLike,
+    role: z.enum(PROJECT_ROLES as [string, ...string[]]).optional(),
+    roleId: cuidLike.optional(),
+  })
+  // Neither given: the usual role of someone who works in a project.
+  .transform((value) => (value.role === undefined && value.roleId === undefined ? { ...value, role: 'CONTRIBUTOR' } : value))
+  .refine(oneRole, ONE_ROLE);
+
+/** A new role for someone already in the project. */
+export const projectMemberRoleSchema = z
+  .object({
+    role: z.enum(PROJECT_ROLES as [string, ...string[]]).optional(),
+    roleId: cuidLike.optional(),
+  })
+  .refine(oneRole, ONE_ROLE);
 
 /* -------------------------------------------------------------- workflow */
 

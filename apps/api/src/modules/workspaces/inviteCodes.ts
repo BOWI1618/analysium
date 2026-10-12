@@ -20,6 +20,7 @@ import { badRequest, notFound } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { env } from '../../config/env';
 import { assertGrantsAccess } from '../auth/access';
+import { resolveWorkspaceRole, type RoleRef } from '../roles/service';
 
 /** No 0/O or 1/I/L: a code read aloud or copied by hand must not be ambiguous. */
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -43,13 +44,21 @@ export function hashCode(input: string): string {
 const codeSelect = {
   id: true,
   role: true,
+  customRole: { select: { id: true, name: true } },
   createdAt: true,
   expiresAt: true,
   invitedById: true,
 } as const;
 
 async function withCreators(
-  rows: { id: string; role: WorkspaceRole; createdAt: Date; expiresAt: Date; invitedById: string }[],
+  rows: {
+    id: string;
+    role: WorkspaceRole;
+    customRole: { id: string; name: string } | null;
+    createdAt: Date;
+    expiresAt: Date;
+    invitedById: string;
+  }[],
 ): Promise<InviteCodeDto[]> {
   const creators = await prisma.user.findMany({
     where: { id: { in: [...new Set(rows.map((r) => r.invitedById))] } },
@@ -59,6 +68,7 @@ async function withCreators(
   return rows.map((r) => ({
     id: r.id,
     role: r.role,
+    customRole: r.customRole,
     createdAt: r.createdAt.toISOString(),
     expiresAt: r.expiresAt.toISOString(),
     createdBy: byId.get(r.invitedById) ?? null,
@@ -67,17 +77,20 @@ async function withCreators(
 
 export async function createInviteCode(
   actor: ActorContext,
-  role: WorkspaceRole,
+  ref: RoleRef,
   ip?: string,
 ): Promise<CreatedInviteCodeDto> {
   assertGrantsAccess(actor);
-  if (role === WorkspaceRole.OWNER) throw badRequest('У пространства может быть только один владелец');
+  if (ref.role === WorkspaceRole.OWNER) throw badRequest('У пространства может быть только один владелец');
+  // A link can let a person in with a role of the workspace's own as well as with a built-in one.
+  const { role, customRoleId } = await resolveWorkspaceRole(actor.workspaceId, ref);
 
   const code = generateCode();
   const row = await prisma.invitation.create({
     data: {
       workspaceId: actor.workspaceId,
       role,
+      customRoleId,
       tokenHash: hashCode(code),
       invitedById: actor.userId,
       expiresAt: new Date(Date.now() + env.INVITE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),

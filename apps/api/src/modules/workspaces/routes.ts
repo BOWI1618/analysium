@@ -6,7 +6,6 @@ import {
   paginationSchema,
   updateMemberSchema,
   updateWorkspaceSchema,
-  type WorkspaceRole,
 } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
 import { workspaceContext } from '../../lib/context';
@@ -60,8 +59,8 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: WorkspaceParams }>('/workspaces/:workspaceId/invite-codes', async (req, reply) => {
     const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
-    const { role } = parse(createInviteCodeSchema, req.body);
-    const created = await inviteCodes.createInviteCode(actor, role as WorkspaceRole, req.ip);
+    const ref = parse(createInviteCodeSchema, req.body);
+    const created = await inviteCodes.createInviteCode(actor, ref, req.ip);
     return reply.status(201).send(created);
   });
 
@@ -85,8 +84,8 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
     '/workspaces/:workspaceId/members/:memberId',
     async (req, reply) => {
       const actor = await workspaceContext(currentUser(req).id, req.params.workspaceId);
-      const { role } = parse(updateMemberSchema, req.body);
-      await service.updateMemberRole(actor, req.params.memberId, role as WorkspaceRole, req.ip);
+      const ref = parse(updateMemberSchema, req.body);
+      await service.updateMemberRole(actor, req.params.memberId, ref, req.ip);
       return reply.status(204).send();
     },
   );

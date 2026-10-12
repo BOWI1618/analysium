@@ -5,7 +5,7 @@
  * a query that forgets to scope by workspace.
  */
 import type { ActorContext, Permission } from '@flowdesk/contracts';
-import { can, canAccessProject } from '@flowdesk/contracts';
+import { can, canAccessProject, normalizeRolePermissions } from '@flowdesk/contracts';
 import { prisma } from './prisma';
 import { forbidden, notFound } from './errors';
 
@@ -21,15 +21,28 @@ export interface ProjectContext {
   };
 }
 
+/** What is read off a membership to know what its holder may do. */
+export const grantsSelect = { select: { scope: true, permissions: true } } as const;
+
+/**
+ * The permissions of a role of the workspace's own, or null for a built-in
+ * role — whose set is fixed and known to `can` by the role's name.
+ */
+export function grantsOf(
+  role: { scope: 'WORKSPACE' | 'PROJECT'; permissions: string[] } | null | undefined,
+): Permission[] | null {
+  return role ? normalizeRolePermissions(role.scope, role.permissions) : null;
+}
+
 /** Resolves membership in a workspace. Non-members get 404, never 403 —
  *  existence of a workspace should not leak to outsiders. */
 export async function workspaceContext(userId: string, workspaceId: string): Promise<ActorContext> {
   const member = await prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId } },
-    select: { role: true },
+    select: { role: true, customRole: grantsSelect },
   });
   if (!member) throw notFound('Пространство');
-  return { userId, workspaceId, workspaceRole: member.role };
+  return { userId, workspaceId, workspaceRole: member.role, workspaceGrants: grantsOf(member.customRole) };
 }
 
 /**
@@ -46,20 +59,22 @@ export async function projectContext(userId: string, projectId: string): Promise
       name: true,
       projectType: true,
       isArchived: true,
-      members: { where: { userId }, select: { role: true } },
-      workspace: { select: { members: { where: { userId }, select: { role: true } } } },
+      members: { where: { userId }, select: { role: true, customRole: grantsSelect } },
+      workspace: { select: { members: { where: { userId }, select: { role: true, customRole: grantsSelect } } } },
     },
   });
   if (!project) throw notFound('Проект');
 
-  const workspaceRole = project.workspace.members[0]?.role;
-  if (!workspaceRole) throw notFound('Проект');
+  const membership = project.workspace.members[0];
+  if (!membership) throw notFound('Проект');
 
   const actor: ActorContext = {
     userId,
     workspaceId: project.workspaceId,
-    workspaceRole,
+    workspaceRole: membership.role,
+    workspaceGrants: grantsOf(membership.customRole),
     projectRole: project.members[0]?.role ?? null,
+    projectGrants: grantsOf(project.members[0]?.customRole),
   };
 
   if (!canAccessProject(actor)) throw notFound('Проект');

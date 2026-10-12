@@ -3,11 +3,11 @@ import {
   createLabelSchema,
   createProjectSchema,
   createStatusSchema,
+  projectMemberRoleSchema,
   projectMemberSchema,
   reorderStatusesSchema,
   updateProjectSchema,
   updateStatusSchema,
-  type ProjectRole,
   Permission,
 } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
@@ -133,10 +133,14 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: P }>('/projects/:projectId/members', async (req, reply) => {
     const { actor } = await projectContext(currentUser(req).id, req.params.projectId);
     const input = parse(projectMemberSchema, req.body);
-    await service.addProjectMember(actor, req.params.projectId, {
-      userId: input.userId,
-      role: input.role as ProjectRole,
-    });
+    await service.addProjectMember(actor, req.params.projectId, input);
+    return reply.status(204).send();
+  });
+
+  app.patch<{ Params: P & { userId: string } }>('/projects/:projectId/members/:userId', async (req, reply) => {
+    const { actor } = await projectContext(currentUser(req).id, req.params.projectId);
+    const ref = parse(projectMemberRoleSchema, req.body);
+    await service.updateProjectMemberRole(actor, req.params.projectId, req.params.userId, ref);
     return reply.status(204).send();
   });
 

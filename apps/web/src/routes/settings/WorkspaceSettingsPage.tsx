@@ -3,14 +3,15 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { AuditLogDto, CreatedInviteCodeDto, WorkspaceRole } from '@flowdesk/contracts';
-import { Permission, WORKSPACE_ROLES, can, outranks } from '@flowdesk/contracts';
-import { Check, KeyRound, Link2, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Permission, WORKSPACE_ROLES, outranks } from '@flowdesk/contracts';
+import { Check, KeyRound, Link2, Plus, Trash2 } from 'lucide-react';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useSession } from '~/app/session';
 import { useRealtime } from '~/app/realtime';
 import { useToast } from '~/app/toast';
 import {
+  roleChoice,
   useCreateInviteCode,
   useInviteCodes,
   useMembers,
@@ -34,6 +35,8 @@ import { AUDIT_ACTION_LABEL, ROLE_LABEL, describeAuditDetails } from '~/lib/labe
 import { DepartmentsSection } from './DepartmentsSection';
 import { projectTree } from '~/features/projects/tree';
 import { TemplatesSection } from './TemplatesSection';
+import { RolesSection } from './RolesSection';
+import { useRoles } from '~/features/roles/hooks';
 
 const SECTIONS = ['general', 'members', 'departments', 'templates', 'roles', 'projects', 'audit'] as const;
 type Section = (typeof SECTIONS)[number];
@@ -58,14 +61,15 @@ export function WorkspaceSettingsPage() {
 
   if (!workspace || !user) return null;
 
-  const actor = { userId: user.id, workspaceId: workspace.id, workspaceRole: workspace.role };
+  // By what the server says the person may do: a role of the workspace's own has no set the page could know.
+  const may = (permission: Permission) => workspace.permissions.includes(permission);
   const visible = SECTIONS.filter((s) =>
     s === 'audit'
-      ? can(actor, Permission.WORKSPACE_VIEW_AUDIT)
+      ? may(Permission.WORKSPACE_VIEW_AUDIT)
       : s === 'departments'
-        ? can(actor, Permission.WORKSPACE_MANAGE_MEMBERS)
+        ? may(Permission.WORKSPACE_MANAGE_MEMBERS)
         : s === 'templates'
-          ? can(actor, Permission.WORKSPACE_UPDATE)
+          ? may(Permission.WORKSPACE_UPDATE)
           : true,
   );
   // An address naming a section the viewer may not see falls back to the first one.
@@ -147,9 +151,7 @@ function GeneralSection() {
 
   if (!workspace) return null;
   const dirty = name !== workspace.name || logo !== (workspace.logo ?? '');
-  const canUpdate = user
-    ? can({ userId: user.id, workspaceId: workspace.id, workspaceRole: workspace.role }, Permission.WORKSPACE_UPDATE)
-    : false;
+  const canUpdate = Boolean(user) && workspace.permissions.includes(Permission.WORKSPACE_UPDATE);
 
   return (
     <>
@@ -226,10 +228,28 @@ function MembersSection() {
 
   // Computed before the early return: the links query below is a hook and has
   // to run on every render.
-  const canManage =
-    workspace && user
-      ? can({ userId: user.id, workspaceId, workspaceRole: workspace.role }, Permission.WORKSPACE_MANAGE_MEMBERS)
-      : false;
+  const canManage = Boolean(workspace && user && workspace.permissions.includes(Permission.WORKSPACE_MANAGE_MEMBERS));
+  // Roles of the workspace's own stand in every list a role is chosen from, after the built-in ones.
+  const { data: roles } = useRoles(workspaceId);
+  const ownRoles = (roles ?? []).filter((item) => item.scope === 'WORKSPACE');
+  const roleOptions = (
+    <>
+      {WORKSPACE_ROLES.filter((r) => r !== 'OWNER').map((option) => (
+        <option key={option} value={option}>
+          {ROLE_LABEL[option as WorkspaceRole]}
+        </option>
+      ))}
+      {ownRoles.length > 0 && (
+        <optgroup label="Свои роли">
+          {ownRoles.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
+  );
   // Letting people in is the owner's alone: nobody else makes or sees the links.
   const grantsAccess = workspace?.role === 'OWNER';
   const { data: codes } = useInviteCodes(workspaceId, grantsAccess);
@@ -254,20 +274,16 @@ function MembersSection() {
             className="flex flex-wrap items-end gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              createCode.mutate(role, { onSuccess: (code) => setCreated(code) });
+              createCode.mutate(roleChoice(role, WORKSPACE_ROLES), { onSuccess: (code) => setCreated(code) });
             }}
           >
             <Select
               label="Роль"
               value={role}
               onChange={(event) => setRole((event.target as HTMLSelectElement).value)}
-              className="w-40"
+              className="w-48"
             >
-              {WORKSPACE_ROLES.filter((r) => r !== 'OWNER').map((option) => (
-                <option key={option} value={option}>
-                  {ROLE_LABEL[option as WorkspaceRole]}
-                </option>
-              ))}
+              {roleOptions}
             </Select>
             <Button type="submit" variant="secondary" iconLeft={<Plus className="size-3.5" />} loading={createCode.isPending}>
               Создать ссылку
@@ -282,7 +298,7 @@ function MembersSection() {
               <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
                 {codes.map((code) => (
                   <li key={code.id} className="flex flex-wrap items-center gap-2.5 p-2.5 text-xs">
-                    <Badge tone="neutral">{ROLE_LABEL[code.role]}</Badge>
+                    <Badge tone="neutral">{code.customRole?.name ?? ROLE_LABEL[code.role]}</Badge>
                     <span className="min-w-0 flex-1 text-text-muted">
                       {code.createdBy ? `создал(а) ${code.createdBy.name}` : 'создатель удалён'} ·{' '}
                       <span title={fullDate(code.createdAt)}>{relativeTime(code.createdAt)}</span>
@@ -353,19 +369,19 @@ function MembersSection() {
 
                   {canChange ? (
                     <select
-                      value={member.role}
-                      onChange={(event) => updateRole.mutate({ memberId: member.id, role: event.target.value })}
+                      value={member.customRole?.id ?? member.role}
+                      onChange={(event) =>
+                        updateRole.mutate({ memberId: member.id, role: roleChoice(event.target.value, WORKSPACE_ROLES) })
+                      }
                       aria-label={`Роль участника ${member.user.name}`}
-                      className="h-7 border-2 border-border-strong bg-surface px-1.5 text-xs"
+                      className="h-7 max-w-44 border-2 border-border-strong bg-surface px-1.5 text-xs"
                     >
-                      {WORKSPACE_ROLES.filter((r) => r !== 'OWNER').map((option) => (
-                        <option key={option} value={option}>
-                          {ROLE_LABEL[option as WorkspaceRole]}
-                        </option>
-                      ))}
+                      {roleOptions}
                     </select>
                   ) : (
-                    <Badge tone={member.role === 'OWNER' ? 'accent' : 'neutral'}>{ROLE_LABEL[member.role]}</Badge>
+                    <Badge tone={member.role === 'OWNER' ? 'accent' : 'neutral'}>
+                      {member.customRole?.name ?? ROLE_LABEL[member.role]}
+                    </Badge>
                   )}
 
                   {canChange && !isSelf && member.user.status === 'ACTIVE' && (
@@ -457,7 +473,7 @@ function InviteCodePanel({ invite, onClose }: { invite: CreatedInviteCodeDto; on
 
   return (
     <div className="mt-3 border-2 border-border-strong bg-surface-sunken p-3">
-      <p className="text-sm font-bold">Ссылка для роли «{ROLE_LABEL[invite.role]}»</p>
+      <p className="text-sm font-bold">Ссылка для роли «{invite.customRole?.name ?? ROLE_LABEL[invite.role]}»</p>
       <p className="mt-0.5 text-xs text-text-muted">
         Скопируйте сейчас — после закрытия ссылка больше не покажется. Она одноразовая и действует до{' '}
         {fullDate(invite.expiresAt)}.
@@ -490,70 +506,6 @@ function InviteCodePanel({ invite, onClose }: { invite: CreatedInviteCodeDto; on
         . Его вводят на странице входа, по строке «Вас пригласили?».
       </p>
     </div>
-  );
-}
-
-/* ----------------------------------------------------------------- roles */
-
-const ROLE_MATRIX: { role: WorkspaceRole; summary: string; grants: string[] }[] = [
-  {
-    role: 'OWNER',
-    summary: 'Полный контроль, включая удаление пространства.',
-    grants: ['Всё, что может администратор', 'Удалить пространство', 'Нельзя исключить из пространства'],
-  },
-  {
-    role: 'ADMIN',
-    summary: 'Ведёт пространство изо дня в день.',
-    grants: [
-      'Управлять участниками и ролями',
-      'Создавать, править и удалять любой проект',
-      'Править и удалять любую задачу',
-      'Читать журнал аудита',
-    ],
-  },
-  {
-    role: 'MEMBER',
-    summary: 'Роль по умолчанию для всех, кто делает работу.',
-    grants: [
-      'Видеть все проекты',
-      'Создавать и править задачи',
-      'Двигать задачи и вести спринты',
-      'Комментировать и загружать файлы',
-    ],
-  },
-  {
-    role: 'GUEST',
-    summary: 'Внешние коллеги с доступом к отдельным проектам.',
-    grants: ['Видит только проекты, куда добавлен', 'Читает задачи и комментирует', 'Не может создавать и править задачи'],
-  },
-];
-
-function RolesSection() {
-  return (
-    <Card
-      title="Роли"
-      description="Что может каждая роль. Роль участника меняется в разделе «Участники»."
-    >
-      <ul className="space-y-2.5">
-        {ROLE_MATRIX.map((entry) => (
-          <li key={entry.role} className="border-2 border-border-strong bg-surface-sunken p-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="size-3.5 text-accent" />
-              <h3 className="text-sm font-semibold">{ROLE_LABEL[entry.role]}</h3>
-            </div>
-            <p className="mt-0.5 text-xs text-text-muted">{entry.summary}</p>
-            <ul className="mt-2 space-y-1">
-              {entry.grants.map((grant) => (
-                <li key={grant} className="flex items-start gap-1.5 text-xs text-text-muted">
-                  <span className="mt-1.5 size-1 shrink-0 bg-text-subtle" aria-hidden="true" />
-                  {grant}
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
-    </Card>
   );
 }
 

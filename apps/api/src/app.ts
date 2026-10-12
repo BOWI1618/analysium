@@ -9,6 +9,7 @@ import { authPlugin, SESSION_COOKIE } from './plugins/auth';
 import { registerErrorHandler } from './plugins/errorHandler';
 import { runWithRequestContext } from './lib/requestContext';
 import { authRoutes } from './modules/auth/routes';
+import { roleRoutes } from './modules/roles/routes';
 import { workspaceRoutes } from './modules/workspaces/routes';
 import { projectRoutes } from './modules/projects/routes';
 import { issueRoutes } from './modules/issues/routes';
@@ -114,6 +115,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(departmentRoutes);
       await api.register(issueTemplateRoutes);
       await api.register(cascadeRoutes);
+      await api.register(roleRoutes);
       await api.register(realtimeRoutes);
     },
     { prefix: '/api/v1' },

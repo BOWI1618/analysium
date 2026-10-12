@@ -142,6 +142,15 @@ export interface ActorContext {
   workspaceRole: WorkspaceRole;
   /** Role in the project being acted upon, if any. */
   projectRole?: ProjectRole | null;
+  /**
+   * What the person's role in the workspace grants, when it is a role of the
+   * workspace's own making rather than a built-in one. It stands in place of
+   * the built-in set; `workspaceRole` then only says how far the person sees
+   * — every project (MEMBER) or the ones they were added to (GUEST).
+   */
+  workspaceGrants?: readonly Permission[] | null;
+  /** The same for the role in the project being acted upon. */
+  projectGrants?: readonly Permission[] | null;
 }
 
 /**
@@ -154,13 +163,19 @@ export function canAccessProject(actor: Pick<ActorContext, 'workspaceRole' | 'pr
 }
 
 export function can(actor: ActorContext, permission: Permission): boolean {
-  const base = WORKSPACE_GRANTS[actor.workspaceRole];
-  if (base?.has(permission)) return true;
-  if (actor.projectRole) {
-    const extra = PROJECT_GRANTS[actor.projectRole];
-    if (extra?.has(permission)) return true;
-  }
+  const base = actor.workspaceGrants
+    ? actor.workspaceGrants.includes(permission)
+    : WORKSPACE_GRANTS[actor.workspaceRole]?.has(permission);
+  if (base) return true;
+  if (actor.projectGrants) return actor.projectGrants.includes(permission);
+  if (actor.projectRole) return PROJECT_GRANTS[actor.projectRole]?.has(permission) ?? false;
   return false;
+}
+
+/** What a built-in role grants — for showing it next to the roles a workspace made itself. */
+export function builtInGrants(kind: 'workspace' | 'project', role: WorkspaceRole | ProjectRole): Permission[] {
+  const set = kind === 'workspace' ? WORKSPACE_GRANTS[role as WorkspaceRole] : PROJECT_GRANTS[role as ProjectRole];
+  return set ? [...set] : [];
 }
 
 export function canAll(actor: ActorContext, permissions: Permission[]): boolean {

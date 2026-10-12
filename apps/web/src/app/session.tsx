@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { can, type Permission } from '@flowdesk/contracts';
+import type { Permission } from '@flowdesk/contracts';
 import type {
   JoinWithCodeInput,
   LoginInput,
@@ -177,9 +177,12 @@ export function useAuthConfig() {
 /**
  * Whether the current user may do this anywhere in the workspace. A project can
  * grant a guest more inside it — check `project.permissions` there.
+ *
+ * Read from what the server sent rather than worked out from the role's name:
+ * a role of the workspace's own has no fixed set the page could know.
  */
 export function useWorkspaceCan(permission: Permission): boolean {
   const { user, workspace } = useSession();
   if (!user || !workspace) return false;
-  return can({ userId: user.id, workspaceId: workspace.id, workspaceRole: workspace.role }, permission);
+  return workspace.permissions.includes(permission);
 }

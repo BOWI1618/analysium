@@ -18,6 +18,7 @@ import { ACTIVITY_LABEL, ROLE_LABEL } from '~/lib/labels';
 interface ProfileResponse {
   user: UserDto & { createdAt: string };
   role: string;
+  customRole: { id: string; name: string } | null;
   joinedAt: string;
   stats: { assigned: number; created: number; completed: number };
   assignedIssues: IssueSummaryDto[];
@@ -81,7 +82,9 @@ export function ProfilePage() {
                   <h1 className="fd-display text-[clamp(1.25rem,2vw,1.75rem)]">{data.user.name}</h1>
                   <p className="text-sm text-text-muted">{data.user.email}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-2">
-                    <Badge tone={data.role === 'OWNER' ? 'accent' : 'neutral'}>{ROLE_LABEL[data.role as WorkspaceRole]}</Badge>
+                    <Badge tone={data.role === 'OWNER' ? 'accent' : 'neutral'}>
+                      {data.customRole?.name ?? ROLE_LABEL[data.role as WorkspaceRole]}
+                    </Badge>
                     <span className="fd-num text-2xs text-text-subtle" title={fullDate(data.joinedAt)}>
                       В команде {relativeTime(data.joinedAt)}
                     </span>
