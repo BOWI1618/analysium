@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { ChevronRight, Columns3, CornerDownRight, Hourglass, MessageSquare, Repeat, SquareCheck, UserPen } from 'lucide-react';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import type { IssueSummaryDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
+import { impliedStartDate } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useIssue, usePatchIssue } from '~/features/issues/hooks';
 import { Avatar } from '~/ui/Avatar';
@@ -386,7 +387,7 @@ export const IssueRow = memo(function IssueRow({
 
       {show('startDate') && (
         <span style={sized('startDate')} className="fd-num hidden w-24 shrink-0 truncate text-right text-2xs whitespace-nowrap text-text-subtle sm:block">
-          {issue.startDate ? dateWithTime(issue.startDate, issue.startHasTime) : ''}
+          {issue.startDate ? dateWithTime(issue.startDate, issue.startHasTime) : shortDate(impliedStartDate(issue))}
         </span>
       )}
 

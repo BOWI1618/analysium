@@ -70,6 +70,35 @@ describe('GET /projects/:id/gantt', () => {
     expect(body.range.end >= iso(20)).toBe(true);
   });
 
+  it('starts a task with only a deadline on the day it was created — until a start is set by hand', async () => {
+    const today = `${new Date().toISOString().slice(0, 10)}T12:00:00.000Z`;
+    const inAWeek = new Date(new Date(today).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const issue = await createIssue(app, owner, project.id, { title: 'Срок через неделю', dueDate: inAWeek });
+    const dated = await createIssue(app, owner, project.id, { title: 'Срок давно прошёл', dueDate: iso(20) });
+    const point = await createIssue(app, owner, project.id, { title: 'Веха', dueDate: inAWeek, isMilestone: true });
+
+    const find = async (id: string) =>
+      ((await gantt()).json().rows as { id: string; start: string | null; end: string | null }[]).find((row) => row.id === id)!;
+    // A bar from the day of creation to the deadline, not a mark on the deadline.
+    expect(await find(issue.id)).toMatchObject({ start: today, end: inAWeek });
+    // Nothing is stored: the task itself still has no start.
+    const read = async () =>
+      (await app.inject({ method: 'GET', url: `/api/v1/issues/${issue.id}`, headers: { cookie: owner.cookie } })).json();
+    expect((await read()).startDate).toBeNull();
+    // A deadline before the day of creation has no span; a milestone is a point.
+    expect((await find(dated.id)).start).toBeNull();
+    expect((await find(point.id)).start).toBeNull();
+
+    // Set by hand, the start is the start; taken away, the day of creation is back.
+    const patch = (startDate: string | null) =>
+      app.inject({ method: 'PATCH', url: `/api/v1/issues/${issue.id}`, headers: { cookie: owner.cookie }, payload: { startDate } });
+    const later = new Date(new Date(today).getTime() + 2 * 24 * 60 * 60 * 1000).toISOString();
+    expect((await patch(later)).statusCode).toBe(200);
+    expect((await find(issue.id)).start).toBe(later);
+    expect((await patch(null)).statusCode).toBe(200);
+    expect((await find(issue.id)).start).toBe(today);
+  });
+
   it('rolls a parent bar up from its children', async () => {
     const parent = await createIssue(app, owner, project.id, { title: 'Родитель' });
     await createIssue(app, owner, project.id, {

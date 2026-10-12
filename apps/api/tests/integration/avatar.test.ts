@@ -20,7 +20,7 @@ afterAll(async () => {
 const BOUNDARY = '----analysium-avatar';
 const bytes = Buffer.from('не совсем png, но для хранения это неважно');
 
-const upload = (mimeType: string, filename = 'me.png') =>
+const upload = (mimeType: string, filename = 'me.png', body: Buffer = bytes) =>
   app.inject({
     method: 'POST',
     url: '/api/v1/me/avatar',
@@ -29,7 +29,7 @@ const upload = (mimeType: string, filename = 'me.png') =>
       Buffer.from(
         `--${BOUNDARY}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`,
       ),
-      bytes,
+      body,
       Buffer.from(`\r\n--${BOUNDARY}--\r\n`),
     ]),
   });
@@ -56,6 +56,26 @@ describe('фото профиля', () => {
     expect(await sessionAvatar()).toBeNull();
     const gone = await app.inject({ method: 'GET', url: avatarUrl, headers: { cookie: user.cookie } });
     expect(gone.statusCode).toBe(404);
+  });
+
+  it('неподвижная картинка — до 2 МБ, GIF — до 4 МБ', async () => {
+    const megabytes = (count: number) => Buffer.alloc(Math.round(count * 1024 * 1024), 1);
+
+    const heavyPhoto = await upload('image/png', 'me.png', megabytes(3));
+    expect(heavyPhoto.statusCode).toBe(400);
+    expect(heavyPhoto.json().error.message).toContain('2 МБ');
+    // The refused file is not left as the photo.
+    expect(await sessionAvatar()).toBeNull();
+
+    // The same three megabytes pass as a GIF…
+    const animated = await upload('image/gif', 'me.gif', megabytes(3));
+    expect(animated.statusCode).toBe(200);
+    expect(await sessionAvatar()).toBe(animated.json().avatarUrl);
+    // …and past four even a GIF is refused, the earlier photo staying in place.
+    const heavyGif = await upload('image/gif', 'me.gif', megabytes(4.5));
+    expect(heavyGif.statusCode).toBe(400);
+    expect(heavyGif.json().error.message).toContain('4 МБ');
+    expect(await sessionAvatar()).toBe(animated.json().avatarUrl);
   });
 
   it('SVG и прочие не-картинки не принимаются', async () => {

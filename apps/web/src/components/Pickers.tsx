@@ -581,6 +581,7 @@ export function DateField({
   onChange,
   disabled,
   label = 'Срок',
+  emptyText = 'Не задан',
   className,
 }: {
   value: string | null;
@@ -589,6 +590,8 @@ export function DateField({
   disabled?: boolean;
   /** Names the field for screen readers: «Срок», «Начало». */
   label?: string;
+  /** What an empty field says — the date that is taken when none is set, where there is one. */
+  emptyText?: string;
   className?: string;
 }) {
   const date = value ? new Date(value) : null;
@@ -627,7 +630,7 @@ export function DateField({
           >
             <CalendarDays className="size-3.5 shrink-0 text-text-subtle" />
             <span className={clsx('fd-num min-w-0 flex-1 truncate', !shown && 'text-text-subtle')}>
-              {shown || 'Не задан'}
+              {shown || emptyText}
             </span>
           </button>
         )}

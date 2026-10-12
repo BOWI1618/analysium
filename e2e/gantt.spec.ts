@@ -148,4 +148,36 @@ test.describe('диаграмма Ганта', () => {
     await page.goto(`/projects/${projectId}/gantt`);
     await expect(page.locator(`[data-bar-id="${second.id}"]`)).toBeVisible({ timeout: 20_000 });
   });
+
+  test('задача без заданного начала идёт от дня создания до срока — на диаграмме и в карточке', async ({ page }) => {
+    await register(page, 'Нина Сроковая');
+    const projectId = await createProject(page);
+
+    // Only a deadline, a week from now — the way a task is usually written down.
+    const day = (offset: number) => new Date(Date.now() + offset * 24 * 60 * 60 * 1000);
+    const wholeDay = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T12:00:00.000Z`;
+    const created = await page.request.post('/api/v1/issues', {
+      data: { projectId, title: 'Только срок', dueDate: wholeDay(day(7)) },
+    });
+    expect(created.status()).toBe(201);
+    const issue = (await created.json()) as { id: string; issueKey: string };
+
+    await page.goto(`/projects/${projectId}/gantt`);
+    const bar = page.locator(`[data-bar-id="${issue.id}"]`);
+    await expect(bar).toBeVisible({ timeout: 20_000 });
+    // A bar of eight days, today to the deadline — not a one-day mark on the deadline.
+    await expect(bar).toHaveAttribute('aria-label', new RegExp(`, ${day(0).getDate()} [^ ]+ → ${day(7).getDate()} [^ ]+,`));
+
+    // The card says where the start comes from, and a start set by hand replaces it.
+    await page.goto(`/issue/${issue.issueKey}`);
+    const start = page.getByRole('button', { name: 'Начало', exact: true });
+    await expect(start).toContainText('день создания', { timeout: 15_000 });
+    await start.click();
+    await page.getByRole('button', { name: 'Завтра', exact: true }).click();
+    await expect(start).not.toContainText('день создания', { timeout: 15_000 });
+    await expect
+      .poll(async () => (await (await page.request.get(`/api/v1/issues/${issue.id}`)).json()).startDate, { timeout: 15_000 })
+      .toBe(wholeDay(day(1)));
+  });
 });

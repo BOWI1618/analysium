@@ -21,6 +21,7 @@ import {
   ISSUE_TYPES,
   Permission,
   RealtimeEventType,
+  impliedStartDate,
   permissionsFor,
 } from '@flowdesk/contracts';
 import type { Prisma } from '@prisma/client';
@@ -61,6 +62,7 @@ const ganttIssueSelect = {
   baselineStartDate: true,
   baselineDueDate: true,
   completedAt: true,
+  createdAt: true,
   status: { select: { id: true, name: true, category: true, color: true, position: true, wipLimit: true, isDefault: true } },
   assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
 } satisfies Prisma.IssueSelect;
@@ -140,6 +142,16 @@ export async function getGantt(
   const truncated = found.length > GANTT_LIMIT;
   const issues = truncated ? found.slice(0, GANTT_LIMIT) : found;
 
+  // Where each bar begins: the start set by hand, else the day the task was
+  // created. The query could order only by the start that is stored, so the
+  // rows are put in order again by the one the chart draws.
+  const startOf = new Map(issues.map((issue) => [issue.id, issue.startDate ?? impliedStartDate(issue, timezone)]));
+  issues.sort((a, b) => {
+    const left = startOf.get(a.id)?.getTime() ?? Infinity;
+    const right = startOf.get(b.id)?.getTime() ?? Infinity;
+    return left === right ? 0 : left < right ? -1 : 1;
+  });
+
   const idSet = new Set(issues.map((i) => i.id));
   const dependencyRows = idSet.size
     ? await prisma.issueDependency.findMany({
@@ -152,7 +164,7 @@ export async function getGantt(
     id: issue.id,
     // A parent outside the filtered set must not orphan its child's indentation.
     parentId: issue.parentId && idSet.has(issue.parentId) ? issue.parentId : null,
-    startDate: issue.startDate,
+    startDate: startOf.get(issue.id) ?? null,
     dueDate: issue.dueDate,
     isMilestone: issue.isMilestone,
     storyPoints: issue.storyPoints,
@@ -213,8 +225,9 @@ export async function getGantt(
     };
   });
 
-  // An issue with only a due date is still on the timeline — it renders as a
-  // deadline marker — so the range must account for one-sided bars too.
+  // An issue with a deadline earlier than the day it was created has no span
+  // and is still on the timeline — it renders as a deadline marker — so the
+  // range must account for one-sided bars too.
   const boundaries = rows.flatMap((r) => [r.start, r.end].filter((v): v is string => v !== null));
   const range = boundaries.length
     ? {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import type { IssueDetailDto, IssueRecurrence, ProjectDto, UserSummaryDto } from '@flowdesk/contracts';
-import { ISSUE_RECURRENCES, Permission } from '@flowdesk/contracts';
+import { ISSUE_RECURRENCES, Permission, impliedStartDate } from '@flowdesk/contracts';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import {
   ArrowLeft,
@@ -72,7 +72,7 @@ import { ProgressBar, SkeletonText } from '~/ui/Feedback';
 import { Panel } from '~/ui/Panel';
 import { ProjectIcon } from '~/ui/ProjectIcon';
 import { Tooltip } from '~/ui/Tooltip';
-import { formatBytes, fullDate, relativeTime } from '~/lib/format';
+import { formatBytes, fullDate, relativeTime, shortDate } from '~/lib/format';
 
 export interface IssueDetailProps {
   issue: IssueDetailDto;
@@ -159,6 +159,7 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   };
 
   const patch = (values: Parameters<typeof updateIssue.mutate>[0]) => updateIssue.mutate(values);
+  const impliedStart = impliedStartDate(issue);
 
   const createLabel = useCreateLabel(issue.projectId);
   // A label created from the list is put on the task straight away.
@@ -736,6 +737,8 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                 value={issue.startDate}
                 hasTime={issue.startHasTime}
                 disabled={!canEdit}
+                // Not set by hand, the start is the day the task was created — the chart draws it from there.
+                emptyText={impliedStart ? `${shortDate(impliedStart)} · день создания` : undefined}
                 onChange={(startDate, startHasTime) => patch({ startDate, startHasTime })}
               />
             </Field>

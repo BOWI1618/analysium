@@ -15,6 +15,8 @@ import { createLinkUrl, linkFromApp, unlinkTelegram } from '../telegram/service'
 /** Photos only, and never SVG — it can carry script. */
 const AVATAR_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+/** A moving picture is heavier by nature: a few seconds of GIF do not fit into two megabytes. */
+const AVATAR_GIF_MAX_BYTES = 4 * 1024 * 1024;
 
 export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -50,15 +52,17 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/me/avatar', async (req) => {
     const user = currentUser(req);
-    const file = await req.file({ limits: { fileSize: AVATAR_MAX_BYTES } });
+    // The stream is cut at the larger of the two limits; which one applies is known only by the type.
+    const file = await req.file({ limits: { fileSize: AVATAR_GIF_MAX_BYTES } });
     if (!file) throw badRequest('Файл не был загружен');
     const mimeType = (file.mimetype || '').toLowerCase();
     if (!AVATAR_MIME.has(mimeType)) throw badRequest('Подойдёт картинка PNG, JPG, WebP или GIF');
+    const isGif = mimeType === 'image/gif';
 
-    const { key } = await storage.save(file.file, { filename: 'avatar', mimeType });
-    if (file.file.truncated) {
+    const { key, size } = await storage.save(file.file, { filename: 'avatar', mimeType });
+    if (file.file.truncated || size > (isGif ? AVATAR_GIF_MAX_BYTES : AVATAR_MAX_BYTES)) {
       await storage.remove(key);
-      throw badRequest('Фото больше 2 МБ — выберите поменьше');
+      throw badRequest(isGif ? 'GIF больше 4 МБ — выберите поменьше' : 'Фото больше 2 МБ — выберите поменьше');
     }
 
     const previous = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { avatarKey: true } });

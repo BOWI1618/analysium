@@ -190,7 +190,7 @@ export function AccountSettingsPage() {
                     )}
                   </div>
                   <p className="mt-1 text-xs text-text-subtle">
-                    PNG, JPG, WebP или GIF до 2 МБ. Без фото показываются инициалы.
+                    PNG, JPG или WebP до 2 МБ, GIF — до 4 МБ. Без фото показываются инициалы.
                   </p>
                   <input
                     ref={photoInputRef}
@@ -204,8 +204,13 @@ export function AccountSettingsPage() {
                       event.target.value = '';
                       if (!file) return;
                       // Checked here too, so a big file is refused before it is sent.
-                      if (file.size > 2 * 1024 * 1024) {
-                        toast.toast({ tone: 'error', title: 'Фото больше 2 МБ', description: 'Выберите файл поменьше.' });
+                      const megabytes = file.type === 'image/gif' ? 4 : 2;
+                      if (file.size > megabytes * 1024 * 1024) {
+                        toast.toast({
+                          tone: 'error',
+                          title: megabytes === 4 ? 'GIF больше 4 МБ' : 'Фото больше 2 МБ',
+                          description: 'Выберите файл поменьше.',
+                        });
                         return;
                       }
                       uploadPhoto.mutate(file);

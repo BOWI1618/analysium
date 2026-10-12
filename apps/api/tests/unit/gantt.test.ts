@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { impliedStartDate } from '@flowdesk/contracts';
 import {
   DependencyType,
   criticalPath,
@@ -107,6 +108,44 @@ describe('rollUpSchedule', () => {
 });
 
 /* --------------------------------------------------------- dependencies */
+
+describe('impliedStartDate', () => {
+  const task = (over: Partial<Parameters<typeof impliedStartDate>[0]> = {}) => ({
+    startDate: null,
+    dueDate: '2026-10-20T12:00:00.000Z',
+    dueHasTime: false,
+    createdAt: '2026-10-05T08:30:00.000Z',
+    ...over,
+  });
+  const day = (value: Date | null) => value?.toISOString() ?? null;
+
+  it('starts a task with only a deadline on the day it was created', () => {
+    expect(day(impliedStartDate(task(), 'UTC'))).toBe('2026-10-05T12:00:00.000Z');
+  });
+
+  it('counts that day in the viewer’s zone', () => {
+    // 22:30 UTC on the 5th is already the 6th in Moscow.
+    const late = task({ createdAt: '2026-10-05T22:30:00.000Z' });
+    expect(day(impliedStartDate(late, 'Europe/Moscow'))).toBe('2026-10-06T12:00:00.000Z');
+    expect(day(impliedStartDate(late, 'UTC'))).toBe('2026-10-05T12:00:00.000Z');
+  });
+
+  it('leaves a start set by hand, a task without a deadline and a milestone alone', () => {
+    expect(impliedStartDate(task({ startDate: '2026-10-10T12:00:00.000Z' }), 'UTC')).toBeNull();
+    expect(impliedStartDate(task({ dueDate: null }), 'UTC')).toBeNull();
+    expect(impliedStartDate(task({ isMilestone: true }), 'UTC')).toBeNull();
+  });
+
+  it('gives no start to a deadline dated before the task was written down', () => {
+    expect(impliedStartDate(task({ dueDate: '2026-10-01T12:00:00.000Z' }), 'UTC')).toBeNull();
+    // Created and due on one day: a span of that day.
+    expect(day(impliedStartDate(task({ dueDate: '2026-10-05T12:00:00.000Z' }), 'UTC'))).toBe('2026-10-05T12:00:00.000Z');
+    // A timed deadline falls on a day of the zone: 22:00 UTC on the 4th is the 5th in Moscow.
+    const timed = task({ dueDate: '2026-10-04T22:00:00.000Z', dueHasTime: true });
+    expect(impliedStartDate(timed, 'UTC')).toBeNull();
+    expect(day(impliedStartDate(timed, 'Europe/Moscow'))).toBe('2026-10-05T12:00:00.000Z');
+  });
+});
 
 describe('findCycle', () => {
   it('accepts a straight chain', () => {
