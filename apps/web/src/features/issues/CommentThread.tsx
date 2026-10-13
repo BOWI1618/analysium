@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import clsx from 'clsx';
 import type { CommentDto, UserSummaryDto } from '@flowdesk/contracts';
-import { EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { COMMENT_REACTIONS, EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
+import { MoreHorizontal, Pencil, SmilePlus, Trash2 } from 'lucide-react';
+import { Popover } from '~/ui/Popover';
 import { Avatar } from '~/ui/Avatar';
 import { Button, IconButton } from '~/ui/Button';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '~/ui/Menu';
@@ -11,7 +13,13 @@ import { relativeTime, fullDate } from '~/lib/format';
 import { RichTextEditor, RichTextViewer } from '~/components/RichText';
 import { Shortcut } from '~/ui/Shortcut';
 import { SHORTCUTS, comboText } from '~/lib/shortcuts';
-import { useComments, useCreateComment, useDeleteComment, useUpdateComment } from '~/features/comments/hooks';
+import {
+  useComments,
+  useCreateComment,
+  useDeleteComment,
+  useToggleReaction,
+  useUpdateComment,
+} from '~/features/comments/hooks';
 
 export function CommentThread({
   issueId,
@@ -60,6 +68,8 @@ export function CommentThread({
               issueId={issueId}
               members={members}
               onUploadImage={onUploadImage}
+              canReact={canComment}
+              viewerName={currentUser.name}
             />
           ))}
         </ul>
@@ -113,12 +123,19 @@ function CommentItem({
   issueId,
   members,
   onUploadImage,
+  canReact,
+  viewerName,
 }: {
   comment: CommentDto;
   issueId: string;
   members: UserSummaryDto[];
   onUploadImage?: (file: File) => Promise<string | null>;
+  /** Reactions are put by whoever may comment; everyone else sees them. */
+  canReact: boolean;
+  viewerName: string;
 }) {
+  const toggleReaction = useToggleReaction(issueId, viewerName);
+  const react = (emoji: string) => toggleReaction.mutate({ commentId: comment.id, emoji });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<unknown>(comment.body);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -205,6 +222,70 @@ function CommentItem({
         ) : (
           <div className="mt-1 rounded-lg bg-surface-sunken px-3 py-2">
             <RichTextViewer value={comment.body} />
+          </div>
+        )}
+
+        {/* Reactions, as in a messenger: a press puts one's own on or takes it off. */}
+        {!editing && (comment.reactions.length > 0 || canReact) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1" role="group" aria-label="Реакции">
+            {comment.reactions.map((reaction) => (
+              <button
+                key={reaction.emoji}
+                type="button"
+                disabled={!canReact}
+                aria-pressed={reaction.mine}
+                aria-label={`${reaction.emoji} ${reaction.count}: ${reaction.users.join(', ')}`}
+                title={reaction.users.join(', ')}
+                onClick={() => react(reaction.emoji)}
+                className={clsx(
+                  'inline-flex h-6 items-center gap-1 border-2 px-1.5 text-xs disabled:cursor-default',
+                  reaction.mine
+                    ? 'border-accent bg-accent-subtle font-bold'
+                    : 'border-border-strong bg-surface enabled:hover:bg-surface-hover',
+                )}
+              >
+                <span aria-hidden="true">{reaction.emoji}</span>
+                <span className="fd-num">{reaction.count}</span>
+              </button>
+            ))}
+            {canReact && (
+              <Popover
+                width={196}
+                label="Выбрать реакцию"
+                trigger={({ toggle, open }) => (
+                  <button
+                    type="button"
+                    onClick={toggle}
+                    aria-label="Добавить реакцию"
+                    aria-expanded={open}
+                    title="Добавить реакцию"
+                    className="inline-flex size-6 items-center justify-center border-2 border-transparent text-text-subtle hover:border-border-strong hover:bg-surface-hover hover:text-text"
+                  >
+                    <SmilePlus className="size-3.5" />
+                  </button>
+                )}
+              >
+                {({ close }) => (
+                  <div className="grid grid-cols-5 gap-1">
+                    {COMMENT_REACTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        aria-label={`Реакция ${emoji}`}
+                        aria-pressed={comment.reactions.some((reaction) => reaction.emoji === emoji && reaction.mine)}
+                        onClick={() => {
+                          react(emoji);
+                          close();
+                        }}
+                        className="flex size-8 items-center justify-center border-2 border-transparent text-base hover:border-border-strong hover:bg-surface-hover aria-pressed:border-accent aria-pressed:bg-accent-subtle"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Popover>
+            )}
           </div>
         )}
       </div>

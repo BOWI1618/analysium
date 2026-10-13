@@ -14,7 +14,7 @@ import { toUserSummary, userSummarySelect } from '../../lib/serialize';
 import { log } from '../../lib/logger';
 import { telegram, telegramEnabled } from '../../lib/telegram';
 import { emit } from '../../realtime/eventBus';
-import { deliverToTelegram } from '../telegram/service';
+import { deliverToTelegram, type TelegramNotice } from '../telegram/service';
 
 export interface NotifyInput {
   userIds: string[];
@@ -82,21 +82,62 @@ export async function notify(input: NotifyInput): Promise<void> {
 }
 
 async function sendToTelegram(created: { id: string; userId: string }[], input: NotifyInput): Promise<void> {
+  await deliverToTelegram(await telegramNotices(created, input), telegram);
+}
+
+/**
+ * The notifications as they go to the messenger: with the task as it stands
+ * now — read after the change that caused the notification — so the message
+ * can say where the task is and when it is due, not only that something
+ * happened to it.
+ */
+export async function telegramNotices(
+  created: { id: string; userId: string }[],
+  input: Pick<NotifyInput, 'actorId' | 'issueId' | 'commentId' | 'title' | 'body' | 'type'>,
+): Promise<TelegramNotice[]> {
   const [actor, issue] = await Promise.all([
     input.actorId ? prisma.user.findUnique({ where: { id: input.actorId }, select: { name: true } }) : null,
-    input.issueId ? prisma.issue.findUnique({ where: { id: input.issueId }, select: { issueKey: true } }) : null,
+    input.issueId
+      ? prisma.issue.findUnique({
+          where: { id: input.issueId },
+          select: {
+            issueKey: true,
+            title: true,
+            priority: true,
+            dueDate: true,
+            dueHasTime: true,
+            status: { select: { name: true, category: true } },
+            project: { select: { name: true, isSystem: true } },
+            parent: { select: { issueKey: true, title: true } },
+            assignee: { select: { name: true } },
+          },
+        })
+      : null,
   ]);
-  await deliverToTelegram(
-    created.map((n) => ({
-      id: n.id,
-      userId: n.userId,
-      title: input.title,
-      body: input.body ?? null,
-      actorName: actor?.name ?? null,
-      issueKey: issue?.issueKey ?? null,
-    })),
-    telegram,
-  );
+  return created.map((n) => ({
+    id: n.id,
+    userId: n.userId,
+    title: input.title,
+    body: input.body ?? null,
+    actorName: actor?.name ?? null,
+    issueKey: issue?.issueKey ?? null,
+    type: input.type,
+    // A comment's text is somebody's words; everything else in a body is ours.
+    quote: Boolean(input.commentId),
+    issue: issue
+      ? {
+          title: issue.title,
+          project: issue.project.isSystem ? null : issue.project.name,
+          parent: issue.parent,
+          status: issue.status.name,
+          closed: issue.status.category === 'COMPLETED' || issue.status.category === 'CANCELED',
+          priority: issue.priority,
+          dueDate: issue.dueDate,
+          dueHasTime: issue.dueHasTime,
+          assignee: issue.assignee?.name ?? null,
+        }
+      : null,
+  }));
 }
 
 /**

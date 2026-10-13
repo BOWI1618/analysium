@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { createCommentSchema, updateCommentSchema } from '@flowdesk/contracts';
+import { createCommentSchema, toggleReactionSchema, updateCommentSchema } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
 import { issueContext, workspaceContext } from '../../lib/context';
 import { currentUser, requireAuth } from '../../plugins/auth';
@@ -35,6 +35,16 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
     const actor = await workspaceContext(currentUser(req).id, comment.issue.project.workspaceId);
     const { body } = parse(updateCommentSchema, req.body);
     return service.updateComment(actor, req.params.commentId, body);
+  });
+
+  // Through the task the comment belongs to: a reaction is open to whoever
+  // may take part in that task — a guest of the project too, by the role there.
+  app.post<{ Params: { commentId: string } }>('/comments/:commentId/reactions', async (req) => {
+    const comment = await prisma.comment.findUnique({ where: { id: req.params.commentId }, select: { issueId: true } });
+    if (!comment) throw notFound('Комментарий');
+    const { actor } = await issueContext(currentUser(req).id, comment.issueId);
+    const { emoji } = parse(toggleReactionSchema, req.body);
+    return { reactions: await service.toggleReaction(actor, req.params.commentId, emoji) };
   });
 
   app.delete<{ Params: { commentId: string } }>('/comments/:commentId', async (req, reply) => {

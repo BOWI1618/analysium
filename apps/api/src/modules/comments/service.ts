@@ -1,4 +1,4 @@
-import type { ActorContext, CommentDto } from '@flowdesk/contracts';
+import type { ActorContext, CommentDto, CommentReactionDto } from '@flowdesk/contracts';
 import {
   ActivityType,
   NotificationType,
@@ -16,7 +16,7 @@ import { assertCan } from '../../lib/context';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
-import { commentSelect, toComment } from '../../lib/serialize';
+import { commentSelect, toComment, toReactions } from '../../lib/serialize';
 import { filterWorkspaceMembers, issueWatchers, notify } from '../notifications/service';
 
 export async function listComments(actor: ActorContext, issueId: string): Promise<CommentDto[]> {
@@ -29,6 +29,7 @@ export async function listComments(actor: ActorContext, issueId: string): Promis
     toComment(c, {
       canEdit: canEditComment(actor, c.author.id),
       canDelete: canDeleteComment(actor, c.author.id),
+      viewerId: actor.userId,
     }),
   );
 }
@@ -101,7 +102,44 @@ export async function createComment(
     log.warn(error, 'comment notification fan-out failed');
   }
 
-  return toComment(comment, { canEdit: true, canDelete: true });
+  return toComment(comment, { canEdit: true, canDelete: true, viewerId: actor.userId });
+}
+
+/**
+ * Puts a reaction on a comment, or takes it off if this person has already
+ * put the same one — one press either way, as in a messenger.
+ *
+ * It is a way of taking part in the discussion, so it asks for what writing a
+ * comment asks for. Nobody is notified: a reaction is there to be seen next
+ * to the comment, not to interrupt.
+ */
+export async function toggleReaction(actor: ActorContext, commentId: string, emoji: string): Promise<CommentReactionDto[]> {
+  assertCan(actor, Permission.COMMENT_CREATE, 'Реакции ставят те, кто может комментировать');
+  const comment = await prisma.comment.findFirst({
+    where: { id: commentId, issue: { project: { workspaceId: actor.workspaceId } } },
+    select: { id: true, issueId: true, issue: { select: { projectId: true } } },
+  });
+  if (!comment) throw notFound('Комментарий');
+
+  const key = { commentId, userId: actor.userId, emoji };
+  // Taken off if it is there; put on otherwise. Two presses at once end as one or the other, never as an error.
+  const removed = await prisma.commentReaction.deleteMany({ where: key });
+  if (removed.count === 0) {
+    await prisma.commentReaction.createMany({ data: [key], skipDuplicates: true });
+  }
+
+  emit(RealtimeEventType.COMMENT_UPDATED, {
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    payload: { issueId: comment.issueId, commentId, projectId: comment.issue.projectId },
+  });
+
+  const rows = await prisma.commentReaction.findMany({
+    where: { commentId },
+    orderBy: { createdAt: 'asc' },
+    select: { emoji: true, userId: true, user: { select: { name: true } } },
+  });
+  return toReactions(rows, actor.userId);
 }
 
 export async function updateComment(actor: ActorContext, commentId: string, body: unknown): Promise<CommentDto> {
@@ -127,7 +165,7 @@ export async function updateComment(actor: ActorContext, commentId: string, body
     payload: { issueId: existing.issueId, commentId, projectId: existing.issue.projectId },
   });
 
-  return toComment(comment, { canEdit: true, canDelete: true });
+  return toComment(comment, { canEdit: true, canDelete: true, viewerId: actor.userId });
 }
 
 export async function deleteComment(actor: ActorContext, commentId: string): Promise<void> {

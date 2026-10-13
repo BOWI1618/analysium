@@ -10,6 +10,7 @@ import type {
   ActivityDto,
   AttachmentDto,
   CommentDto,
+  CommentReactionDto,
   IssueSummaryDto,
   LabelDto,
   SprintDto,
@@ -195,11 +196,31 @@ export const commentSelect = {
   editedAt: true,
   author: { select: userSummarySelect },
   attachments: { select: attachmentSelect },
+  reactions: {
+    orderBy: { createdAt: 'asc' },
+    select: { emoji: true, userId: true, user: { select: { name: true } } },
+  },
 } satisfies Prisma.CommentSelect;
+
+/** Reactions gathered by sign, in the order each sign first appeared. */
+export function toReactions(
+  rows: { emoji: string; userId: string; user: { name: string } }[],
+  viewerId: string,
+): CommentReactionDto[] {
+  const bySign = new Map<string, CommentReactionDto>();
+  for (const row of rows) {
+    const entry = bySign.get(row.emoji) ?? { emoji: row.emoji, count: 0, mine: false, users: [] };
+    entry.count += 1;
+    entry.users.push(row.user.name);
+    if (row.userId === viewerId) entry.mine = true;
+    bySign.set(row.emoji, entry);
+  }
+  return [...bySign.values()];
+}
 
 export function toComment(
   c: Prisma.CommentGetPayload<{ select: typeof commentSelect }>,
-  perms: { canEdit: boolean; canDelete: boolean },
+  perms: { canEdit: boolean; canDelete: boolean; viewerId: string },
 ): CommentDto {
   return {
     id: c.id,
@@ -210,6 +231,7 @@ export function toComment(
     updatedAt: c.updatedAt.toISOString(),
     editedAt: iso(c.editedAt),
     attachments: c.attachments.map(toAttachment),
+    reactions: toReactions(c.reactions, perms.viewerId),
     canEdit: perms.canEdit,
     canDelete: perms.canDelete,
   };

@@ -242,8 +242,19 @@ export interface CommentDto {
   updatedAt: string;
   editedAt: string | null;
   attachments: AttachmentDto[];
+  /** Reactions in the order they first appeared, each with who put it. */
+  reactions: CommentReactionDto[];
   canEdit: boolean;
   canDelete: boolean;
+}
+
+export interface CommentReactionDto {
+  emoji: string;
+  count: number;
+  /** The viewer is among those who put it. */
+  mine: boolean;
+  /** Names of those who put it, for the hint. */
+  users: string[];
 }
 
 export interface AttachmentDto {

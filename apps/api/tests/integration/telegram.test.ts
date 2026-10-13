@@ -150,6 +150,152 @@ describe('Telegram', () => {
     });
   });
 
+  it('сообщение рассказывает о задаче: чья часть, проект, статус, срок и кто что сделал', async () => {
+    const now = new Date('2026-10-13T08:00:00.000Z');
+    const read = { timezone: 'Europe/Moscow', now };
+    const issue = {
+      title: 'МИР',
+      project: 'CRM',
+      parent: { issueKey: 'CRM-4', title: 'Запуск по регионам' },
+      status: 'К выполнению',
+      closed: false,
+      priority: 'HIGH',
+      dueDate: new Date('2026-10-15T12:00:00.000Z'),
+      dueHasTime: false,
+      assignee: 'Мария Чен',
+    };
+    const assigned = formatNotice(
+      { title: 'CRM-4.1 назначена на вас', body: 'МИР', actorName: 'Ризванов Р.О.', issueKey: 'CRM-4.1', type: 'ISSUE_ASSIGNED', issue },
+      'https://analysium.space',
+      read,
+    ).text;
+    expect(assigned.split('\n')).toEqual([
+      '<b>CRM-4.1 назначена на вас</b>',
+      'МИР',
+      // A part's own title rarely says what it is a part of.
+      '<i>подзадача в CRM-4 «Запуск по регионам»</i>',
+      '',
+      'Проект: CRM',
+      'Статус: К выполнению',
+      'Срок: 15 октября — через 2 дня',
+      'Приоритет: высокий',
+      '',
+      '<i>Назначил(а): Ризванов Р.О.</i>',
+    ]);
+
+    // A comment is somebody's words: set apart as a quote, with the task named above it.
+    const commented = formatNotice(
+      {
+        title: 'Новый комментарий в CRM-4',
+        body: 'Нужен <отчёт> до пятницы',
+        actorName: 'Автор',
+        issueKey: 'CRM-4',
+        type: 'ISSUE_COMMENTED',
+        quote: true,
+        issue: { ...issue, title: 'Запуск по регионам', parent: null, priority: 'NONE' },
+      },
+      'https://analysium.space',
+      read,
+    ).text;
+    expect(commented).toContain('Запуск по регионам\n<blockquote>Нужен &lt;отчёт&gt; до пятницы</blockquote>');
+    expect(commented).toContain('Исполнитель: Мария Чен');
+    expect(commented).not.toContain('Приоритет');
+    expect(commented).toContain('<i>Написал(а): Автор</i>');
+
+    // How far the deadline is, by the reader's own calendar; a time is shown on their clock.
+    const due = (dueDate: string, dueHasTime: boolean, closed = false, timezone = 'Europe/Moscow') =>
+      formatNotice(
+        {
+          title: 'x',
+          body: null,
+          actorName: null,
+          issueKey: 'CRM-4',
+          type: 'ISSUE_DUE_SOON',
+          issue: { ...issue, dueDate: new Date(dueDate), dueHasTime, closed },
+        },
+        'https://analysium.space',
+        { timezone, now },
+      )
+        .text.split('\n')
+        .find((line) => line.startsWith('Срок:'));
+    expect(due('2026-10-13T12:00:00.000Z', false)).toBe('Срок: 13 октября — сегодня');
+    expect(due('2026-10-14T12:00:00.000Z', false)).toBe('Срок: 14 октября — завтра');
+    expect(due('2026-10-08T12:00:00.000Z', false)).toBe('Срок: 8 октября — просрочен на 5 дней');
+    expect(due('2026-10-12T12:00:00.000Z', false)).toBe('Срок: 12 октября — просрочен на 1 день');
+    // 21:30 UTC on the 13th is half past midnight on the 14th in Moscow — tomorrow there, today in UTC.
+    expect(due('2026-10-13T21:30:00.000Z', true)).toBe('Срок: 14 октября, 00:30 — завтра');
+    expect(due('2026-10-13T21:30:00.000Z', true, false, 'UTC')).toBe('Срок: 13 октября, 21:30 — сегодня');
+    // A finished task is not late for anything; another year is named.
+    expect(due('2026-10-08T12:00:00.000Z', false, true)).toBe('Срок: 8 октября');
+    expect(due('2027-01-10T12:00:00.000Z', false)).toMatch(/^Срок: 10 января 2027 г\. — через \d+ дн/);
+    // A zone the server does not know reads as UTC rather than failing the message.
+    expect(due('2026-10-14T12:00:00.000Z', false, false, 'Nowhere/Land')).toBe('Срок: 14 октября — завтра');
+
+    // The deadline taken away is said in the details; the body that only repeated the title is not.
+    const cleared = formatNotice(
+      {
+        title: 'Изменился срок у CRM-4',
+        body: 'Срок снят — МИР',
+        actorName: 'Автор',
+        issueKey: 'CRM-4',
+        type: 'ISSUE_DUE_DATE_CHANGED',
+        issue: { ...issue, dueDate: null },
+      },
+      'https://analysium.space',
+      read,
+    ).text;
+    expect(cleared).toContain('Срок: снят');
+    expect(cleared).not.toContain('Срок снят — МИР');
+    expect(cleared).toContain('<i>Изменил(а) срок: Автор</i>');
+  });
+
+  it('уведомление уходит в мессенджер с задачей, какой она стала после изменения', async () => {
+    const parent = await createIssue(app, owner, projectId, { title: 'Большая задача' });
+    const part = await createIssue(app, owner, projectId, {
+      title: 'Её часть',
+      parentId: parent.id,
+      type: 'SUBTASK',
+      assigneeId: member.id,
+      priority: 'URGENT',
+      dueDate: '2031-03-15T12:00:00.000Z',
+    });
+    const { telegramNotices } = await import('../../src/modules/notifications/service');
+    const [notice] = await telegramNotices([{ id: 'n1', userId: member.id }], {
+      actorId: owner.id,
+      issueId: part.id,
+      commentId: null,
+      title: `${part.issueKey} назначена на вас`,
+      body: 'Её часть',
+      type: 'ISSUE_ASSIGNED',
+    });
+    expect(notice).toMatchObject({
+      issueKey: part.issueKey,
+      actorName: owner.name,
+      type: 'ISSUE_ASSIGNED',
+      quote: false,
+      issue: {
+        title: 'Её часть',
+        parent: { issueKey: parent.issueKey, title: 'Большая задача' },
+        closed: false,
+        priority: 'URGENT',
+        dueHasTime: false,
+        assignee: member.name,
+      },
+    });
+    expect(notice!.issue!.project).toBeTruthy();
+    expect(notice!.issue!.dueDate?.toISOString()).toBe('2031-03-15T12:00:00.000Z');
+    // A notification that is not about a task carries none.
+    const [plain] = await telegramNotices([{ id: 'n2', userId: member.id }], {
+      actorId: null,
+      issueId: null,
+      commentId: null,
+      title: 'Спринт начался',
+      body: null,
+      type: 'SPRINT_STARTED',
+    });
+    expect(plain).toMatchObject({ issue: null, issueKey: null, actorName: null });
+  });
+
   it('изнутри Telegram аккаунт подключается одним нажатием — по данным, подписанным Telegram', async () => {
     const token = '123456:TEST-TOKEN';
     const sign = (telegramUserId: number, botToken: string) => {

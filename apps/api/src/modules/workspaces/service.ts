@@ -357,7 +357,22 @@ export async function removeMember(actor: ActorContext, memberId: string, ip?: s
     throw forbidden('Нельзя исключить участника вашего уровня или выше');
   }
 
-  await prisma.workspaceMember.delete({ where: { id: memberId } });
+  // Out of the workspace is out of its projects: the membership of a project
+  // is kept on its own row, and it used to stay behind — the person went on
+  // being listed among a project's members, and would have had their old role
+  // back the moment they were let in again.
+  await prisma.$transaction([
+    prisma.projectMember.deleteMany({
+      where: { userId: member.userId, project: { workspaceId: actor.workspaceId } },
+    }),
+    prisma.workspaceMember.delete({ where: { id: memberId } }),
+  ]);
+  // Open pages keep the list of people; this tells them it has changed.
+  emit(RealtimeEventType.MEMBER_UPDATED, {
+    workspaceId: actor.workspaceId,
+    actorId: actor.userId,
+    payload: { memberId, userId: member.userId },
+  });
   audit({
     workspaceId: actor.workspaceId,
     actorId: actor.userId,

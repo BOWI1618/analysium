@@ -79,6 +79,7 @@ model User {
   reportedIssues     Issue[]             @relation("IssueReporter")
   assignedIssues     Issue[]             @relation("IssueAssignee")
   comments           Comment[]
+  commentReactions   CommentReaction[]
   activityEvents     ActivityEvent[]
   notifications      Notification[]      @relation("NotificationRecipient")
   actedNotifications Notification[]      @relation("NotificationActor")
@@ -676,13 +677,32 @@ model Comment {
   updatedAt DateTime  @updatedAt
   editedAt  DateTime?
 
-  issue       Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  author      User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  issue       Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author      User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
   attachments Attachment[]
+  reactions   CommentReaction[]
 
   @@index([issueId, createdAt])
   @@index([authorId])
   @@map("comments")
+}
+
+/// A reaction to a comment, the way a messenger has them: one sign from one
+/// person, once. Which signs there are is the application's to say
+/// (packages/contracts), so the column is a plain string.
+model CommentReaction {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+  @@index([commentId])
+  @@map("comment_reactions")
 }
 
 /// File metadata only. Bytes live behind a StorageAdapter (local disk in dev,

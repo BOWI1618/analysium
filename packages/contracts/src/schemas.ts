@@ -128,6 +128,19 @@ export const setNewPasswordSchema = z.object({
 });
 export type SetNewPasswordInput = z.infer<typeof setNewPasswordSchema>;
 
+/**
+ * The signs a comment can be answered with instead of words. A short fixed
+ * row, as in a messenger: enough to say «видел», «согласен», «сделано» without
+ * a comment of one word.
+ */
+export const COMMENT_REACTIONS = ['👍', '❤️', '🔥', '🎉', '😂', '😮', '😢', '👀', '✅', '🙏'] as const;
+export type CommentReaction = (typeof COMMENT_REACTIONS)[number];
+
+/** Puts the reaction on, or takes it off if the person has already put it. */
+export const toggleReactionSchema = z.object({
+  emoji: z.enum(COMMENT_REACTIONS),
+});
+
 /** Launch data a Telegram Mini App receives; the server checks its signature. */
 export const telegramLoginSchema = z.object({ initData: z.string().min(1).max(4096) });
 
