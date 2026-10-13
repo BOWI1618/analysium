@@ -583,9 +583,14 @@ export function IssueRowHeader({
   const show = (column: ListColumn) => columns.includes(column);
   const widths = useContext(ColumnWidthsContext);
 
+  // A name stands in the middle of its column, with a rule on the left: two
+  // neighbours — «Срок» set to the right and «Статус» to the left — used to
+  // read as one word, «СРОК СТАТУС».
+  // No padding of its own: the narrowest columns are exactly as wide as their names.
+  const HEAD = 'relative shrink-0 self-stretch items-center justify-center border-l-2 border-border-strong/30 text-center';
   const cell = (column: ListColumn, className: string, children: React.ReactNode) => (
-    <span style={widthStyle(widths, column)} className={clsx('relative shrink-0', className)}>
-      {children}
+    <span style={widthStyle(widths, column)} className={clsx(HEAD, className)}>
+      <span className="whitespace-nowrap">{children}</span>
       {onResize && RESIZABLE.has(column) && (
         <ColumnResizer column={column} label={ALL_COLUMNS.find((c) => c.key === column)!.label} onResize={onResize} />
       )}
@@ -605,27 +610,27 @@ export function IssueRowHeader({
         Ключ
       </span>
       <span className="min-w-0 flex-1 sm:min-w-24 xl:min-w-40">Задача</span>
-      {show('type') && cell('type', 'hidden w-24 sm:block', 'Тип')}
-      {show('labels') && cell('labels', 'hidden w-32 sm:block', 'Метки')}
-      {show('project') && cell('project', 'hidden w-24 sm:block', 'Проект')}
-      {show('startDate') && cell('startDate', 'hidden w-24 text-right sm:block', 'Начало')}
-      {show('dueDate') && cell('dueDate', 'hidden w-36 text-right sm:block', 'Срок')}
+      {show('type') && cell('type', 'hidden w-24 sm:flex', 'Тип')}
+      {show('labels') && cell('labels', 'hidden w-32 sm:flex', 'Метки')}
+      {show('project') && cell('project', 'hidden w-24 sm:flex', 'Проект')}
+      {show('startDate') && cell('startDate', 'hidden w-24 sm:flex', 'Начало')}
+      {show('dueDate') && cell('dueDate', 'hidden w-36 sm:flex', 'Срок')}
       {show('storyPoints') && (
-        <span className="hidden w-14 shrink-0 text-right sm:block" title="Оценка в баллах, не в часах">
-          Оценка
+        <span className={clsx(HEAD, 'hidden w-14 sm:flex')} title="Оценка в баллах, не в часах">
+          <span className="whitespace-nowrap">Оценка</span>
         </span>
       )}
       {show('comments') && (
-        <span className="hidden w-10 shrink-0 justify-end sm:flex" aria-label="Комментарии" title="Комментарии">
+        <span className={clsx(HEAD, 'hidden w-10 sm:flex')} aria-label="Комментарии" title="Комментарии">
           <MessageSquare className="size-3" />
         </span>
       )}
-      {show('status') && cell('status', 'hidden w-32 sm:block', 'Статус')}
+      {show('status') && cell('status', 'hidden w-32 sm:flex', 'Статус')}
       {show('priority') && <span className="w-5 shrink-0" aria-label="Приоритет" />}
-      {show('created') && cell('created', 'hidden w-20 text-right sm:block', 'Создано')}
-      {show('updated') && cell('updated', 'hidden w-20 text-right sm:block', 'Обновлено')}
+      {show('created') && cell('created', 'hidden w-20 sm:flex', 'Создано')}
+      {show('updated') && cell('updated', 'hidden w-20 sm:flex', 'Обновлено')}
       {show('reporter') && (
-        <span className="hidden w-6 shrink-0 justify-center sm:flex" aria-label="Автор" title="Автор">
+        <span className={clsx(HEAD, 'hidden w-6 sm:flex')} aria-label="Автор" title="Автор">
           <UserPen className="size-3" />
         </span>
       )}

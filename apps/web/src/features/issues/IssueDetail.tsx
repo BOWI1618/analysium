@@ -30,6 +30,7 @@ import { SHORTCUTS } from '~/lib/shortcuts';
 import { useToast } from '~/app/toast';
 import { nextLabelColor, useCreateLabel, useProject, useProjects } from '~/features/projects/hooks';
 import { useSprints } from '~/features/sprints/hooks';
+import { useReadIssueNotifications } from '~/features/notifications/hooks';
 import {
   useDeleteAttachment,
   useDeleteIssue,
@@ -56,6 +57,7 @@ import {
   UserPicker,
 } from '~/components/Pickers';
 import {
+  DueDateChip,
   ISSUE_TYPE_META,
   IssueTypeIcon,
   LabelChip,
@@ -159,6 +161,8 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   };
 
   const patch = (values: Parameters<typeof updateIssue.mutate>[0]) => updateIssue.mutate(values);
+  // The task is on the screen: what its notifications asked to look at has been looked at.
+  useReadIssueNotifications(workspace?.id ?? '', issue.id);
 
   // The project is chosen in two places — at the top of the card and in its
   // field — by the same picker: search, and subprojects under their project.
@@ -579,6 +583,14 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                         >
                           {subtask.title}
                         </span>
+                        {/* When each part is due, next to who has it: read off the list without opening every part. */}
+                        <DueDateChip
+                          value={subtask.dueDate}
+                          hasTime={subtask.dueHasTime}
+                          carriedDays={subtask.carriedOverDays}
+                          done={isClosedStatus(subtask.status)}
+                          className="shrink-0"
+                        />
                         <Avatar user={subtask.assignee} size="sm" showEmpty={false} />
                       </button>
                     </li>
@@ -787,6 +799,10 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                 hasTime={issue.dueHasTime}
                 disabled={!canEdit}
                 onChange={(dueDate, dueHasTime) => patch({ dueDate, dueHasTime })}
+                start={issue.startDate}
+                onPeriodChange={(startDate, dueDate, dueHasTime) =>
+                  patch({ startDate, startHasTime: false, dueDate, dueHasTime })
+                }
               />
             </Field>
 

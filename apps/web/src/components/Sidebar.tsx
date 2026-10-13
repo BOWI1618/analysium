@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import {
@@ -26,7 +26,6 @@ import { Permission } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useProjects } from '~/features/projects/hooks';
 import { projectTree } from '~/features/projects/tree';
-import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import { useUnreadCount } from '~/features/notifications/hooks';
 import { useDepartments } from '~/features/departments/hooks';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
@@ -140,17 +139,24 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
   // Subprojects sit under their project and open with its arrow.
   const tree = useMemo(() => projectTree(realProjects).slice(0, 8), [realProjects]);
   const hasBranches = tree.some((branch) => branch.children.length > 0);
-  const [openProjects, setOpenProjects] = useLocalStorage<string[]>('flowdesk.sidebar-open-projects', []);
-  const toggleBranch = (projectId: string) =>
-    setOpenProjects((open) => (open.includes(projectId) ? open.filter((id) => id !== projectId) : [...open, projectId]));
-
-  // Coming into a subproject by a link opens its branch, so the place one is
-  // in is always visible in the rail. After that the arrow is the user's.
-  const currentProjectId = useLocation().pathname.match(/^\/projects\/([^/]+)/)?.[1];
+  // Which branches are open is not remembered. A branch opened by its arrow
+  // used to stay open for good, and with a dozen projects the rail turned into
+  // a long list to search through. Now it folds back by itself: on a reload,
+  // and on leaving for another section. One branch opens on its own — the one
+  // of the subproject being looked at, so the place one is in is always
+  // visible in the rail.
+  const { pathname } = useLocation();
+  const currentProjectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
   const currentParentId = realProjects.find((project) => project.id === currentProjectId)?.parentId ?? null;
-  useEffect(() => {
-    if (currentParentId) setOpenProjects((open) => (open.includes(currentParentId) ? open : [...open, currentParentId]));
-  }, [currentParentId, setOpenProjects]);
+  // Where one is, as far as the rail is concerned: a project together with its
+  // subprojects is one place, and so is every other section. What the arrows
+  // were set to holds within a place and is dropped on leaving it.
+  const place = currentProjectId ? (currentParentId ?? currentProjectId) : (pathname.split('/')[1] ?? '');
+  const [arrows, setArrows] = useState<{ place: string; open: Record<string, boolean> }>({ place, open: {} });
+  const chosen = arrows.place === place ? arrows.open : {};
+  const isBranchOpen = (projectId: string) => chosen[projectId] ?? projectId === currentParentId;
+  const toggleBranch = (projectId: string) =>
+    setArrows({ place, open: { ...chosen, [projectId]: !isBranchOpen(projectId) } });
 
   if (!workspace || !user) return null;
 
@@ -377,7 +383,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
                 />
               )}
               {tree.map(({ project, children }) => {
-                const expanded = children.length > 0 && openProjects.includes(project.id);
+                const expanded = children.length > 0 && isBranchOpen(project.id);
                 const row = (item: typeof project) => (
                   <NavItem
                     key={item.id}

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RoleChoice } from '~/features/members/hooks';
+import { withFamilyCounts } from './tree';
 import type {
   CreateProjectInput,
   CreateStatusInput,
@@ -30,7 +31,10 @@ export function useProjects(workspaceId: string, includeArchived = false, option
       api.get<ProjectDto[]>(`/workspaces/${workspaceId}/projects`, {
         query: { includeArchived: includeArchived || undefined },
       }),
-    select: includeSystem ? undefined : (projects) => projects.filter((p) => !p.isSystem),
+    // Counted with subprojects here, in the one place every list of projects
+    // comes from, so the menu, the page of projects and the home page agree
+    // with each other and with the project's own board.
+    select: (projects) => withFamilyCounts(includeSystem ? projects : projects.filter((p) => !p.isSystem)),
     staleTime: 30_000,
   });
 }
@@ -106,19 +110,34 @@ export function useToggleFavorite(workspaceId: string) {
   return useMutation({
     mutationFn: (projectId: string) =>
       api.post<{ isFavorite: boolean }>(`/projects/${projectId}/favorite`),
-    // Optimistic: starring should feel instant.
+    // Optimistic: starring should feel instant. The star is drawn from two
+    // places — the list of projects and the opened project itself — and both
+    // are turned: the one in a project's header reads the latter, and used to
+    // stay dark until the page was loaded again.
     onMutate: async (projectId) => {
-      await queryClient.cancelQueries({ queryKey: qk.projects(workspaceId) });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: qk.projects(workspaceId) }),
+        queryClient.cancelQueries({ queryKey: qk.project(projectId), exact: true }),
+      ]);
       const previous = queryClient.getQueriesData<ProjectDto[]>({ queryKey: qk.projects(workspaceId) });
+      const previousProject = queryClient.getQueryData<ProjectDetailDto>(qk.project(projectId));
       queryClient.setQueriesData<ProjectDto[]>({ queryKey: qk.projects(workspaceId) }, (list) =>
         list?.map((p) => (p.id === projectId ? { ...p, isFavorite: !p.isFavorite } : p)),
       );
-      return { previous };
+      queryClient.setQueryData<ProjectDetailDto>(qk.project(projectId), (project) =>
+        project ? { ...project, isFavorite: !project.isFavorite } : project,
+      );
+      return { previous, previousProject };
     },
-    onError: (_error, _projectId, context) => {
+    onError: (_error, projectId, context) => {
       context?.previous?.forEach(([key, value]) => queryClient.setQueryData(key, value));
+      if (context?.previousProject) queryClient.setQueryData(qk.project(projectId), context.previousProject);
     },
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) }),
+    onSettled: (_data, _error, projectId) => {
+      void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
+      // Exactly the project: its key is also the root of its board and lists, which have not changed.
+      void queryClient.invalidateQueries({ queryKey: qk.project(projectId), exact: true });
+    },
   });
 }
 

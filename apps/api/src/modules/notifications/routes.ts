@@ -74,6 +74,20 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(204).send();
   });
 
+  /**
+   * Opening a task is reading what was said about it: every notification the
+   * person has about that task stops asking for attention. Scoped by the
+   * person, so it can never touch anyone else's — and needs no more than that:
+   * a notification about a task one may no longer open is simply read too.
+   */
+  app.post<{ Params: { issueId: string } }>('/issues/:issueId/notifications/read', async (req) => {
+    const result = await prisma.notification.updateMany({
+      where: { userId: currentUser(req).id, issueId: req.params.issueId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { updated: result.count };
+  });
+
   app.post<{ Params: { workspaceId: string } }>(
     '/workspaces/:workspaceId/notifications/read-all',
     async (req) => {

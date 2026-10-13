@@ -782,6 +782,14 @@ export function CreateIssueDialog() {
                 setDueDate(value);
                 setDueHasTime(hasTime);
               }}
+              // «Несколько дней» in the same window: the task then runs from the first day to the last.
+              start={startDate}
+              onPeriodChange={(first, value, hasTime) => {
+                setStartDate(first);
+                setStartHasTime(false);
+                setDueDate(value);
+                setDueHasTime(hasTime);
+              }}
             />
           </div>
         </div>

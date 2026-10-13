@@ -199,6 +199,39 @@ describe('массовые изменения', () => {
   });
 });
 
+describe('открыл задачу — прочитал уведомления о ней', () => {
+  it('гаснут все уведомления человека об этой задаче, и только они', async () => {
+    const first = await createIssue(app, owner, project.id, { title: 'Задача с ответом', assigneeId: member.id });
+    const second = await createIssue(app, owner, project.id, { title: 'Соседняя задача', assigneeId: member.id });
+    await comment(owner, first.id, 'Ответ, который прочтут в задаче');
+    await comment(owner, first.id, 'И ещё один');
+    const unread = (userId: string, issueId: string) =>
+      prisma.notification.count({ where: { userId, issueId, readAt: null } });
+    // Assigned, then two comments on the first; assigned on the second.
+    expect(await unread(member.id, first.id)).toBe(3);
+    expect(await unread(member.id, second.id)).toBe(1);
+    const before = (await inbox(member)).unreadCount;
+
+    const read = await call(member, 'POST', `/issues/${first.id}/notifications/read`);
+    expect(read.statusCode).toBe(200);
+    expect(read.json()).toEqual({ updated: 3 });
+    expect(await unread(member.id, first.id)).toBe(0);
+    // The neighbour's stays lit, and the bell's figure drops by exactly what was read.
+    expect(await unread(member.id, second.id)).toBe(1);
+    expect((await inbox(member)).unreadCount).toBe(before - 3);
+    // Asked again — nothing left to read.
+    expect((await call(member, 'POST', `/issues/${first.id}/notifications/read`)).json()).toEqual({ updated: 0 });
+
+    // Another person opening the same task reads their own notifications, never someone else's.
+    await call(member, 'POST', `/issues/${second.id}/comments`, {
+      body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Вопрос автору' }] }] },
+    });
+    expect(await unread(owner.id, second.id)).toBe(1);
+    expect((await call(member, 'POST', `/issues/${second.id}/notifications/read`)).json()).toEqual({ updated: 1 });
+    expect(await unread(owner.id, second.id)).toBe(1);
+  });
+});
+
 describe('профиль и поиск людей', () => {
   it('счётчики профиля считают все задачи, а не первые двадцать', async () => {
     const busy = await registerUser(app, { name: 'Очень Занятой' });

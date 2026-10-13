@@ -98,4 +98,70 @@ test.describe('календарь', () => {
     expect(new Date(placed.dueDate).getHours()).toBe(15);
     await expect(panel.getByRole('button', { name: /Разобрать почту/ })).toHaveCount(0);
   });
+
+  test('несколько дней выбираются в окне срока: первый день и последний', async ({ page }) => {
+    const projectId = await setup(page);
+    // Days of the next month, so the two are always in one grid whatever today is.
+    const next = new Date();
+    next.setDate(1);
+    next.setMonth(next.getMonth() + 1);
+    const day = (n: number) => new Date(next.getFullYear(), next.getMonth(), n);
+    const name = (n: number) =>
+      day(n).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).replace(/\s*г\.$/, '');
+    const stored = (n: number) => `${ymd(day(n))}T12:00:00.000Z`;
+
+    await page.goto(`/projects/${projectId}/list`);
+    await page.getByRole('button', { name: /Создать задачу/ }).first().click();
+    const form = page.getByRole('dialog', { name: 'Новая задача' });
+    await form.getByLabel('Название задачи').fill('Выездная проверка');
+    const field = form.getByRole('button', { name: 'Срок', exact: true });
+    await field.click();
+    const picker = page.getByRole('dialog', { name: 'Срок: дата и время' });
+    await picker.getByRole('button', { name: 'Следующий месяц' }).click();
+
+    await picker.getByLabel('Несколько дней').check();
+    await picker.getByRole('button', { name: name(10) }).click();
+    await expect(picker.getByText('теперь выберите другой край')).toBeVisible();
+    await picker.getByRole('button', { name: name(13) }).click();
+    await expect(picker.getByText('4 дня')).toBeVisible();
+    // Both ends and the days between them are marked; the day after is not.
+    for (const n of [10, 11, 12, 13]) {
+      await expect(picker.getByRole('button', { name: name(n) })).toHaveAttribute('aria-pressed', 'true');
+    }
+    await expect(picker.getByRole('button', { name: name(14) })).toHaveAttribute('aria-pressed', 'false');
+    await picker.getByRole('button', { name: 'Готово' }).click();
+    // The field says the whole period, not only its last day.
+    await expect(field).toContainText(/^10 .+ – 13 /);
+
+    const created = page.waitForResponse((r) => r.url().endsWith('/api/v1/issues') && r.request().method() === 'POST');
+    await form.getByRole('button', { name: 'Создать', exact: true }).click();
+    const issue = await (await created).json();
+    expect(issue).toMatchObject({ startDate: stored(10), dueDate: stored(13), startHasTime: false, dueHasTime: false });
+
+    // On the calendar the task lies across those days.
+    await page.goto(`/projects/${projectId}/calendar`);
+    await page.getByRole('radio', { name: 'Месяц' }).click();
+    await page.getByRole('button', { name: 'Вперёд' }).click();
+    await expect(page.getByRole('button', { name: /Выездная проверка/ }).first()).toBeVisible({ timeout: 15_000 });
+
+    // In the card the same window opens on the period; the ends can be clicked in either order,
+    // and without the tick the task is one day again.
+    await page.goto(`/issue/${issue.issueKey}`);
+    const due = page.getByRole('button', { name: 'Срок', exact: true });
+    await expect(due).toContainText(/^10 .+ – 13 /, { timeout: 15_000 });
+    await due.click();
+    await expect(picker.getByLabel('Несколько дней')).toBeChecked();
+    await picker.getByRole('button', { name: name(20) }).click();
+    await picker.getByRole('button', { name: name(17) }).click();
+    const read = async () => {
+      const { startDate, dueDate } = await (await page.request.get(`/api/v1/issues/${issue.id}`)).json();
+      return { startDate, dueDate };
+    };
+    await expect.poll(read, { timeout: 15_000 }).toEqual({ startDate: stored(17), dueDate: stored(20) });
+    await picker.getByLabel('Несколько дней').uncheck();
+    await expect.poll(read, { timeout: 15_000 }).toEqual({ startDate: null, dueDate: stored(20) });
+    // One day again: a click moves the deadline, as it always did.
+    await picker.getByRole('button', { name: name(22) }).click();
+    await expect.poll(read, { timeout: 15_000 }).toEqual({ startDate: null, dueDate: stored(22) });
+  });
 });

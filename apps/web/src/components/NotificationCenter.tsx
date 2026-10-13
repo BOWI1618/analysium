@@ -11,6 +11,9 @@ import { CountBadge } from '~/ui/Badge';
 import { EmptyState, SkeletonText } from '~/ui/Feedback';
 import { pluralize, relativeTime } from '~/lib/format';
 
+/** Their body is somebody's own words. */
+const QUOTED = new Set(['ISSUE_COMMENTED', 'ISSUE_MENTIONED']);
+
 const TYPE_LABEL: Record<string, string> = {
   ISSUE_ASSIGNED: 'Назначено',
   ISSUE_MENTIONED: 'Упоминание',
@@ -22,6 +25,25 @@ const TYPE_LABEL: Record<string, string> = {
   SPRINT_STARTED: 'Спринт',
   SPRINT_COMPLETED: 'Спринт',
 };
+
+/**
+ * What happened, with who did it: «Ризванов Р.О. написал(а) в КХ-1» rather
+ * than «Новый комментарий в КХ-1» with no name anywhere. Where the stored
+ * title already carries what matters — the new status, the new assignee — it
+ * is kept as it is.
+ */
+function headline(notification: NotificationDto): string {
+  const actor = notification.actor?.name;
+  const key = notification.issue?.issueKey;
+  if (actor && key) {
+    if (notification.type === 'ISSUE_COMMENTED') return `${actor} написал(а) в ${key}`;
+    if (notification.type === 'ISSUE_MENTIONED') return `${actor} упомянул(а) вас в ${key}`;
+    if (notification.type === 'ISSUE_ASSIGNED' && notification.title.endsWith('назначена на вас')) {
+      return `${actor} назначил(а) вам ${key}`;
+    }
+  }
+  return notification.title;
+}
 
 export function NotificationBell() {
   const { workspace } = useSession();
@@ -131,11 +153,18 @@ export function NotificationList({
                   <Avatar user={notification.actor} size="md" className="mt-0.5" />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-bold text-text">{notification.title}</span>
-                      {!notification.readAt && <span className="size-1.5 shrink-0 bg-accent" />}
+                      <span className="truncate text-sm font-bold text-text">{headline(notification)}</span>
+                      {!notification.readAt && <span className="size-1.5 shrink-0 bg-accent" aria-label="не прочитано" />}
                     </p>
-                    {notification.body && (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">{notification.body}</p>
+                    {/* Which task: a key alone says nothing to someone who has thirty of them. */}
+                    {notification.issue && (
+                      <p className="mt-0.5 truncate text-xs font-medium text-text">{notification.issue.title}</p>
+                    )}
+                    {/* Shown when it adds something to the task's name: the words of a comment, the new date. */}
+                    {notification.body && !(notification.issue && notification.body.includes(notification.issue.title)) && (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">
+                        {QUOTED.has(notification.type) ? `«${notification.body}»` : notification.body}
+                      </p>
                     )}
                     <p className="mt-1 flex items-center gap-1.5 text-2xs text-text-subtle">
                       <span className="fd-num border border-border-strong bg-surface-active px-1.5 py-px">

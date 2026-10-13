@@ -28,6 +28,8 @@ import { Popover } from '~/ui/Popover';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '~/ui/Menu';
 import { Avatar } from '~/ui/Avatar';
 import { ProjectIcon } from '~/ui/ProjectIcon';
+import { Checkbox } from '~/ui/Input';
+import { pluralize } from '~/lib/format';
 import { IssueTypeIcon, PriorityIcon, PRIORITY_META, StatusDot, ISSUE_TYPE_META } from './IssueMeta';
 
 /**
@@ -586,6 +588,8 @@ export function DateField({
   label = 'Срок',
   emptyText = 'Не задан',
   className,
+  start,
+  onPeriodChange,
 }: {
   value: string | null;
   hasTime?: boolean;
@@ -596,19 +600,42 @@ export function DateField({
   /** What an empty field says — the date that is taken when none is set, where there is one. */
   emptyText?: string;
   className?: string;
+  /**
+   * The task's start, for a field that can take a run of days: with
+   * `onPeriodChange` the window offers «Несколько дней», where the first and
+   * the last day are picked in the same month grid.
+   */
+  start?: string | null;
+  /** The period picked: its first day (null for a single day) and its last, with the time kept on the last. */
+  onPeriodChange?: (start: string | null, value: string | null, hasTime: boolean) => void;
 }) {
   const date = value ? new Date(value) : null;
   const dateValue = date ? format(date, 'yyyy-MM-dd') : '';
   const timeValue = date && hasTime ? format(date, 'HH:mm') : '';
 
+  const moment = (day: string, time: string) =>
+    time ? new Date(`${day}T${time}:00`).toISOString() : new Date(`${day}T12:00:00.000Z`).toISOString();
+
   const emit = (day: string, time: string) => {
     if (!day) return onChange(null, false);
-    if (time) return onChange(new Date(`${day}T${time}:00`).toISOString(), true);
-    onChange(new Date(`${day}T12:00:00.000Z`).toISOString(), false);
+    onChange(moment(day, time), Boolean(time));
   };
 
+  // A period only when the start is another day: a start on the day of the
+  // deadline is a slot of hours, kept by the start's own field.
+  const startDay = start && date ? format(new Date(start), 'yyyy-MM-dd') : '';
+  const periodStart = onPeriodChange && startDay && startDay < dateValue ? startDay : '';
+
+  const emitPeriod = (firstDay: string, lastDay: string, time: string) => {
+    if (!onPeriodChange) return;
+    if (!lastDay) return onPeriodChange(null, null, false);
+    // The first day is a whole day; the time, if any, is the deadline's.
+    onPeriodChange(firstDay && firstDay < lastDay ? moment(firstDay, '') : null, moment(lastDay, time), Boolean(time));
+  };
+
+  const dayLabel = (day: Date) => format(day, isSameYear(day, new Date()) ? 'd MMM' : 'd MMM yyyy', { locale: ru });
   const shown = date
-    ? format(date, isSameYear(date, new Date()) ? 'd MMM' : 'd MMM yyyy', { locale: ru }) + (timeValue ? `, ${timeValue}` : '')
+    ? (periodStart ? `${dayLabel(new Date(`${periodStart}T00:00:00`))} – ` : '') + dayLabel(date) + (timeValue ? `, ${timeValue}` : '')
     : '';
 
   return (
@@ -645,13 +672,15 @@ export function DateField({
             timeValue={timeValue}
             onChange={emit}
             onClose={close}
+            period={onPeriodChange ? { startValue: periodStart, onChange: emitPeriod } : undefined}
           />
         )}
       </Popover>
       {value && !disabled && (
         <button
           type="button"
-          onClick={() => onChange(null, false)}
+          // A period goes whole: its first day would otherwise stay behind, out of sight.
+          onClick={() => (periodStart && onPeriodChange ? onPeriodChange(null, null, false) : onChange(null, false))}
           aria-label={`Убрать: ${label.toLowerCase()}`}
           className="shrink-0 rounded-sm p-0.5 text-text-subtle hover:bg-surface-hover hover:text-text"
         >
@@ -665,27 +694,97 @@ export function DateField({
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const TIME_PRESETS = ['09:00', '12:00', '15:00', '18:00'];
 
-/** The month and the time, side by side in one panel. */
+/**
+ * The month and the time, side by side in one panel.
+ *
+ * With `period` the panel can take a run of days: «Несколько дней» turns the
+ * grid into a picker of two ends — the first click is one end, the second the
+ * other, in either order, and a third starts over. Without the tick a click
+ * is the day, as before: changing a deadline must stay one click.
+ *
+ * What is picked is kept here while the window is open, and each change is
+ * passed on at once. The values that come in are only where it starts from:
+ * a task takes a moment to come back from the server, and a second click made
+ * in that moment has to build on the first, not on what the task said before.
+ */
 function DateTimePanel({
   label,
   dateValue,
   timeValue,
   onChange,
   onClose,
+  period,
 }: {
   label: string;
   dateValue: string;
   timeValue: string;
   onChange: (day: string, time: string) => void;
   onClose: () => void;
+  period?: {
+    /** The first day of the period as it stands, or '' for a single day. */
+    startValue: string;
+    onChange: (firstDay: string, lastDay: string, time: string) => void;
+  };
 }) {
   const [month, setMonth] = useState(() => startOfMonth(dateValue ? new Date(`${dateValue}T00:00:00`) : new Date()));
   const days = eachDayOfInterval({
     start: startOfWeek(month, { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
   });
-  const ymd = (day: Date) => format(day, 'yyyy-MM-dd');
+  const ymd = (date: Date) => format(date, 'yyyy-MM-dd');
   const todayYmd = ymd(new Date());
+
+  // The day (the last one of a period), the first day of a period, the time.
+  const [day, setDay] = useState(dateValue);
+  const [firstDay, setFirstDay] = useState(period?.startValue ?? '');
+  const [time, setTime] = useState(timeValue);
+  // A task that already runs over several days opens as such.
+  const [ranging, setRanging] = useState(Boolean(period?.startValue));
+  // One end is picked and the other is awaited.
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const first = ranging ? (anchor ?? (firstDay || day)) : day;
+  const last = ranging ? (anchor ?? day) : day;
+
+  /** One day: the deadline alone, whatever the start is. */
+  const setSingle = (nextDay: string, nextTime: string) => {
+    setDay(nextDay);
+    setTime(nextDay ? nextTime : '');
+    onChange(nextDay, nextDay ? nextTime : '');
+  };
+  /** A period, or — with no first day — a single day that takes the start away. */
+  const setPeriod = (nextFirst: string, nextLast: string, nextTime: string) => {
+    setFirstDay(nextFirst);
+    setDay(nextLast);
+    setTime(nextLast ? nextTime : '');
+    period?.onChange(nextFirst, nextLast, nextLast ? nextTime : '');
+  };
+
+  const pick = (key: string) => {
+    if (!ranging || !period) return setSingle(key, time);
+    if (anchor === null) {
+      // The first end. It is a task of that one day until the other end is given.
+      setAnchor(key);
+      setPeriod('', key, time);
+      return;
+    }
+    setAnchor(null);
+    if (key === anchor) return setPeriod('', key, time);
+    setPeriod(key < anchor ? key : anchor, key < anchor ? anchor : key, time);
+  };
+
+  const toggleRanging = (on: boolean) => {
+    setRanging(on);
+    // Turned on over a day already chosen, that day is one end and the next click the other.
+    setAnchor(on && day && !firstDay ? day : null);
+    // Turned off, the period folds into its last day.
+    if (!on && firstDay) setPeriod('', day, time);
+  };
+
+  // In a period the time is the last day's, and the first day stays as it is.
+  const changeTime = (nextTime: string) => (ranging && period ? setPeriod(firstDay, day, nextTime) : setSingle(day, nextTime));
+
+  const dayCount =
+    first && last ? Math.round((new Date(`${last}T12:00:00Z`).getTime() - new Date(`${first}T12:00:00Z`).getTime()) / 86_400_000) + 1 : 0;
 
   return (
     <div className="space-y-2">
@@ -715,89 +814,115 @@ function DateTimePanel({
             {weekday}
           </span>
         ))}
-        {days.map((day) => {
-          const key = ymd(day);
-          const selected = key === dateValue;
+        {days.map((date) => {
+          const key = ymd(date);
+          // The ends of a period are drawn as the chosen day is; the days between them, lighter.
+          const selected = Boolean(first) && (key === first || key === last);
+          const between = Boolean(first && last) && key > first && key < last;
           return (
             <button
               key={key}
               type="button"
-              onClick={() => onChange(key, timeValue)}
-              aria-label={format(day, 'd MMMM yyyy', { locale: ru })}
-              aria-pressed={selected}
+              onClick={() => pick(key)}
+              aria-label={format(date, 'd MMMM yyyy', { locale: ru })}
+              aria-pressed={selected || between}
               className={clsx(
                 'fd-num h-8 text-xs',
                 selected
                   ? 'border-2 border-border-strong bg-accent font-bold text-accent-fg'
-                  : key === todayYmd
-                    ? 'border-2 border-accent font-bold hover:bg-accent-subtle'
-                    : 'hover:bg-surface-hover',
-                !selected && !isSameMonth(day, month) && 'text-text-subtle/60',
+                  : between
+                    ? 'bg-accent-subtle font-bold'
+                    : key === todayYmd
+                      ? 'border-2 border-accent font-bold hover:bg-accent-subtle'
+                      : 'hover:bg-surface-hover',
+                !selected && !between && !isSameMonth(date, month) && 'text-text-subtle/60',
               )}
             >
-              {format(day, 'd')}
+              {format(date, 'd')}
             </button>
           );
         })}
       </div>
 
-      <div className="flex gap-1">
-        {[
-          ['Сегодня', 0],
-          ['Завтра', 1],
-          ['Через неделю', 7],
-        ].map(([title, offset]) => (
-          <button
-            key={title}
-            type="button"
-            onClick={() => {
-              const day = addDays(new Date(), offset as number);
-              setMonth(startOfMonth(day));
-              onChange(ymd(day), timeValue);
-            }}
-            className="flex-1 border-2 border-border-strong px-1 py-0.5 text-2xs font-bold whitespace-nowrap hover:bg-surface-hover"
-          >
-            {title}
-          </button>
-        ))}
-      </div>
+      {period && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Checkbox
+            checked={ranging}
+            onChange={(event) => toggleRanging(event.target.checked)}
+            label={<span className="text-xs">Несколько дней</span>}
+          />
+          {ranging && (
+            <span className="text-2xs text-text-subtle" aria-live="polite">
+              {anchor !== null
+                ? 'теперь выберите другой край'
+                : dayCount > 1
+                  ? pluralize(dayCount, ['день', 'дня', 'дней'])
+                  : 'выберите первый и последний день'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Shortcuts name one day; with a period being picked they would be a third way to click. */}
+      {!ranging && (
+        <div className="flex gap-1">
+          {[
+            ['Сегодня', 0],
+            ['Завтра', 1],
+            ['Через неделю', 7],
+          ].map(([title, offset]) => (
+            <button
+              key={title}
+              type="button"
+              onClick={() => {
+                const target = addDays(new Date(), offset as number);
+                setMonth(startOfMonth(target));
+                setSingle(ymd(target), time);
+              }}
+              className="flex-1 border-2 border-border-strong px-1 py-0.5 text-2xs font-bold whitespace-nowrap hover:bg-surface-hover"
+            >
+              {title}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="border-t-2 border-border-strong pt-2">
         <div className="flex items-center gap-1.5">
           <span className="text-2xs font-bold tracking-wide text-text-subtle uppercase">Время</span>
           <input
             type="time"
-            value={timeValue}
-            disabled={!dateValue}
-            onChange={(event) => onChange(dateValue, event.target.value)}
+            value={time}
+            disabled={!day}
+            onChange={(event) => changeTime(event.target.value)}
             aria-label={`${label}: время`}
             className="fd-num h-7 flex-1 rounded-md border-2 border-border-strong bg-surface px-1.5 text-sm focus:border-accent focus:outline-none disabled:opacity-50"
           />
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1">
-          {TIME_PRESETS.map((time) => (
+          {TIME_PRESETS.map((preset) => (
             <button
-              key={time}
+              key={preset}
               type="button"
-              disabled={!dateValue}
-              onClick={() => onChange(dateValue, time)}
-              aria-pressed={timeValue === time}
+              disabled={!day}
+              onClick={() => changeTime(preset)}
+              aria-pressed={time === preset}
               className={clsx(
                 'fd-num border-2 border-border-strong px-1.5 py-0.5 text-2xs disabled:opacity-40',
-                timeValue === time ? 'bg-ink text-text-inverted' : 'hover:bg-surface-hover',
+                time === preset ? 'bg-ink text-text-inverted' : 'hover:bg-surface-hover',
               )}
             >
-              {time}
+              {preset}
             </button>
           ))}
           <button
             type="button"
-            disabled={!dateValue}
-            onClick={() => onChange(dateValue, '')}
-            aria-pressed={Boolean(dateValue) && !timeValue}
+            disabled={!day}
+            onClick={() => changeTime('')}
+            aria-pressed={Boolean(day) && !time}
             className={clsx(
               'border-2 border-border-strong px-1.5 py-0.5 text-2xs disabled:opacity-40',
-              dateValue && !timeValue ? 'bg-ink text-text-inverted' : 'hover:bg-surface-hover',
+              day && !time ? 'bg-ink text-text-inverted' : 'hover:bg-surface-hover',
             )}
           >
             Весь день
@@ -808,9 +933,11 @@ function DateTimePanel({
       <div className="flex items-center justify-between border-t-2 border-border-strong pt-2">
         <button
           type="button"
-          disabled={!dateValue}
+          disabled={!day}
           onClick={() => {
-            onChange('', '');
+            // A period goes whole: its first day would otherwise stay behind, out of sight.
+            if (period && firstDay) setPeriod('', '', '');
+            else setSingle('', '');
             onClose();
           }}
           className="text-xs text-danger hover:underline disabled:opacity-40"
@@ -828,4 +955,3 @@ function DateTimePanel({
     </div>
   );
 }
-

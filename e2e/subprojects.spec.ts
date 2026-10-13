@@ -61,6 +61,29 @@ test.describe('подпроекты', () => {
     // The way back up is in the breadcrumbs.
     await page.getByRole('link', { name: 'Основной проект' }).first().click();
     await expect(page).toHaveURL(new RegExp(`/projects/${main.id}`));
+    // Still the same place — the project with its subprojects — so the branch stays as the arrow left it.
+    await expect(branch.getByRole('link', { name: /Подготовка стенда/ })).toBeVisible();
+
+    // It folds back by itself on leaving for another section…
+    await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: /Главная/ }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(branch).toHaveCount(0);
+    // …and is not kept for the next visit: on the project itself it is folded, an arrow away.
+    const unfold = page.getByRole('button', { name: 'Показать подпроекты «Основной проект»' });
+    await page.goto(`/projects/${main.id}/board`);
+    await expect(unfold).toBeVisible({ timeout: 15_000 });
+    await expect(branch).toHaveCount(0);
+    // Opened by the arrow, it does not outlive a reload either.
+    await unfold.click();
+    await expect(branch).toBeVisible();
+    await page.reload();
+    await expect(unfold).toBeVisible({ timeout: 15_000 });
+    await expect(branch).toHaveCount(0);
+    // Inside a subproject its branch is open without asking, reload or not: the place one is in stays in view.
+    await unfold.click();
+    await branch.getByRole('link', { name: /Подготовка стенда/ }).click();
+    await page.reload();
+    await expect(branch.getByRole('link', { name: /Подготовка стенда/ })).toBeVisible({ timeout: 15_000 });
   });
 });
 
@@ -181,6 +204,12 @@ test.describe('основной проект вместе с подпроект�
     await expect(foreign.getByRole('img', { name: 'Подпроект: Блог сайта' })).toBeVisible();
     await expect(own.getByRole('img', { name: /^Подпроект:/ })).toHaveCount(0);
 
+    // The figure next to the project in the menu counts what its board shows: its own task and the subproject's.
+    const inMenu = page.locator('aside').getByRole('link', { name: /Сайт компании/ });
+    await expect(inMenu).toContainText('2', { timeout: 15_000 });
+    await page.getByRole('button', { name: 'Показать подпроекты «Сайт компании»' }).click();
+    await expect(page.locator('aside').getByRole('link', { name: /Блог сайта/ })).toContainText('1');
+
     // The same in the list.
     await page.getByRole('link', { name: 'Список' }).click();
     await expect(page.getByTitle('Задача из блога', { exact: true })).toBeVisible({ timeout: 15_000 });
@@ -198,6 +227,9 @@ test.describe('основной проект вместе с подпроект�
       .toBe(blogDone.id);
     // And still stands on this board, now in its «Готово».
     await expect(foreign).toBeVisible();
+    // One task less is open in the subproject — and so in the project above it.
+    await expect(inMenu).toContainText('1', { timeout: 15_000 });
+    await expect(inMenu).not.toContainText('2');
 
     // The subproject opened by itself shows its own tasks, with no marks.
     await page.goto(`/projects/${blog.id}/board`);
@@ -240,6 +272,42 @@ test.describe('список проектов в меню слева', () => {
   });
 });
 
+test.describe('избранное', () => {
+  test('звезда в шапке проекта загорается сразу, не дожидаясь ответа сервера', async ({ page }) => {
+    await register(page, 'Проверяющий Избранное');
+    const project = await createProject(page, 'Избранный проект');
+    await page.goto(`/projects/${project.id}/board`);
+    const star = page.getByRole('button', { name: 'В избранное' });
+    await expect(star).toBeVisible({ timeout: 15_000 });
+
+    // The answer is held back for three seconds: the star must not wait for it.
+    await page.route('**/favorite', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      await route.continue();
+    });
+    await star.click();
+    await expect(page.getByRole('button', { name: 'Убрать из избранного' })).toBeVisible({ timeout: 1_500 });
+
+    // And it is the server's answer too: still lit after the page is loaded again.
+    await page.unroute('**/favorite');
+    const session = await (await page.request.get('/api/v1/auth/session')).json();
+    await expect
+      .poll(
+        async () =>
+          (await (await page.request.get(`/api/v1/workspaces/${session.workspaces[0].id}/projects`)).json()).find(
+            (item: { id: string }) => item.id === project.id,
+          ).isFavorite,
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Убрать из избранного' })).toBeVisible({ timeout: 15_000 });
+    // Off again, as quickly.
+    await page.getByRole('button', { name: 'Убрать из избранного' }).click();
+    await expect(page.getByRole('button', { name: 'В избранное' })).toBeVisible({ timeout: 1_500 });
+  });
+});
+
 test.describe('типы задач', () => {
   test('эпика в выборе типа нет, а подзадача добавляется к обычной задаче', async ({ page }) => {
     await register(page, 'Проверяющий Типы');
@@ -261,10 +329,15 @@ test.describe('типы задач', () => {
 
     // The case from the report: a subtask of a project's task is created.
     const created = await page.request.post('/api/v1/issues', {
-      data: { projectId: project.id, parentId: task.id, type: 'SUBTASK', title: 'Ролевая модель' },
+      data: { projectId: project.id, parentId: task.id, type: 'SUBTASK', title: 'Ролевая модель', dueDate: '2031-03-15T12:00:00.000Z' },
     });
     expect(created.status()).toBe(201);
     expect((await created.json()).issueKey).toBe(`${task.issueKey}.1`);
+
+    // In the task's card each part says when it is due, next to who has it.
+    await page.goto(`/issue/${task.issueKey}`);
+    const parts = page.getByRole('region', { name: 'Подзадачи' });
+    await expect(parts.getByRole('button', { name: /Ролевая модель/ })).toContainText('15 мар', { timeout: 15_000 });
   });
 });
 
