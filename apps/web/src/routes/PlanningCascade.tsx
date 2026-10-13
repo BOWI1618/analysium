@@ -45,13 +45,13 @@ type StateKey = 'all' | 'backlog' | 'todo' | 'doing' | 'done';
  * names: every project calls its columns its own way, and the card shows the
  * project's own name. Switching changes what is listed, never a task.
  *
- * Everything is listed first: a pool is what a person holds, and a task that
- * has left the backlog is still theirs to see and to hand on. In that list the
- * finished ones stand after the open ones, so it does not open with what was
- * closed long ago. A single state is a way to narrow it.
+ * Everything open is listed first: a pool is what a person holds, and a task
+ * that has left the backlog is still theirs to see and to hand on. Closed work
+ * is not part of that list — it cannot be handed over and only pushed the open
+ * tasks apart; it has a state of its own. A single state is a way to narrow it.
  */
 const STATES: { value: StateKey; label: string; filters: IssueFilters; empty: string }[] = [
-  { value: 'all', label: 'Все', filters: { openFirst: true }, empty: 'Задач нет' },
+  { value: 'all', label: 'Все', filters: { includeDone: false }, empty: 'Задач нет' },
   { value: 'backlog', label: 'Бэклог', filters: { statusCategory: ['BACKLOG'] }, empty: 'В бэклоге пусто' },
   { value: 'todo', label: 'К выполнению', filters: { statusCategory: ['UNSTARTED'] }, empty: 'Нет задач к выполнению' },
   { value: 'doing', label: 'В работе', filters: { statusCategory: ['STARTED'] }, empty: 'В работе ничего нет' },

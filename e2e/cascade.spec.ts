@@ -215,10 +215,13 @@ test.describe('распределение по подчинённости', () =
     await expect(pool.getByRole('radio', { name: 'Все' })).toBeChecked({ timeout: 15_000 });
     await expect(card(pool, 'Уже в работе')).toBeVisible({ timeout: 15_000 });
     await expect(card(pool, 'Создал себе сам')).toBeVisible();
-    // Finished tasks are there too — crossed out, and after the open ones, however old their date.
-    await expect(card(pool, 'Закрыта раньше всех')).toBeVisible();
-    await expect(pool.getByRole('article').last()).toContainText('Закрыта раньше всех');
-    await expect(card(pool, 'Закрыта раньше всех').getByText('Закрыта раньше всех')).toHaveCSS('text-decoration-line', 'line-through');
+    // Finished tasks are not in that list: they are looked up under their own state, crossed out.
+    await expect(card(pool, 'Закрыта раньше всех')).toHaveCount(0);
+    await pool.getByRole('radio', { name: 'Завершённые' }).click();
+    await expect(card(pool, 'Закрыта раньше всех').getByText('Закрыта раньше всех')).toHaveCSS('text-decoration-line', 'line-through', {
+      timeout: 15_000,
+    });
+    await expect(card(pool, 'Уже в работе')).toHaveCount(0);
     // The people on the sides are shown the same way.
     await expect(first.getByLabel('Состояние задач: Ведущий Первый')).toHaveValue('all');
   });
