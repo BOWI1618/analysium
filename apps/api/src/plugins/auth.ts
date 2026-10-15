@@ -97,7 +97,7 @@ async function resolveUser(req: FastifyRequest): Promise<{ user: AuthenticatedUs
       id: true,
       expiresAt: true,
       user: {
-        select: { id: true, name: true, email: true, avatarUrl: true, timezone: true, status: true },
+        select: { id: true, name: true, email: true, avatarUrl: true, timezone: true, timezoneChosen: true, status: true },
       },
     },
   });
@@ -105,8 +105,17 @@ async function resolveUser(req: FastifyRequest): Promise<{ user: AuthenticatedUs
   if (!session || session.expiresAt.getTime() < Date.now()) return null;
   if (session.user.status === 'DEACTIVATED') return null;
 
+  const { timezoneChosen, ...user } = session.user;
+  const reported = reportedTimezone(req);
+  // Nobody picked a zone: the saved one follows the browser. Telegram has no
+  // browser to ask, and a deadline at 9:30 came there as 6:30 on the UTC default.
+  if (reported && !timezoneChosen && reported !== user.timezone) {
+    await prisma.user.updateMany({ where: { id: user.id, timezoneChosen: false }, data: { timezone: reported } });
+    user.timezone = reported;
+  }
+
   return {
-    user: { ...session.user, viewerTimezone: reportedTimezone(req) ?? session.user.timezone },
+    user: { ...user, viewerTimezone: reported ?? user.timezone },
     sessionId: session.id,
   };
 }

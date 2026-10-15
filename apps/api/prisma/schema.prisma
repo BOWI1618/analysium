@@ -43,6 +43,10 @@ model User {
   authProvider String     @default("local")
   status       UserStatus @default(ACTIVE)
   timezone     String     @default("UTC")
+  /// Set once the person picks a zone in the settings. Until then the zone
+  /// follows the browser they use, so messages drawn on the server — Telegram —
+  /// show the same clock as the screen.
+  timezoneChosen Boolean @default(false)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   lastActiveAt DateTime?

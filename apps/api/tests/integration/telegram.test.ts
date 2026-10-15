@@ -322,6 +322,60 @@ describe('Telegram', () => {
     expect(await linked(owner)).toBe(true);
   });
 
+  it('срок со временем приходит по часам того, кто открывал приложение, пока пояс не выбран вручную', async () => {
+    const reader = await registerUser(app, { name: 'Читатель Из Москвы' });
+    await prisma.user.update({ where: { id: reader.id }, data: { telegramChatId: '9300' } });
+    const session = (zone: string) =>
+      app.inject({ method: 'GET', url: '/api/v1/auth/session', headers: { cookie: reader.cookie, 'x-time-zone': zone } });
+    const send = async () => {
+      const { api, sent } = fakeTelegram();
+      await deliverToTelegram(
+        [
+          {
+            id: 'due-at-930',
+            userId: reader.id,
+            title: 'Срок задачи',
+            body: null,
+            actorName: null,
+            issueKey: 'WEB-1',
+            issue: {
+              title: 'Созвон',
+              project: null,
+              parent: null,
+              status: 'К выполнению',
+              closed: false,
+              priority: 'NONE',
+              // 9:30 in Moscow.
+              dueDate: new Date('2030-03-05T06:30:00.000Z'),
+              dueHasTime: true,
+              assignee: null,
+            },
+          },
+        ],
+        api,
+      );
+      return sent[0]!.text;
+    };
+
+    // The UTC default, nobody has opened the app yet: the server can only guess.
+    expect(await send()).toContain('06:30');
+
+    await session('Europe/Moscow');
+    expect(await send()).toContain('09:30');
+
+    // A zone picked in the settings is kept, whatever browser the person opens the app in.
+    const picked = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/me',
+      headers: { cookie: reader.cookie },
+      payload: { name: reader.name, timezone: 'Asia/Yekaterinburg' },
+    });
+    expect(picked.statusCode).toBe(200);
+    await session('Europe/Moscow');
+    expect((await session('Europe/Moscow')).json().user.timezone).toBe('Asia/Yekaterinburg');
+    expect(await send()).toContain('11:30');
+  });
+
   it('без токена бота ссылка не выдаётся, а отключение безвредно', async () => {
     const link = await app.inject({ method: 'POST', url: '/api/v1/me/telegram/link', headers: { cookie: member.cookie } });
     expect(link.statusCode).toBe(400);

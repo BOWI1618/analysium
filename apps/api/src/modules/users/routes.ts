@@ -29,9 +29,15 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       patch.avatarUrl !== undefined
         ? (await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { avatarKey: true } })).avatarKey
         : null;
+    // The form sends the zone with every save; only a different one is a choice.
+    const chosenZone = patch.timezone !== undefined && patch.timezone !== user.timezone;
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { ...patch, ...(replacedPhoto ? { avatarKey: null, avatarMime: null } : {}) },
+      data: {
+        ...patch,
+        ...(chosenZone ? { timezoneChosen: true } : {}),
+        ...(replacedPhoto ? { avatarKey: null, avatarMime: null } : {}),
+      },
       select: {
         id: true,
         name: true,

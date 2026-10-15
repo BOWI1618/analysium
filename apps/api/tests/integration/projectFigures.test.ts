@@ -134,8 +134,9 @@ describe('просрочка считается по часам того, кто
 
     expect(await overdueFor('UTC')).toBe(ahead ? 0 : 1);
     expect(await overdueFor(zone)).toBe(ahead ? 1 : 0);
-    // A header that names no real zone falls back to the profile's, not to an error.
-    expect(await overdueFor('Not/A_Zone')).toBe(ahead ? 0 : 1);
+    // A header that names no real zone falls back to the profile's, not to an error. Nobody picked
+    // a zone for this account, so the profile has followed the last real one the browser named.
+    expect(await overdueFor('Not/A_Zone')).toBe(ahead ? 1 : 0);
   });
 });
 
