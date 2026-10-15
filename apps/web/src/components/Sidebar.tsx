@@ -6,6 +6,7 @@ import {
   X,
   ChevronsRight,
   Home,
+  CalendarDays,
   Inbox,
   LayoutGrid,
   Plus,
@@ -279,10 +280,18 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           onClick={onNavigate}
         />
         <NavItem
+          to="/calendar"
+          icon={<CalendarDays className="size-4" />}
+          label="Календарь"
+          index="03"
+          collapsed={collapsed}
+          onClick={onNavigate}
+        />
+        <NavItem
           to="/inbox"
           icon={<Inbox className="size-4" />}
           label="Входящие"
-          index="03"
+          index="04"
           badge={unread > 0 ? <CountBadge count={unread} tone="accent" /> : undefined}
           collapsed={collapsed}
           onClick={onNavigate}
@@ -294,7 +303,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           end
           icon={<LayoutGrid className="size-4" />}
           label="Проекты"
-          index="04"
+          index="05"
           collapsed={collapsed}
           onClick={onNavigate}
         />
@@ -302,7 +311,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           to="/employee-work"
           icon={<Users className="size-4" />}
           label="Задачи сотрудника"
-          index="05"
+          index="06"
           collapsed={collapsed}
           onClick={onNavigate}
         />
@@ -312,7 +321,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
           to="/planning"
           icon={<ListTodo className="size-4" />}
           label="Распределение"
-          index="06"
+          index="07"
           collapsed={collapsed}
           onClick={onNavigate}
         />
@@ -321,7 +330,7 @@ export function Sidebar({ onNavigate, inDrawer = false }: { onNavigate?: () => v
             to="/department-work"
             icon={<Network className="size-4" />}
             label="Задачи отдела"
-            index="07"
+            index="08"
             collapsed={collapsed}
             onClick={onNavigate}
           />

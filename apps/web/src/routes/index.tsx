@@ -10,6 +10,7 @@ import { HomePage } from './HomePage';
 import { MyWorkPage } from './MyWorkPage';
 import { EmployeeWorkPage } from './EmployeeWorkPage';
 import { PlanningPage } from './PlanningPage';
+import { MyCalendarPage } from './MyCalendarPage';
 import { DepartmentWorkPage } from './DepartmentWorkPage';
 import { InboxPage } from './InboxPage';
 import { ProjectsPage } from './ProjectsPage';
@@ -109,6 +110,7 @@ export function AppRoutes() {
         >
           <Route index element={<HomePage />} />
           <Route path="my-work" element={<MyWorkPage />} />
+          <Route path="calendar" element={<MyCalendarPage />} />
           <Route path="employee-work" element={<EmployeeWorkPage />} />
           <Route path="planning" element={<PlanningPage />} />
           <Route path="department-work" element={<DepartmentWorkPage />} />
