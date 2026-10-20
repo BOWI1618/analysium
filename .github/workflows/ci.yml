@@ -66,8 +66,11 @@ jobs:
         # means production would silently get a different database than dev.
         # Paths are relative to apps/api: `npx --workspace` would change the
         # working directory out from under them.
+        # The shadow database has to exist before the diff: Prisma replays the
+        # migrations into it, and without it this step failed on every push.
         working-directory: apps/api
         run: |
+          PGPASSWORD=flowdesk psql -h localhost -p 5433 -U flowdesk -d flowdesk -c "CREATE DATABASE flowdesk_shadow"
           npx prisma migrate diff \
             --from-migrations prisma/migrations \
             --to-schema-datamodel prisma/schema.prisma \
