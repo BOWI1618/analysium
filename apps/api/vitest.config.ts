@@ -7,9 +7,8 @@ export default defineConfig({
     // Integration tests share one Postgres schema — run files sequentially.
     fileParallelism: false,
     testTimeout: 30_000,
-    // Each file's setup recreates the test database through `npx prisma db
-    // push`; on a slower Windows machine that alone takes 15–25 s, and the
-    // first, cold file overran 30.
+    // The schema is pushed once into a template; each file copies it in its setup.
+    globalSetup: ['tests/globalSetup.ts'],
     hookTimeout: 60_000,
   },
 });

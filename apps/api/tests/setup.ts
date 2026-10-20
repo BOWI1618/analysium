@@ -4,8 +4,9 @@
  * Tests run against a real PostgreSQL database in its own schema, so the
  * queries, constraints and transactions under test are the ones that run in
  * production — an in-memory fake would not catch a broken foreign key or a
- * unique-index race. The test database is dropped and recreated at the start
- * of every run, and the app's connection to it is closed at the end.
+ * unique-index race. The schema is pushed once per run into a template
+ * database; every test file then starts from a fresh copy of it, and the
+ * app's connection is closed at the end.
  */
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -15,6 +16,7 @@ import type { FastifyInstance } from 'fastify';
 const require = createRequire(import.meta.url);
 
 const TEST_DATABASE = process.env.TEST_DATABASE_NAME ?? 'flowdesk_test';
+const TEMPLATE_DATABASE = `${TEST_DATABASE}_template`;
 
 const sourceUrl = new URL(
   process.env.TEST_DATABASE_URL ??
@@ -46,27 +48,39 @@ process.env.AUTH_RATE_LIMIT_MAX = '100000';
 // real people. Tests that cover Telegram hand in a stand-in instead.
 process.env.TELEGRAM_BOT_TOKEN = '';
 
-export async function migrateTestSchema(): Promise<void> {
+/** Drops a database and creates it anew, empty or as a copy of a template. */
+async function recreateDatabase(name: string, template?: string): Promise<void> {
   const { PrismaClient } = await import('@prisma/client');
-
   // Dropping a database requires a connection to a different one.
   const maintenance = new PrismaClient({
     datasources: { db: { url: urlForDatabase('postgres') } },
   });
   try {
     await maintenance.$executeRawUnsafe(
-      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${TEST_DATABASE}' AND pid <> pg_backend_pid()`,
+      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}' AND pid <> pg_backend_pid()`,
     );
-    await maintenance.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${TEST_DATABASE}"`);
-    await maintenance.$executeRawUnsafe(`CREATE DATABASE "${TEST_DATABASE}"`);
+    await maintenance.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}"`);
+    await maintenance.$executeRawUnsafe(`CREATE DATABASE "${name}"${template ? ` TEMPLATE "${template}"` : ''}`);
   } finally {
     await maintenance.$disconnect();
   }
+}
 
-  const target = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL! } } });
+/**
+ * The schema, once per run, into the template every test file copies. Run by
+ * vitest's global setup: pushing it for each of forty files cost several
+ * minutes of a run that is otherwise a few.
+ */
+export async function buildTemplateDatabase(): Promise<void> {
+  await recreateDatabase(TEMPLATE_DATABASE);
+  const url = urlForDatabase(TEMPLATE_DATABASE);
+
+  const { PrismaClient } = await import('@prisma/client');
+  const target = new PrismaClient({ datasources: { db: { url } } });
   try {
     await target.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS pg_trgm');
   } finally {
+    // A template with a connection open cannot be copied.
     await target.$disconnect();
   }
 
@@ -77,8 +91,13 @@ export async function migrateTestSchema(): Promise<void> {
   // itself is switched off for the same reason.
   execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate'], {
     stdio: 'inherit',
-    env: { ...process.env, CHECKPOINT_DISABLE: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+    env: { ...process.env, DATABASE_URL: url, CHECKPOINT_DISABLE: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' },
   });
+}
+
+/** A test file's own database: a fresh copy of the template, nothing left from the file before. */
+export async function migrateTestSchema(): Promise<void> {
+  await recreateDatabase(TEST_DATABASE, TEMPLATE_DATABASE);
 }
 
 /** Closes the app's Prisma connection so the test process can exit cleanly. */
