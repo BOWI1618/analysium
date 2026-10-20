@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { Bell, CheckCheck, Inbox } from 'lucide-react';
+import { AlarmClock, Bell, CheckCheck, Inbox } from 'lucide-react';
 import type { NotificationDto } from '@flowdesk/contracts';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
@@ -19,7 +19,8 @@ const TYPE_LABEL: Record<string, string> = {
   ISSUE_MENTIONED: 'Упоминание',
   ISSUE_STATUS_CHANGED: 'Статус',
   ISSUE_COMMENTED: 'Комментарий',
-  ISSUE_DUE_SOON: 'Скоро срок',
+  ISSUE_DUE_SOON: 'Срок',
+  ISSUE_OVERDUE: 'Просрочено',
   ISSUE_DUE_DATE_CHANGED: 'Срок',
   ISSUE_UNASSIGNED: 'Снято назначение',
   SPRINT_STARTED: 'Спринт',
@@ -150,7 +151,20 @@ export function NotificationList({
                     !notification.readAt && 'bg-accent-subtle',
                   )}
                 >
-                  <Avatar user={notification.actor} size="md" className="mt-0.5" />
+                  {/* A reminder comes from nobody: a clock instead of an empty face. */}
+                  {!notification.actor && (notification.type === 'ISSUE_DUE_SOON' || notification.type === 'ISSUE_OVERDUE') ? (
+                    <span
+                      aria-hidden="true"
+                      className={clsx(
+                        'mt-0.5 flex size-6 shrink-0 items-center justify-center border-2 border-border-strong',
+                        notification.type === 'ISSUE_OVERDUE' ? 'bg-danger text-text-inverted' : 'bg-marker text-ink',
+                      )}
+                    >
+                      <AlarmClock className="size-3.5" />
+                    </span>
+                  ) : (
+                    <Avatar user={notification.actor} size="md" className="mt-0.5" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-bold text-text">{headline(notification)}</span>

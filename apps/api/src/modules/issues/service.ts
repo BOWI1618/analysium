@@ -1053,7 +1053,32 @@ interface IssueChanges {
   /** The status the issue has just entered. */
   status?: { name: string };
   /** Only when the deadline really moved; `to: null` means it was removed. */
-  dueDate?: { to: Date | null };
+  dueDate?: { to: Date | null; hasTime: boolean };
+}
+
+/**
+ * A deadline the way the interface writes one: «21 октября» for a whole day —
+ * the same date everywhere — and «21 октября, 15:00» on the reader's clock.
+ */
+export function dueDateText(due: Date, hasTime: boolean, timezone: string, now = new Date()): string {
+  const zone = (() => {
+    if (!hasTime) return 'UTC';
+    try {
+      new Intl.DateTimeFormat('ru-RU', { timeZone: timezone });
+      return timezone;
+    } catch {
+      return 'UTC';
+    }
+  })();
+  const sameYear = due.getUTCFullYear() === now.getUTCFullYear();
+  const date = new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    ...(sameYear ? {} : { year: 'numeric' }),
+    timeZone: zone,
+  }).format(due);
+  if (!hasTime) return date;
+  return `${date}, ${new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: zone }).format(due)}`;
 }
 
 const sameInstant = (a: Date | null | undefined, b: Date | null | undefined): boolean =>
@@ -1101,7 +1126,7 @@ async function announceChanges(
 
   if (changes.status || changes.dueDate) {
     jobs.push(
-      issueWatchers(issue.id).then(async (watchers) => {
+      issueWatchers(issue.id, [], false).then(async (watchers) => {
         if (changes.status) {
           await notify({
             ...common,
@@ -1111,18 +1136,23 @@ async function announceChanges(
           });
         }
         if (changes.dueDate) {
-          const due = changes.dueDate.to;
-          await notify({
-            ...common,
-            userIds: watchers,
-            type: NotificationType.ISSUE_DUE_DATE_CHANGED,
-            title: `Изменился срок у ${issue.issueKey}`,
-            // The product is Russian throughout, so the date in a notification
-            // is written the way the rest of the interface writes dates.
-            body: due
-              ? `${new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(due)} — ${issue.title}`
-              : `Срок снят — ${issue.title}`,
-          });
+          const { to: due, hasTime } = changes.dueDate;
+          // A deadline with a time is a moment: each reader gets it on their own clock.
+          const zones = await prisma.user.findMany({ where: { id: { in: watchers } }, select: { id: true, timezone: true } });
+          const byText = new Map<string, string[]>();
+          for (const { id, timezone } of zones) {
+            const text = due ? `Новый срок: ${dueDateText(due, hasTime, timezone)}` : 'Срок снят';
+            byText.set(text, [...(byText.get(text) ?? []), id]);
+          }
+          for (const [text, userIds] of byText) {
+            await notify({
+              ...common,
+              userIds,
+              type: NotificationType.ISSUE_DUE_DATE_CHANGED,
+              title: `Изменился срок у ${issue.issueKey}`,
+              body: text,
+            });
+          }
         }
       }),
     );
@@ -1158,7 +1188,11 @@ async function fanoutUpdate(
             ? { from: before.assigneeId, to: patch.assigneeId ?? null }
             : undefined,
         status: before.newStatus ?? undefined,
-        dueDate: patch.dueDate !== undefined && !sameInstant(before.dueDate, nextDue) ? { to: nextDue } : undefined,
+        // A date sent without a time is a whole-day date, as the update itself reads it.
+        dueDate:
+          patch.dueDate !== undefined && !sameInstant(before.dueDate, nextDue)
+            ? { to: nextDue, hasTime: patch.dueHasTime ?? false }
+            : undefined,
       },
     ),
   );
@@ -1573,7 +1607,7 @@ export async function bulkUpdate(
         // A deadline set by hand starts the carry-over count again, as in the card.
         data.carriedOverDays = 0;
         after.dueDate = nextDue;
-        if (!sameInstant(issue.dueDate, nextDue)) changes.dueDate = { to: nextDue };
+        if (!sameInstant(issue.dueDate, nextDue)) changes.dueDate = { to: nextDue, hasTime: nextDueHasTime };
       }
 
       const activity: Prisma.ActivityEventCreateManyInput[] = diffIssue(issue as never, after as never).map((c) => ({

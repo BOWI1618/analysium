@@ -816,6 +816,7 @@ enum NotificationType {
   ISSUE_STATUS_CHANGED
   ISSUE_COMMENTED
   ISSUE_DUE_SOON
+  ISSUE_OVERDUE
   ISSUE_DUE_DATE_CHANGED
   ISSUE_UNASSIGNED
   SPRINT_STARTED
@@ -835,6 +836,9 @@ model Notification {
   readAt      DateTime?
   /// Set once the notification went out in an e-mail digest; never mailed twice.
   emailedAt   DateTime?
+  /// A deadline reminder: which one and for which deadline («today:<due>»), so
+  /// it is sent once and a moved deadline gets reminders of its own.
+  reminderKey String?
   createdAt   DateTime         @default(now())
 
   user      User      @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
@@ -845,6 +849,7 @@ model Notification {
   @@index([userId, readAt, createdAt])
   @@index([userId, createdAt])
   @@index([readAt, emailedAt, createdAt])
+  @@index([issueId, reminderKey])
   @@map("notifications")
 }
 

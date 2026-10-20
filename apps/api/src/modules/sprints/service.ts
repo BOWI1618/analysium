@@ -140,7 +140,7 @@ export async function startSprint(actor: ActorContext, sprintId: string): Promis
     workspaceId: actor.workspaceId,
     actorId: actor.userId,
     type: NotificationType.SPRINT_STARTED,
-    title: `Sprint "${updated.name}" started`,
+    title: `Спринт «${updated.name}» начался`,
     body: updated.goal,
   });
 
@@ -205,7 +205,7 @@ export async function completeSprint(
     workspaceId: actor.workspaceId,
     actorId: actor.userId,
     type: NotificationType.SPRINT_COMPLETED,
-    title: `Sprint "${updated.name}" completed`,
+    title: `Спринт «${updated.name}» завершён`,
     body: unfinished.length ? `${unfinished.length} unfinished issue(s) were moved` : null,
   });
 

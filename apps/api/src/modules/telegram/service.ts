@@ -201,7 +201,7 @@ const ACTOR_VERB: Record<string, string> = {
   ISSUE_MENTIONED: 'Упомянул(а)',
 };
 
-const ABOUT_ASSIGNEE = new Set(['ISSUE_ASSIGNED', 'ISSUE_UNASSIGNED', 'ISSUE_DUE_SOON']);
+const ABOUT_ASSIGNEE = new Set(['ISSUE_ASSIGNED', 'ISSUE_UNASSIGNED', 'ISSUE_DUE_SOON', 'ISSUE_OVERDUE']);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

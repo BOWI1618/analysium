@@ -26,6 +26,8 @@ export interface NotifyInput {
   body?: string | null;
   issueId?: string | null;
   commentId?: string | null;
+  /** A deadline reminder's key; see the due-date scanner. */
+  reminderKey?: string | null;
 }
 
 /**
@@ -60,6 +62,7 @@ export async function notify(input: NotifyInput): Promise<void> {
           body: input.body ?? null,
           issueId: input.issueId ?? null,
           commentId: input.commentId ?? null,
+          reminderKey: input.reminderKey ?? null,
         },
         select: { id: true, userId: true },
       }),
@@ -150,13 +153,21 @@ export async function telegramNotices(
  * just been taken from is no longer on the issue, but should hear about it —
  * and they are still subject to their own choice not to hear.
  */
-export async function issueWatchers(issueId: string, also: (string | null | undefined)[] = []): Promise<string[]> {
+export async function issueWatchers(
+  issueId: string,
+  also: (string | null | undefined)[] = [],
+  /**
+   * False for a change of status or deadline: having once written in a task
+   * used to bring every later move of it. Those who want them subscribe.
+   */
+  commenters = true,
+): Promise<string[]> {
   const issue = await prisma.issue.findUnique({
     where: { id: issueId },
     select: {
       assigneeId: true,
       reporterId: true,
-      comments: { select: { authorId: true }, distinct: ['authorId'], take: 50 },
+      comments: commenters ? { select: { authorId: true }, distinct: ['authorId'], take: 50 } : { select: { authorId: true }, take: 0 },
       subscriptions: { select: { userId: true, subscribed: true } },
     },
   });
