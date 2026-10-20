@@ -97,10 +97,11 @@ export function DepartmentWorkPage() {
       ...(chosen.statusCategory?.length ? { includeDone: undefined } : {}),
       // People's work includes their subtasks, whoever holds the parent.
       includeSubtasks: true,
-      sort: 'dueDate',
-      order: 'asc',
+      // A column pressed in the header puts its order over the soonest deadline first.
+      sort: barFilters.sort ?? 'dueDate',
+      order: barFilters.sort ? (barFilters.order ?? 'asc') : 'asc',
     }),
-    [chosen],
+    [chosen, barFilters.sort, barFilters.order],
   );
 
   const everybody = useMemo(() => (workspaceMembers ?? []).map((member) => member.user), [workspaceMembers]);
@@ -383,7 +384,11 @@ export function DepartmentWorkPage() {
                     />
                   ) : (
                     <>
-                      <IssueRowHeader columns={COLUMNS} />
+                      <IssueRowHeader
+                        columns={COLUMNS}
+                        sort={{ key: listFilters.sort ?? 'dueDate', order: listFilters.order ?? 'asc' }}
+                        onSort={(next) => setBarFilters({ ...barFilters, sort: next.key, order: next.order })}
+                      />
                       {issues.map((issue) => (
                         <IssueRow
                           key={issue.id}

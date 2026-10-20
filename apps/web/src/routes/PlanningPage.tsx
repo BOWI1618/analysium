@@ -149,8 +149,16 @@ function PlanningPool() {
   }, [barFilters]);
 
   const poolFilters = useMemo<IssueFilters>(
-    () => ({ ...chosen, assigneeId: ['none'], includeDone: false, includeSubtasks: true, sort: 'dueDate', order: 'asc' }),
-    [chosen],
+    () => ({
+      ...chosen,
+      assigneeId: ['none'],
+      includeDone: false,
+      includeSubtasks: true,
+      // A column pressed in the header puts its order over the soonest deadline first.
+      sort: barFilters.sort ?? 'dueDate',
+      order: barFilters.sort ? (barFilters.order ?? 'asc') : 'asc',
+    }),
+    [chosen, barFilters.sort, barFilters.order],
   );
   const pool = useIssueList({ workspaceId }, poolFilters);
   const poolIssues = useMemo(() => flattenPages(pool.data), [pool.data]);
@@ -412,7 +420,11 @@ function PlanningPool() {
                 />
               ) : (
                 <>
-                  <IssueRowHeader columns={columns} />
+                  <IssueRowHeader
+                    columns={columns}
+                    sort={{ key: poolFilters.sort ?? 'dueDate', order: poolFilters.order ?? 'asc' }}
+                    onSort={(next) => setBarFilters({ ...barFilters, sort: next.key, order: next.order })}
+                  />
                   {poolIssues.map((issue) => (
                     <IssueRow
                       key={issue.id}

@@ -38,15 +38,28 @@ export async function createComment(
   actor: ActorContext,
   issue: { id: string; issueKey: string; projectId: string; title: string },
   body: unknown,
+  replyToId?: string,
 ): Promise<CommentDto> {
   assertCan(actor, Permission.COMMENT_CREATE);
 
   const doc = sanitizeDoc(body);
   if (isDocEmpty(doc)) throw badRequest('Комментарий не может быть пустым', { body: 'Сначала напишите текст' });
 
+  // An answer stays inside its task: an id from another task would quote what this one cannot see.
+  const repliedTo = replyToId
+    ? await prisma.comment.findFirst({ where: { id: replyToId, issueId: issue.id }, select: { id: true, authorId: true } })
+    : null;
+  if (replyToId && !repliedTo) throw badRequest('Комментарий, на который вы отвечаете, удалён');
+
   const comment = await prisma.$transaction(async (tx) => {
     const created = await tx.comment.create({
-      data: { issueId: issue.id, authorId: actor.userId, body: doc as never, bodyText: docToText(doc) },
+      data: {
+        issueId: issue.id,
+        authorId: actor.userId,
+        body: doc as never,
+        bodyText: docToText(doc),
+        replyToId: repliedTo?.id ?? null,
+      },
       select: commentSelect,
     });
     await tx.activityEvent.create({
@@ -73,7 +86,19 @@ export async function createComment(
     ]);
 
     const mentionedSet = new Set(mentioned);
+    // The one answered hears about it even without watching the task; a mention already told them.
+    const answered = repliedTo && !mentionedSet.has(repliedTo.authorId) ? repliedTo.authorId : null;
     await Promise.all([
+      notify({
+        userIds: answered ? [answered] : [],
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        type: NotificationType.ISSUE_COMMENTED,
+        title: `Ответ на ваш комментарий в ${issue.issueKey}`,
+        body: docToText(doc).slice(0, 160),
+        issueId: issue.id,
+        commentId: comment.id,
+      }),
       notify({
         userIds: mentioned,
         workspaceId: actor.workspaceId,
@@ -86,7 +111,7 @@ export async function createComment(
       }),
       // A mention already notified them — don't send a second "commented" ping.
       notify({
-        userIds: watchers.filter((id) => !mentionedSet.has(id)),
+        userIds: watchers.filter((id) => !mentionedSet.has(id) && id !== answered),
         workspaceId: actor.workspaceId,
         actorId: actor.userId,
         type: NotificationType.ISSUE_COMMENTED,

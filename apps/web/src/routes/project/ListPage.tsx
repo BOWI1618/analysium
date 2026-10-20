@@ -243,7 +243,12 @@ export function ListPage() {
           className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
           style={listMinStyle(columns, true, widths)}
         >
-        <IssueRowHeader columns={columns} onResize={resizeColumn} />
+        <IssueRowHeader
+          columns={columns}
+          onResize={resizeColumn}
+          sort={{ key: filters.sort ?? 'updated', order: filters.order ?? 'desc' }}
+          onSort={(next) => setFilters({ ...filters, sort: next.key, order: next.order })}
+        />
         {canCreate && <QuickAddRow projectId={projectId} />}
 
         {query.isLoading ? (

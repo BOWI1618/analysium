@@ -110,7 +110,12 @@ export function EmployeeWorkPage() {
     }
   }, [chosen, userId, view]);
 
-  const query = useIssueList({ workspaceId }, listFilters, { enabled: Boolean(userId) });
+  // A column pressed in the header puts its order over the view's own.
+  const sortedFilters = useMemo<IssueFilters>(
+    () => (barFilters.sort ? { ...listFilters, sort: barFilters.sort, order: barFilters.order ?? 'asc' } : listFilters),
+    [listFilters, barFilters.sort, barFilters.order],
+  );
+  const query = useIssueList({ workspaceId }, sortedFilters, { enabled: Boolean(userId) });
   const {
     data: stats,
     error: statsError,
@@ -282,7 +287,12 @@ export function EmployeeWorkPage() {
             <EmptyState title={EMPTY[view].title} description={EMPTY[view].description} />
           ) : (
             <>
-              <IssueRowHeader columns={columns} selectable={false} />
+              <IssueRowHeader
+                columns={columns}
+                selectable={false}
+                sort={{ key: sortedFilters.sort ?? 'dueDate', order: sortedFilters.order ?? 'asc' }}
+                onSort={(next) => setBarFilters({ ...barFilters, sort: next.key, order: next.order })}
+              />
               {issues.map((issue) => (
                 <IssueRow
                   key={issue.id}

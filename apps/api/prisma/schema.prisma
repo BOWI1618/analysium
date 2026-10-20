@@ -680,8 +680,13 @@ model Comment {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   editedAt  DateTime?
+  /// The comment this one answers, quoted above it as in a messenger. A deleted
+  /// original leaves the answer standing, without the quote.
+  replyToId String?
 
   issue       Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  replyTo     Comment?          @relation("CommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies     Comment[]         @relation("CommentReplies")
   author      User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
   attachments Attachment[]
   reactions   CommentReaction[]

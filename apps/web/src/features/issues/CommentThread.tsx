@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import clsx from 'clsx';
-import type { CommentDto, UserSummaryDto } from '@flowdesk/contracts';
+import type { CommentDto, CommentQuoteDto, UserSummaryDto } from '@flowdesk/contracts';
 import { COMMENT_REACTIONS, EMPTY_DOC, isDocEmpty } from '@flowdesk/contracts';
-import { MoreHorizontal, Pencil, SmilePlus, Trash2 } from 'lucide-react';
+import { CornerUpLeft, MoreHorizontal, Pencil, SmilePlus, Trash2, X } from 'lucide-react';
 import { Popover } from '~/ui/Popover';
 import { Avatar } from '~/ui/Avatar';
 import { Button, IconButton } from '~/ui/Button';
@@ -39,12 +39,26 @@ export function CommentThread({
   const createComment = useCreateComment(issueId);
   const [draft, setDraft] = useState<unknown>(EMPTY_DOC);
   const [draftKey, setDraftKey] = useState(0);
+  const [replyTo, setReplyTo] = useState<CommentDto | null>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   useUnsavedChanges(!isDocEmpty(draft));
+
+  // The composer is the one below the list: an answer is written there, with
+  // the comment it answers named above it, as in a messenger.
+  const answer = (comment: CommentDto) => {
+    setReplyTo(comment);
+    // A new editor takes the focus and keeps what was already typed.
+    setDraftKey((k) => k + 1);
+    composerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
 
   const submit = async () => {
     if (isDocEmpty(draft) || createComment.isPending) return;
     try {
-      await createComment.mutateAsync(draft);
+      // An original deleted meanwhile is gone from the list too: the answer goes as a plain comment.
+      const answered = replyTo && comments?.some((comment) => comment.id === replyTo.id) ? replyTo.id : undefined;
+      await createComment.mutateAsync({ body: draft, replyToId: answered });
+      setReplyTo(null);
       setDraft(EMPTY_DOC);
       // Remounting the editor is the reliable way to clear ProseMirror state.
       setDraftKey((k) => k + 1);
@@ -70,6 +84,7 @@ export function CommentThread({
               onUploadImage={onUploadImage}
               canReact={canComment}
               viewerName={currentUser.name}
+              onReply={canComment ? () => answer(comment) : undefined}
             />
           ))}
         </ul>
@@ -82,11 +97,27 @@ export function CommentThread({
       )}
 
       {canComment && (
-        <div className="flex gap-2.5 pt-1">
+        <div ref={composerRef} className="flex gap-2.5 pt-1">
           <Avatar user={currentUser} size="lg" className="mt-1 shrink-0" />
           <div className="min-w-0 flex-1">
+            {replyTo && (
+              <div
+                role="status"
+                className="mb-1.5 flex items-start gap-2 border-2 border-l-4 border-border-strong border-l-accent bg-surface-sunken px-2 py-1.5"
+              >
+                <CornerUpLeft className="mt-0.5 size-3.5 shrink-0 text-accent" />
+                <div className="min-w-0 flex-1 text-xs">
+                  <p className="font-bold">Ответ: {replyTo.author.name}</p>
+                  <p className="truncate text-text-muted">{quoteText(replyTo)}</p>
+                </div>
+                <IconButton label="Не отвечать на комментарий" size="xs" onClick={() => setReplyTo(null)}>
+                  <X className="size-3.5" />
+                </IconButton>
+              </div>
+            )}
             <RichTextEditor
               key={draftKey}
+              autoFocus={draftKey > 0 && replyTo !== null}
               value={draft}
               onChange={setDraft}
               users={members}
@@ -118,6 +149,34 @@ export function CommentThread({
   );
 }
 
+/** How a comment begins, for a quote of it: its text as the server keeps it, or the element on screen. */
+function quoteText(comment: CommentDto): string {
+  const shown = document.getElementById(`comment-${comment.id}`)?.querySelector('[data-comment-body]')?.textContent;
+  return (shown ?? '').trim().slice(0, 200) || 'Комментарий';
+}
+
+/** The comment answered, above the answer: who wrote it and how it began; a press goes to it. */
+function Quote({ quote }: { quote: CommentQuoteDto }) {
+  const goTo = () => {
+    const target = document.getElementById(`comment-${quote.id}`);
+    if (!target) return;
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.classList.add('bg-marker-subtle');
+    window.setTimeout(() => target.classList.remove('bg-marker-subtle'), 1600);
+  };
+  return (
+    <button
+      type="button"
+      onClick={goTo}
+      title="Перейти к комментарию"
+      className="mt-1 block w-full border-l-4 border-accent bg-surface px-2 py-1 text-left text-xs hover:bg-surface-hover"
+    >
+      <span className="block font-bold">{quote.author.name}</span>
+      <span className="line-clamp-2 break-words text-text-muted">{quote.text || 'Вложение'}</span>
+    </button>
+  );
+}
+
 function CommentItem({
   comment,
   issueId,
@@ -125,6 +184,7 @@ function CommentItem({
   onUploadImage,
   canReact,
   viewerName,
+  onReply,
 }: {
   comment: CommentDto;
   issueId: string;
@@ -133,6 +193,8 @@ function CommentItem({
   /** Reactions are put by whoever may comment; everyone else sees them. */
   canReact: boolean;
   viewerName: string;
+  /** Present for those who may comment. */
+  onReply?: () => void;
 }) {
   const toggleReaction = useToggleReaction(issueId, viewerName);
   const react = (emoji: string) => toggleReaction.mutate({ commentId: comment.id, emoji });
@@ -153,7 +215,7 @@ function CommentItem({
   };
 
   return (
-    <li className="flex gap-2.5">
+    <li id={`comment-${comment.id}`} className="flex gap-2.5 transition-colors">
       <Avatar user={comment.author} size="lg" className="mt-0.5 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -221,12 +283,15 @@ function CommentItem({
           </div>
         ) : (
           <div className="mt-1 rounded-lg bg-surface-sunken px-3 py-2">
-            <RichTextViewer value={comment.body} />
+            {comment.replyTo && <Quote quote={comment.replyTo} />}
+            <div data-comment-body className={clsx(comment.replyTo && 'mt-1.5')}>
+              <RichTextViewer value={comment.body} />
+            </div>
           </div>
         )}
 
         {/* Reactions, as in a messenger: a press puts one's own on or takes it off. */}
-        {!editing && (comment.reactions.length > 0 || canReact) && (
+        {!editing && (comment.reactions.length > 0 || canReact || onReply) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1" role="group" aria-label="Реакции">
             {comment.reactions.map((reaction) => (
               <button
@@ -285,6 +350,16 @@ function CommentItem({
                   </div>
                 )}
               </Popover>
+            )}
+            {onReply && (
+              <button
+                type="button"
+                onClick={onReply}
+                className="inline-flex h-6 items-center gap-1 border-2 border-transparent px-1 text-xs text-text-subtle hover:border-border-strong hover:bg-surface-hover hover:text-text"
+              >
+                <CornerUpLeft className="size-3.5" />
+                Ответить
+              </button>
             )}
           </div>
         )}

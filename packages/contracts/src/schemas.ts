@@ -587,7 +587,7 @@ export const issueFilterSchema = z.object({
    */
   openFirst: queryBoolean.optional(),
   sort: z
-    .enum(['rank', 'created', 'updated', 'priority', 'dueDate', 'title', 'status'])
+    .enum(['rank', 'created', 'updated', 'priority', 'startDate', 'dueDate', 'title', 'status'])
     .default('rank'),
   order: z.enum(['asc', 'desc']).default('asc'),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -627,8 +627,12 @@ export const savedViewSchema = z.object({
 
 export const createCommentSchema = z.object({
   body: z.record(z.unknown()),
+  /** A comment of the same task this one answers. */
+  replyToId: z.string().min(1).max(64).optional(),
 });
-export const updateCommentSchema = createCommentSchema;
+export const updateCommentSchema = z.object({
+  body: z.record(z.unknown()),
+});
 
 /* ----------------------------------------------------------------- gantt */
 

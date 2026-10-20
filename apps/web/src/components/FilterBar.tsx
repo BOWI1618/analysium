@@ -80,6 +80,7 @@ const SORT_LABELS: Record<string, string> = {
   created: 'По дате создания',
   updated: 'По дате обновления',
   priority: 'По приоритету',
+  startDate: 'По дате начала',
   dueDate: 'По сроку',
   title: 'По заголовку',
   status: 'По статусу',

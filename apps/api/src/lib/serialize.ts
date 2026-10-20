@@ -195,6 +195,7 @@ export const commentSelect = {
   updatedAt: true,
   editedAt: true,
   author: { select: userSummarySelect },
+  replyTo: { select: { id: true, bodyText: true, author: { select: userSummarySelect } } },
   attachments: { select: attachmentSelect },
   reactions: {
     orderBy: { createdAt: 'asc' },
@@ -230,6 +231,9 @@ export function toComment(
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
     editedAt: iso(c.editedAt),
+    replyTo: c.replyTo
+      ? { id: c.replyTo.id, author: toUserSummary(c.replyTo.author)!, text: c.replyTo.bodyText.slice(0, 200) }
+      : null,
     attachments: c.attachments.map(toAttachment),
     reactions: toReactions(c.reactions, perms.viewerId),
     canEdit: perms.canEdit,

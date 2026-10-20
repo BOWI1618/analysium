@@ -187,6 +187,8 @@ export function orderByFor(
     case 'priority':
       // Enum order in the schema is URGENT → NONE, so ascending == most urgent.
       return [{ priority: dir === 'asc' ? 'asc' : 'desc' }, { rank: 'asc' }, { id: 'asc' }];
+    case 'startDate':
+      return [{ startDate: { sort: dir, nulls: 'last' } }, { id: 'asc' }];
     case 'dueDate':
       return [{ dueDate: { sort: dir, nulls: 'last' } }, { id: 'asc' }];
     case 'title':

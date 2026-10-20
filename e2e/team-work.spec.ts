@@ -100,7 +100,7 @@ test.describe('распределение задач', () => {
     // «Без срока» keeps the tasks nobody has dated yet in view.
     // Next to the person panel the bar is narrow, so its facets sit behind one button.
     await pool.getByRole('button', { name: /^Фильтры/ }).click();
-    await pool.getByRole('button', { name: 'Срок' }).click();
+    await pool.getByRole('button', { name: 'Срок', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Без срока' }).click();
     await page.keyboard.press('Escape');
     await expect(pool.getByText('Третья свободная')).toBeVisible({ timeout: 15_000 });

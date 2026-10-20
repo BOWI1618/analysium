@@ -243,6 +243,59 @@ describe('editing and deleting', () => {
   });
 });
 
+describe('ответы', () => {
+  const reply = (cookie: string, text: string, replyToId: string) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/v1/issues/${issue.id}/comments`,
+      headers: { cookie },
+      payload: { body: doc(text), replyToId },
+    });
+  const listed = async () =>
+    (await app.inject({ method: 'GET', url: `/api/v1/issues/${issue.id}/comments`, headers: { cookie: owner.cookie } })).json() as {
+      id: string;
+      replyTo: { id: string } | null;
+    }[];
+
+  it('ответ цитирует исходный комментарий, а его автору приходит уведомление', async () => {
+    const original = (await post(member.sessionCookie, 'Срок пока перенёс с 19 на 23')).json();
+    const answer = await reply(owner.cookie, 'Принято', original.id);
+    expect(answer.statusCode).toBe(201);
+    expect(answer.json().replyTo).toMatchObject({
+      id: original.id,
+      author: { id: member.id },
+      text: 'Срок пока перенёс с 19 на 23',
+    });
+    expect((await listed()).find((c) => c.id === answer.json().id)!.replyTo!.id).toBe(original.id);
+
+    const inbox = await app.inject({
+      method: 'GET',
+      url: `/api/v1/workspaces/${owner.workspaceId}/notifications`,
+      headers: { cookie: member.sessionCookie },
+    });
+    const titles = inbox.json().items.map((n: { title: string }) => n.title);
+    expect(titles).toContain(`Ответ на ваш комментарий в ${issue.issueKey}`);
+  });
+
+  it('на комментарий другой задачи ответить нельзя; удалённый исходный оставляет ответ без цитаты', async () => {
+    const other = await createIssue(app, owner, project.id, { title: 'Другая тема' });
+    const foreign = (
+      await app.inject({
+        method: 'POST',
+        url: `/api/v1/issues/${other.id}/comments`,
+        headers: { cookie: owner.cookie },
+        payload: { body: doc('Чужой') },
+      })
+    ).json();
+    expect((await reply(owner.cookie, 'Мимо', foreign.id)).statusCode).toBe(400);
+
+    const original = (await post(owner.cookie, 'Будет удалён')).json();
+    const answer = (await reply(member.sessionCookie, 'Ответ остаётся', original.id)).json();
+    await app.inject({ method: 'DELETE', url: `/api/v1/comments/${original.id}`, headers: { cookie: owner.cookie } });
+    expect((await listed()).find((c) => c.id === answer.id)!.replyTo).toBeNull();
+  });
+});
+
 describe('access control', () => {
   it('hides comments on another workspace’s issue', async () => {
     const outsider = await registerUser(app, { email: 'nosy@comments.test' });

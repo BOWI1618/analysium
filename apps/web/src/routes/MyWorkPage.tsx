@@ -106,6 +106,9 @@ export function MyWorkPage() {
     setSearchParams(
       (current) => {
         const params = new URLSearchParams(current);
+        // Each tab opens in its own order: one picked by a column goes with the tab it was picked on.
+        params.delete('sort');
+        params.delete('order');
         if (next === 'assigned') params.delete('tab');
         else params.set('tab', next);
         return params;
@@ -239,7 +242,13 @@ export function MyWorkPage() {
           />
         ) : groupBy === 'none' ? (
           <>
-            <IssueRowHeader columns={columns} selectable={false} onResize={resizeColumn} />
+            <IssueRowHeader
+              columns={columns}
+              selectable={false}
+              onResize={resizeColumn}
+              sort={{ key: filters.sort ?? 'rank', order: filters.order ?? 'asc' }}
+              onSort={(next) => setExtraFilters({ ...extraFilters, sort: next.key, order: next.order })}
+            />
             {issues.map((issue) => (
               <IssueRow
                 key={issue.id}

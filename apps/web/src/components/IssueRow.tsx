@@ -1,9 +1,9 @@
 import { createContext, memo, useCallback, useContext } from 'react';
 import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
 import clsx from 'clsx';
-import { ChevronRight, Columns3, CornerDownRight, Hourglass, MessageSquare, Repeat, SquareCheck, UserPen } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, Columns3, CornerDownRight, Hourglass, MessageSquare, Repeat, SquareCheck, UserPen } from 'lucide-react';
 import { RECURRENCE_LABEL } from '~/lib/labels';
-import type { IssueSummaryDto, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
+import type { IssueSummaryDto, SortKey, SortOrder, StatusDto, UserSummaryDto } from '@flowdesk/contracts';
 import { impliedStartDate } from '@flowdesk/contracts';
 import { useUiStore } from '~/app/uiStore';
 import { useIssue, usePatchIssue } from '~/features/issues/hooks';
@@ -570,27 +570,80 @@ function SubtaskRows({
 }
 
 /** Sticky header describing the visible columns; their edges are dragged to resize them. */
+export interface ColumnSort {
+  key: SortKey;
+  order: SortOrder;
+}
+
+/** The order a column is put in by a press on its name; the task's own name sorts by title. */
+const SORT_BY: Partial<Record<ListColumn | 'title', SortKey>> = {
+  title: 'title',
+  startDate: 'startDate',
+  dueDate: 'dueDate',
+  status: 'status',
+  created: 'created',
+  updated: 'updated',
+};
+
+/**
+ * A press on a column's name sorts by it; a second press turns the order
+ * round. Dates of a change open with the latest, the rest from the top.
+ */
+export function nextColumnSort(current: ColumnSort | undefined, key: SortKey): ColumnSort {
+  if (current?.key === key) return { key, order: current.order === 'asc' ? 'desc' : 'asc' };
+  return { key, order: key === 'created' || key === 'updated' ? 'desc' : 'asc' };
+}
+
 export function IssueRowHeader({
   columns,
   selectable = true,
   onResize,
+  sort,
+  onSort,
 }: {
   columns: ListColumn[];
   selectable?: boolean;
   /** `null` puts the column back to its own width. Without it columns do not resize. */
   onResize?: (column: ListColumn, width: number | null) => void;
+  /** The list's order, marked on its column. */
+  sort?: ColumnSort;
+  /** Without it the names are not pressed. */
+  onSort?: (next: ColumnSort) => void;
 }) {
   const show = (column: ListColumn) => columns.includes(column);
   const widths = useContext(ColumnWidthsContext);
+
+  const name = (column: ListColumn | 'title', text: string) => {
+    const key = SORT_BY[column];
+    if (!onSort || !key) return <span className="whitespace-nowrap">{text}</span>;
+    const active = sort?.key === key;
+    const way = active ? (sort!.order === 'asc' ? ', по возрастанию' : ', по убыванию') : '';
+    return (
+      <button
+        type="button"
+        onClick={() => onSort(nextColumnSort(sort, key))}
+        aria-label={`Сортировать по колонке «${text}»${way}`}
+        title={active ? 'Нажмите, чтобы развернуть порядок' : 'Сортировать по этой колонке'}
+        className={clsx(
+          'inline-flex items-center gap-0.5 whitespace-nowrap uppercase hover:text-text',
+          active && 'text-text',
+        )}
+      >
+        {text}
+        {active &&
+          (sort!.order === 'asc' ? <ArrowUp className="size-3 shrink-0" /> : <ArrowDown className="size-3 shrink-0" />)}
+      </button>
+    );
+  };
 
   // A name stands in the middle of its column, with a rule on the left: two
   // neighbours — «Срок» set to the right and «Статус» to the left — used to
   // read as one word, «СРОК СТАТУС».
   // No padding of its own: the narrowest columns are exactly as wide as their names.
   const HEAD = 'relative shrink-0 self-stretch items-center justify-center border-l-2 border-border-strong/30 text-center';
-  const cell = (column: ListColumn, className: string, children: React.ReactNode) => (
+  const cell = (column: ListColumn, className: string, children: string) => (
     <span style={widthStyle(widths, column)} className={clsx(HEAD, className)}>
-      <span className="whitespace-nowrap">{children}</span>
+      {name(column, children)}
       {onResize && RESIZABLE.has(column) && (
         <ColumnResizer column={column} label={ALL_COLUMNS.find((c) => c.key === column)!.label} onResize={onResize} />
       )}
@@ -609,7 +662,7 @@ export function IssueRowHeader({
       <span className="shrink-0" style={{ width: 'var(--key-rail)' }}>
         Ключ
       </span>
-      <span className="min-w-0 flex-1 sm:min-w-24 xl:min-w-40">Задача</span>
+      <span className="min-w-0 flex-1 sm:min-w-24 xl:min-w-40">{name('title', 'Задача')}</span>
       {show('type') && cell('type', 'hidden w-24 sm:flex', 'Тип')}
       {show('labels') && cell('labels', 'hidden w-32 sm:flex', 'Метки')}
       {show('project') && cell('project', 'hidden w-24 sm:flex', 'Проект')}

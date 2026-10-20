@@ -17,12 +17,12 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: { issueId: string } }>('/issues/:issueId/comments', async (req, reply) => {
     const { actor } = await issueContext(currentUser(req).id, req.params.issueId);
-    const { body } = parse(createCommentSchema, req.body);
+    const { body, replyToId } = parse(createCommentSchema, req.body);
     const issue = await prisma.issue.findUniqueOrThrow({
       where: { id: req.params.issueId },
       select: { id: true, issueKey: true, projectId: true, title: true },
     });
-    const comment = await service.createComment(actor, issue, body);
+    const comment = await service.createComment(actor, issue, body, replyToId);
     return reply.status(201).send(comment);
   });
 

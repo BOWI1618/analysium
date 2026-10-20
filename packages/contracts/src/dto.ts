@@ -241,11 +241,20 @@ export interface CommentDto {
   createdAt: string;
   updatedAt: string;
   editedAt: string | null;
+  /** The comment this one answers; null when it answers none or the original was deleted. */
+  replyTo: CommentQuoteDto | null;
   attachments: AttachmentDto[];
   /** Reactions in the order they first appeared, each with who put it. */
   reactions: CommentReactionDto[];
   canEdit: boolean;
   canDelete: boolean;
+}
+
+/** Enough of the answered comment to quote it: who wrote it and how it began. */
+export interface CommentQuoteDto {
+  id: string;
+  author: UserSummaryDto;
+  text: string;
 }
 
 export interface CommentReactionDto {

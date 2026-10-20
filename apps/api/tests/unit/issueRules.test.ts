@@ -224,6 +224,16 @@ describe('compareIssues', () => {
     expect(compareIssues(without, withDate, 'dueDate', 'desc')).toBeGreaterThan(0);
   });
 
+  it('по дате начала: раньше — выше, задачи без начала внизу в обе стороны', () => {
+    const early = { ...base, startDate: '2026-02-01T00:00:00.000Z' };
+    const late = { ...base, startDate: '2026-03-01T00:00:00.000Z' };
+    const without = { ...base, startDate: null };
+    expect(compareIssues(early, late, 'startDate', 'asc')).toBeLessThan(0);
+    expect(compareIssues(early, late, 'startDate', 'desc')).toBeGreaterThan(0);
+    expect(compareIssues(without, early, 'startDate', 'asc')).toBeGreaterThan(0);
+    expect(compareIssues(without, early, 'startDate', 'desc')).toBeGreaterThan(0);
+  });
+
   it('falls back to rank when the primary key ties', () => {
     const a = { ...base, rank: 'A', title: 'same' };
     const b = { ...base, rank: 'B', title: 'same' };

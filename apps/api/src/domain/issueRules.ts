@@ -220,13 +220,14 @@ export function diffIssue(before: IssueSnapshot, after: Partial<IssueSnapshot>):
 
 import { PRIORITY_WEIGHT } from '@flowdesk/contracts';
 
-export type SortKey = 'rank' | 'created' | 'updated' | 'priority' | 'dueDate' | 'title' | 'status';
+export type SortKey = 'rank' | 'created' | 'updated' | 'priority' | 'startDate' | 'dueDate' | 'title' | 'status';
 
 export interface SortableIssue {
   rank: string;
   createdAt: Date | string;
   updatedAt: Date | string;
   priority: IssuePriority;
+  startDate?: Date | string | null;
   dueDate: Date | string | null;
   title: string;
   status?: { position: number };
@@ -257,9 +258,10 @@ export function compareIssues(a: SortableIssue, b: SortableIssue, key: SortKey, 
       // users mean by sorting by priority.
       result = PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority];
       break;
+    case 'startDate':
     case 'dueDate': {
-      const ta = time(a.dueDate);
-      const tb = time(b.dueDate);
+      const ta = time((key === 'startDate' ? a.startDate : a.dueDate) ?? null);
+      const tb = time((key === 'startDate' ? b.startDate : b.dueDate) ?? null);
       // Issues without a due date always sink to the bottom, both directions.
       if (ta === null && tb === null) result = 0;
       else if (ta === null) return 1;

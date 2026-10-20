@@ -18,7 +18,8 @@ export function useCreateComment(issueId: string) {
   const toast = useToast();
 
   return useMutation({
-    mutationFn: (body: unknown) => api.post<CommentDto>(`/issues/${issueId}/comments`, { body }),
+    mutationFn: ({ body, replyToId }: { body: unknown; replyToId?: string }) =>
+      api.post<CommentDto>(`/issues/${issueId}/comments`, { body, replyToId }),
     onSuccess: (comment) => {
       queryClient.setQueryData<CommentDto[]>(qk.issueComments(issueId), (list) => [...(list ?? []), comment]);
       void queryClient.invalidateQueries({ queryKey: qk.issueActivity(issueId) });
