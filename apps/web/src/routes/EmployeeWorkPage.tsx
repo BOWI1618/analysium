@@ -13,6 +13,9 @@ import { SavedViews } from '~/components/SavedViews';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
+import { StageBoard } from '~/components/StageBoard';
+import { useLocalStorage } from '~/lib/hooks/useLocalStorage';
+import { SegmentedControl } from '~/ui/Tabs';
 import { IssueRow, IssueRowHeader, listMinStyle, type ListColumn } from '~/components/IssueRow';
 import { UserPicker } from '~/components/Pickers';
 import { Avatar } from '~/ui/Avatar';
@@ -50,6 +53,8 @@ export function EmployeeWorkPage() {
   const { user, workspace } = useSession();
   const openIssue = useUiStore((s) => s.openIssue);
   const workspaceId = workspace?.id ?? '';
+  // List or kanban by stage; remembered on this device.
+  const [layout, setLayout] = useLocalStorage<'list' | 'board'>('flowdesk.employee-layout', 'list');
 
   // Person, view and filters all live in the address: a link to «просроченные
   // задачи Марии в проекте X» can be sent to someone as it is.
@@ -253,6 +258,17 @@ export function EmployeeWorkPage() {
         hideAssignee
         hideDoneOption={false}
         sortOptions={false}
+        trailing={
+          <SegmentedControl
+            label="Вид"
+            value={layout}
+            onChange={setLayout}
+            options={[
+              { value: 'list', label: 'Список' },
+              { value: 'board', label: 'Канбан' },
+            ]}
+          />
+        }
         views={
           <SavedViews
             layout="EMPLOYEE"
@@ -269,6 +285,28 @@ export function EmployeeWorkPage() {
       />
 
       <StaleNotice query={query} />
+      {layout === 'board' && person && issues.length > 0 && !(query.error && !query.data) ? (
+        <StageBoard
+          issues={issues}
+          onOpenIssue={openIssue}
+          footer={
+            (query.hasNextPage || total !== undefined) && (
+              <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-t-2 border-border-strong bg-surface p-2">
+                {total !== undefined && (
+                  <span className="fd-num text-2xs text-text-subtle">
+                    Загружено {flattenPages(query.data).length} из {pluralize(total, ['задачи', 'задач', 'задач'])}
+                  </span>
+                )}
+                {query.hasNextPage && (
+                  <Button size="sm" variant="secondary" loading={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+                    Загрузить ещё
+                  </Button>
+                )}
+              </div>
+            )
+          }
+        />
+      ) : (
       <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
           className="sm:min-w-[var(--list-min)] xl:min-w-[var(--list-min-xl)]"
@@ -328,6 +366,7 @@ export function EmployeeWorkPage() {
           )}
         </div>
       </div>
+      )}
     </>
   );
 }

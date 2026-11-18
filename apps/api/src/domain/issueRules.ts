@@ -19,7 +19,8 @@ export interface StatusLike {
  * so renaming a column never breaks a report.
  */
 export const DEFAULT_STATUSES: { name: string; category: StatusCategory; color: string; wipLimit?: number }[] = [
-  { name: 'Бэклог', category: SC.BACKLOG, color: '#9fb0c6' },
+  // Orange, so the backlog stands apart from the blues of the work in hand.
+  { name: 'Бэклог', category: SC.BACKLOG, color: '#d97706' },
   { name: 'К выполнению', category: SC.UNSTARTED, color: '#7c88a1' },
   { name: 'В работе', category: SC.STARTED, color: '#0083ca', wipLimit: 5 },
   { name: 'На ревью', category: SC.STARTED, color: '#283a97' },

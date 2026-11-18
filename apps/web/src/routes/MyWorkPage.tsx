@@ -13,6 +13,7 @@ import { SavedViews } from '~/components/SavedViews';
 import type { IssueFilters } from '~/features/issues/types';
 import { Topbar } from '~/components/Topbar';
 import { FilterBar } from '~/components/FilterBar';
+import { StageBoard } from '~/components/StageBoard';
 import {
   ColumnWidthsContext,
   ColumnsMenu,
@@ -116,6 +117,8 @@ export function MyWorkPage() {
       { replace: true },
     );
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
+  // List or kanban by stage; remembered on this device.
+  const [layout, setLayout] = useLocalStorage<'list' | 'board'>('flowdesk.my-work-layout', 'list');
   const [extraFilters, setExtraFilters] = useFilterState();
 
   const { data: members } = useMembers(workspaceId);
@@ -203,6 +206,17 @@ export function MyWorkPage() {
         }
         trailing={
           <div className="flex items-center gap-2">
+          <SegmentedControl
+            label="Вид"
+            value={layout}
+            onChange={setLayout}
+            options={[
+              { value: 'list', label: 'Список' },
+              { value: 'board', label: 'Канбан' },
+            ]}
+          />
+          {layout === 'list' && (
+          <>
           <ColumnsMenu columns={columns} onChange={setColumns} />
           <SegmentedControl
             label="Группировка"
@@ -215,11 +229,28 @@ export function MyWorkPage() {
               { value: 'dueDate', label: 'Срок' },
             ]}
           />
+          </>
+          )}
           </div>
         }
       />
 
       <StaleNotice query={query} />
+      {layout === 'board' && issues.length > 0 && !(query.error && !query.data) ? (
+        <StageBoard
+          issues={issues}
+          onOpenIssue={openIssue}
+          footer={
+            query.hasNextPage && (
+              <div className="flex shrink-0 justify-center border-t-2 border-border-strong bg-surface p-2">
+                <Button size="sm" variant="secondary" loading={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+                  Загрузить ещё
+                </Button>
+              </div>
+            )
+          }
+        />
+      ) : (
       <ColumnWidthsContext.Provider value={widths}>
       <div className="min-h-0 flex-1 overflow-auto bg-surface scrollbar-thin">
         <div
@@ -301,6 +332,7 @@ export function MyWorkPage() {
         </div>
       </div>
       </ColumnWidthsContext.Provider>
+      )}
     </>
   );
 }
