@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { AlarmClock, Bell, CheckCheck, Inbox } from 'lucide-react';
+import { AlarmClock, Bell, CheckCheck, Inbox, Sparkles } from 'lucide-react';
 import type { NotificationDto } from '@flowdesk/contracts';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
@@ -25,6 +25,7 @@ const TYPE_LABEL: Record<string, string> = {
   ISSUE_UNASSIGNED: 'Снято назначение',
   SPRINT_STARTED: 'Спринт',
   SPRINT_COMPLETED: 'Спринт',
+  RELEASE_NOTES: 'Что нового',
 };
 
 /**
@@ -84,10 +85,13 @@ export function NotificationList({
   workspaceId,
   onNavigate,
   maxHeight = 'max-h-[26rem]',
+  fullText = false,
 }: {
   workspaceId: string;
   onNavigate?: () => void;
   maxHeight?: string;
+  /** Long texts (an update's summary) shown whole rather than cut short. */
+  fullText?: boolean;
 }) {
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useNotifications(workspaceId);
   const markRead = useMarkRead(workspaceId);
@@ -152,7 +156,14 @@ export function NotificationList({
                   )}
                 >
                   {/* A reminder comes from nobody: a clock instead of an empty face. */}
-                  {!notification.actor && (notification.type === 'ISSUE_DUE_SOON' || notification.type === 'ISSUE_OVERDUE') ? (
+                  {notification.type === 'RELEASE_NOTES' ? (
+                    <span
+                      aria-hidden="true"
+                      className="mt-0.5 flex size-6 shrink-0 items-center justify-center border-2 border-border-strong bg-marker text-ink"
+                    >
+                      <Sparkles className="size-3.5" />
+                    </span>
+                  ) : !notification.actor && (notification.type === 'ISSUE_DUE_SOON' || notification.type === 'ISSUE_OVERDUE') ? (
                     <span
                       aria-hidden="true"
                       className={clsx(
@@ -176,7 +187,16 @@ export function NotificationList({
                     )}
                     {/* Shown when it adds something to the task's name: the words of a comment, the new date. */}
                     {notification.body && !(notification.issue && notification.body.includes(notification.issue.title)) && (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">
+                      <p
+                        className={clsx(
+                          'mt-0.5 text-xs text-text-muted',
+                          // An update's summary is a list: one point per line,
+                          // whole on the inbox page, its start under the bell.
+                          notification.type === 'RELEASE_NOTES'
+                            ? clsx('whitespace-pre-line', !fullText && 'line-clamp-4')
+                            : 'line-clamp-2',
+                        )}
+                      >
                         {QUOTED.has(notification.type) ? `«${notification.body}»` : notification.body}
                       </p>
                     )}

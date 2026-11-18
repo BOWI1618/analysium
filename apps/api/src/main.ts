@@ -4,6 +4,7 @@ import { prisma } from './lib/prisma';
 import { startDueDateScanner } from './jobs/dueDateScanner';
 import { startCarryOver } from './jobs/carryOver';
 import { startTelegramBot } from './jobs/telegramBot';
+import { startReleaseNotes } from './jobs/releaseNotes';
 
 async function main(): Promise<void> {
   const app = await buildApp();
@@ -27,6 +28,8 @@ async function main(): Promise<void> {
 
   try {
     await app.listen({ port: env.PORT, host: env.HOST });
+    // After a deploy: what the update brought, to everyone's notifications.
+    startReleaseNotes();
   } catch (error) {
     app.log.error(error, 'failed to start');
     process.exit(1);

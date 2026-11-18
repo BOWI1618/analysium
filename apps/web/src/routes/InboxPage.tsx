@@ -19,10 +19,10 @@ export function InboxPage() {
                 <Marker>Входящие</Marker>
               </>
             }
-            note="Всё, что касается вас: упоминания, назначения и сроки."
+            note="Всё, что касается вас: упоминания, назначения, сроки и что нового в Анализиуме."
           />
           <div className="border-2 border-border-strong bg-surface shadow-lg">
-            <NotificationList workspaceId={workspace?.id ?? ''} maxHeight="max-h-none" />
+            <NotificationList workspaceId={workspace?.id ?? ''} maxHeight="max-h-none" fullText />
           </div>
         </div>
       </div>

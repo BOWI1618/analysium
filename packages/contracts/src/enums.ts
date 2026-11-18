@@ -153,6 +153,7 @@ export const NotificationType = {
   ISSUE_UNASSIGNED: 'ISSUE_UNASSIGNED',
   SPRINT_STARTED: 'SPRINT_STARTED',
   SPRINT_COMPLETED: 'SPRINT_COMPLETED',
+  RELEASE_NOTES: 'RELEASE_NOTES',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

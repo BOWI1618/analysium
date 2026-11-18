@@ -823,6 +823,8 @@ enum NotificationType {
   ISSUE_UNASSIGNED
   SPRINT_STARTED
   SPRINT_COMPLETED
+  /// What a new version of Analysium brought, sent to everyone once.
+  RELEASE_NOTES
 }
 
 model Notification {
@@ -839,7 +841,8 @@ model Notification {
   /// Set once the notification went out in an e-mail digest; never mailed twice.
   emailedAt   DateTime?
   /// A deadline reminder: which one and for which deadline («today:<due>»), so
-  /// it is sent once and a moved deadline gets reminders of its own.
+  /// it is sent once and a moved deadline gets reminders of its own. For
+  /// release notes, «release:<id>», so each release is announced once.
   reminderKey String?
   createdAt   DateTime         @default(now())
 
