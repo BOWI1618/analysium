@@ -237,8 +237,13 @@ export const IssueRow = memo(function IssueRow({
       }}
       className={clsx(
         'group flex cursor-pointer items-center gap-2 border-b-2 border-border-strong py-2 pr-3 transition-colors',
-        depth === 1 ? 'bg-surface-sunken pl-3' : 'pl-3',
-        selected ? 'bg-marker-subtle' : 'hover:bg-surface-hover',
+        'pl-3',
+        // «ПГ» tasks: a pale tint and a thin bar on the left — visible when
+        // scanning, without shouting over priority and due-date colours.
+        issue.isPg && 'shadow-[inset_3px_0_0_var(--warning)]',
+        selected
+          ? 'bg-marker-subtle'
+          : clsx(issue.isPg ? 'bg-warning-subtle' : depth === 1 && 'bg-surface-sunken', 'hover:bg-surface-hover'),
         focused && 'ring-1 ring-accent ring-inset',
       )}
     >
@@ -285,8 +290,9 @@ export const IssueRow = memo(function IssueRow({
 
       <IssueTypeIcon type={issue.type} className={clsx('size-3.5 shrink-0', depth === 1 && 'ml-3')} />
 
-      <span className="fd-key shrink-0 truncate" style={{ width: 'var(--key-rail)' }}>
-        {issue.issueKey}
+      {/* The project a task belongs to reads better in a list than its number. */}
+      <span className="shrink-0 truncate text-2xs font-bold text-text-muted" style={{ width: 'var(--project-rail)' }} title={issue.project.name}>
+        {issue.project.name}
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col sm:min-w-24 xl:min-w-40">
@@ -659,8 +665,8 @@ export function IssueRowHeader({
       {selectable && <span className="size-3.5 shrink-0" />}
       <span className="w-4 shrink-0" />
       <span className="size-3.5 shrink-0" />
-      <span className="shrink-0" style={{ width: 'var(--key-rail)' }}>
-        Ключ
+      <span className="shrink-0" style={{ width: 'var(--project-rail)' }}>
+        Проект
       </span>
       <span className="min-w-0 flex-1 sm:min-w-24 xl:min-w-40">{name('title', 'Задача')}</span>
       {show('type') && cell('type', 'hidden w-24 sm:flex', 'Тип')}

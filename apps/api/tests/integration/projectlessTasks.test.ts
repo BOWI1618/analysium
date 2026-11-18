@@ -107,7 +107,7 @@ describe('задачи без проекта', () => {
     const first = await create();
     expect(first.statusCode).toBe(201);
     expect(first.json().key).toBe('AS');
-    expect(first.json().labels).toEqual([]);
+    expect(first.json().labels.map((l: { name: string }) => l.name).sort()).toEqual(['ДИ', 'МБО']);
     expect((await create()).json().key).toBe('AS2');
   });
 

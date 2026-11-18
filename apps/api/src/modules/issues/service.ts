@@ -218,7 +218,8 @@ export async function getBoard(
       const [rows, total, own] = await Promise.all([
         prisma.issue.findMany({
           where,
-          orderBy: [{ rank: 'asc' }, { id: 'asc' }],
+          // Columns keep the same order as the lists: priority, then deadline.
+          orderBy: orderByFor('priority', 'asc'),
           take: perColumn + 1,
           select: issueSummarySelect,
         }),
@@ -255,9 +256,9 @@ export async function getIssue(actor: ActorContext, issueId: string): Promise<Is
   const [subtasks, watchers] = await Promise.all([
     prisma.issue.findMany({
       where: { parentId: issueId, archivedAt: null },
-      // In the order they were added, oldest first — a checklist, not a board
-      // column where new cards land on top.
-      orderBy: [{ subNumber: 'asc' }],
+      // Most urgent first, then by deadline, like every list; ties in the
+      // order they were added.
+      orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { subNumber: 'asc' }],
       select: issueSummarySelect,
     }),
     issueWatchers(issueId),
@@ -553,6 +554,7 @@ export async function createIssue(
         startHasTime: Boolean(input.startDate && input.startHasTime),
         dueHasTime: Boolean(input.dueDate && input.dueHasTime),
         isMilestone: input.isMilestone ?? false,
+        isPg: input.isPg ?? false,
         // A subtask comes back with its parent, never on its own.
         recurrence: input.parentId ? null : ((input.recurrence ?? null) as never),
         rank,
@@ -851,6 +853,9 @@ export async function updateIssue(
   }
   if (patch.isMilestone !== undefined) {
     data.isMilestone = patch.isMilestone;
+  }
+  if (patch.isPg !== undefined) {
+    data.isPg = patch.isPg;
   }
   if (patch.recurrence !== undefined) {
     if (patch.recurrence && (patch.parentId !== undefined ? patch.parentId : before.parentId)) {

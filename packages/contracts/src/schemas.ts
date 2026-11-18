@@ -415,6 +415,7 @@ export const createIssueSchema = z.object({
   startHasTime: z.boolean().optional(),
   dueHasTime: z.boolean().optional(),
   isMilestone: z.boolean().optional(),
+  isPg: z.boolean().optional(),
   recurrence: z.enum(ISSUE_RECURRENCES as [string, ...string[]]).nullable().optional(),
   labelIds: z.array(cuidLike).max(20).optional(),
   /** People subscribed to the task from the start; each must be able to open it. */
@@ -457,6 +458,7 @@ export const updateIssueSchema = z
     startHasTime: z.boolean().optional(),
     dueHasTime: z.boolean().optional(),
     isMilestone: z.boolean().optional(),
+    isPg: z.boolean().optional(),
     recurrence: z.enum(ISSUE_RECURRENCES as [string, ...string[]]).nullable().optional(),
     /** Captures the current dates as the baseline the Gantt compares against. */
     setBaseline: z.boolean().optional(),
@@ -588,7 +590,8 @@ export const issueFilterSchema = z.object({
   openFirst: queryBoolean.optional(),
   sort: z
     .enum(['rank', 'created', 'updated', 'priority', 'startDate', 'dueDate', 'title', 'status'])
-    .default('rank'),
+    // Most urgent first, then by deadline — the order every list opens in.
+    .default('priority'),
   order: z.enum(['asc', 'desc']).default('asc'),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(200).optional(),

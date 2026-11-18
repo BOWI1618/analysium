@@ -27,6 +27,7 @@ const copySelect = {
   startHasTime: true,
   dueHasTime: true,
   isMilestone: true,
+  isPg: true,
   labels: { select: { labelId: true } },
 } as const;
 
@@ -60,6 +61,7 @@ export async function duplicateIssue(userId: string, issueId: string, input: Dup
     startHasTime: input.dates ? issue.startHasTime : false,
     dueHasTime: input.dates ? issue.dueHasTime : false,
     isMilestone: issue.isMilestone,
+    isPg: issue.isPg,
     labelIds: input.labels ? issue.labels.map((l) => l.labelId) : [],
   });
 

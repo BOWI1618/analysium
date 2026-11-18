@@ -186,7 +186,13 @@ export function orderByFor(
       return [{ updatedAt: dir }, { id: dir }];
     case 'priority':
       // Enum order in the schema is URGENT → NONE, so ascending == most urgent.
-      return [{ priority: dir === 'asc' ? 'asc' : 'desc' }, { rank: 'asc' }, { id: 'asc' }];
+      // Within one priority the nearest deadline leads, undated tasks last.
+      return [
+        { priority: dir === 'asc' ? 'asc' : 'desc' },
+        { dueDate: { sort: 'asc', nulls: 'last' } },
+        { rank: 'asc' },
+        { id: 'asc' },
+      ];
     case 'startDate':
       return [{ startDate: { sort: dir, nulls: 'last' } }, { id: 'asc' }];
     case 'dueDate':

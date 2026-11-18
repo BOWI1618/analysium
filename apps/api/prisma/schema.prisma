@@ -548,6 +548,8 @@ model Issue {
   carriedOverDays   Int              @default(0)
   /// A milestone has no duration and renders as a diamond on the timeline.
   isMilestone       Boolean          @default(false)
+  /// «ПГ» mark: such tasks stand out by colour in lists and on the board.
+  isPg              Boolean          @default(false)
   /// A recurring task: closing it creates the next one with its dates moved
   /// forward, and the rule moves over to that copy.
   recurrence        IssueRecurrence?

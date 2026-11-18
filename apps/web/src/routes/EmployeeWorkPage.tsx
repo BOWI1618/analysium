@@ -92,7 +92,7 @@ export function EmployeeWorkPage() {
   const { data: onlyProject } = useProject(onlyProjectId);
 
   const listFilters = useMemo<IssueFilters>(() => {
-    const base: IssueFilters = { ...chosen, assigneeId: [userId], includeSubtasks: true, sort: 'dueDate', order: 'asc' };
+    const base: IssueFilters = { ...chosen, assigneeId: [userId], includeSubtasks: true, sort: 'priority', order: 'asc' };
     switch (view) {
       case 'active':
         return { ...base, includeDone: false };
@@ -290,7 +290,7 @@ export function EmployeeWorkPage() {
               <IssueRowHeader
                 columns={columns}
                 selectable={false}
-                sort={{ key: sortedFilters.sort ?? 'dueDate', order: sortedFilters.order ?? 'asc' }}
+                sort={{ key: sortedFilters.sort ?? 'priority', order: sortedFilters.order ?? 'asc' }}
                 onSort={(next) => setBarFilters({ ...barFilters, sort: next.key, order: next.order })}
               />
               {issues.map((issue) => (

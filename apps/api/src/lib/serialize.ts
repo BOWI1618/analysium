@@ -55,6 +55,7 @@ export const issueSummarySelect = {
   dueHasTime: true,
   carriedOverDays: true,
   isMilestone: true,
+  isPg: true,
   recurrence: true,
   // Read only to count checklist items for the card; the document itself is
   // not part of the summary. Counting on read keeps the number right after
@@ -147,6 +148,7 @@ export function toIssueSummary(issue: IssueRow): IssueSummaryDto {
     dueHasTime: issue.dueHasTime,
     carriedOverDays: issue.carriedOverDays,
     isMilestone: issue.isMilestone,
+    isPg: issue.isPg,
     recurrence: issue.recurrence,
     rank: issue.rank,
     commentCount: issue._count.comments,

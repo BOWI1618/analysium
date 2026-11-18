@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import type { IssueDetailDto, IssueRecurrence, ProjectDto, UserSummaryDto } from '@flowdesk/contracts';
-import { ISSUE_RECURRENCES, Permission, impliedStartDate } from '@flowdesk/contracts';
+import { ISSUE_RECURRENCES, Permission, compareByPriorityAndDue, impliedStartDate } from '@flowdesk/contracts';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import {
   ArrowLeft,
@@ -98,6 +98,8 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   const toast = useToast();
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
   const openIssue = useUiStore((s) => s.openIssue);
+  const openSubtask = useUiStore((s) => s.openSubtask);
+  const closeSubtask = useUiStore((s) => s.closeSubtask);
 
   // Issue shortcuts press the very buttons a mouse would, found inside this
   // issue: one code path, and nothing to fall out of sync with the fields. They
@@ -202,7 +204,11 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   return (
     <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-surface">
       {/* ------------------------------------------------------------ header */}
-      <header className="flex shrink-0 items-center gap-2 border-b-2 border-border-strong bg-surface px-3 py-2 shadow-sm">
+      {/* In a window the header is what moves it. */}
+      <header
+        data-dialog-drag=""
+        className="flex shrink-0 items-center gap-2 border-b-2 border-border-strong bg-surface px-3 py-2 shadow-sm"
+      >
         {canEdit && project && (
           <DoneToggle
             done={isClosedStatus(issue.status)}
@@ -392,6 +398,8 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
             <button
               type="button"
               onClick={() => {
+                // From a subtask window the parent is usually right underneath.
+                closeSubtask();
                 if (variant === 'page') navigate(`/issue/${issue.parent!.issueKey}`);
                 else openIssue(issue.parent!.id);
               }}
@@ -566,15 +574,21 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                 <p className="text-xs text-text-subtle">Разбейте задачу на части.</p>
               ) : (
                 <ul className="divide-y-2 divide-border-strong border-2 border-border-strong">
-                  {issue.subtasks.map((subtask) => (
+                  {/* Same order as every list: priority, then deadline. */}
+                  {[...issue.subtasks].sort(compareByPriorityAndDue).map((subtask) => (
                     <li key={subtask.id}>
                       <button
                         type="button"
-                        onClick={() => openIssue(subtask.id)}
-                        className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-surface-hover"
+                        onClick={() => openSubtask(subtask.id)}
+                        className={clsx(
+                          'flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-surface-hover',
+                          subtask.isPg && 'bg-warning-subtle shadow-[inset_3px_0_0_var(--warning)]',
+                        )}
                       >
                         <StatusDot status={subtask.status} className="size-3" />
-                        <span className="fd-key">{subtask.issueKey}</span>
+                        <span className="max-w-32 shrink-0 truncate text-2xs font-bold text-text-muted" title={subtask.project.name}>
+                          {subtask.project.name}
+                        </span>
                         <span
                           className={clsx(
                             'min-w-0 flex-1 truncate text-sm',
@@ -826,6 +840,20 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
                 </select>
               </Field>
             )}
+
+            <Field label="ПГ">
+              <label className="flex h-7 cursor-pointer items-center gap-2 text-sm has-[:disabled]:cursor-default">
+                <input
+                  type="checkbox"
+                  aria-label="ПГ"
+                  checked={issue.isPg}
+                  disabled={!canEdit}
+                  onChange={(event) => patch({ isPg: event.target.checked })}
+                  className="size-3.5 cursor-pointer accent-[var(--accent)] disabled:cursor-default"
+                />
+                <span className="text-text-muted">Выделять в списках</span>
+              </label>
+            </Field>
 
             <div className="fd-num space-y-1 bg-surface-sunken px-3.5 py-3 text-2xs text-text-subtle">
               <p title={fullDate(issue.createdAt)}>Создано {relativeTime(issue.createdAt)}</p>

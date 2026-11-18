@@ -71,7 +71,7 @@ export function ListPage() {
   const openIssue = useUiStore((s) => s.openIssue);
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
 
-  const [filters, setFilters] = useFilterState({ sort: 'updated', order: 'desc' });
+  const [filters, setFilters] = useFilterState({ sort: 'priority', order: 'asc' });
   const [columns, setColumns] = useLocalStorage<ListColumn[]>('flowdesk.list-columns', DEFAULT_COLUMNS);
   const [widths, resizeColumn] = useColumnWidths('flowdesk.list-widths');
   const [groupBy, setGroupBy] = useLocalStorage<ListGroupBy>('flowdesk.list-group', 'none');
@@ -246,7 +246,7 @@ export function ListPage() {
         <IssueRowHeader
           columns={columns}
           onResize={resizeColumn}
-          sort={{ key: filters.sort ?? 'updated', order: filters.order ?? 'desc' }}
+          sort={{ key: filters.sort ?? 'priority', order: filters.order ?? 'asc' }}
           onSort={(next) => setFilters({ ...filters, sort: next.key, order: next.order })}
         />
         {canCreate && <QuickAddRow projectId={projectId} />}

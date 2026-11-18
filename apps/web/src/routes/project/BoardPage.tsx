@@ -24,7 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
-import { Permission, StatusCategory } from '@flowdesk/contracts';
+import { Permission, StatusCategory, compareByPriorityAndDue } from '@flowdesk/contracts';
 import { Plus, AlertTriangle, ArrowDownToLine } from 'lucide-react';
 import type { StatusDto } from '@flowdesk/contracts';
 import { useSession } from '~/app/session';
@@ -103,7 +103,16 @@ export function BoardPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const columns = board?.columns ?? [];
+  // Cards always stand by priority, then deadline — also right after an
+  // optimistic move or a priority change, before the server answers.
+  const columns = useMemo(
+    () =>
+      (board?.columns ?? []).map((column) => ({
+        ...column,
+        issues: [...column.issues].sort(compareByPriorityAndDue),
+      })),
+    [board],
+  );
 
   const findIssue = (id: string): { issue: IssueSummaryDto; column: BoardColumnDto } | null => {
     for (const column of columns) {

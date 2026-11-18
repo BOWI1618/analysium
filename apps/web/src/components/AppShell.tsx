@@ -11,6 +11,7 @@ import { CommandPalette } from './CommandPalette';
 import { CreateIssueDialog } from './CreateIssueDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { IssueDetailPanel } from '~/features/issues/IssueDetailPanel';
+import { SubtaskWindow } from '~/features/issues/SubtaskWindow';
 
 /**
  * Application chrome: sidebar + routed content, plus the global overlays
@@ -97,6 +98,7 @@ export function AppShell() {
       <CreateIssueDialog />
       <ShortcutsDialog />
       <IssueDetailPanel />
+      <SubtaskWindow />
     </div>
   );
 }

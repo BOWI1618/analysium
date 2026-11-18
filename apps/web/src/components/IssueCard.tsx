@@ -77,7 +77,9 @@ export const IssueCard = memo(function IssueCard({
       role="button"
       aria-label={`${issue.issueKey}: ${issue.title}`}
       className={clsx(
-        'group cursor-grab border-2 bg-surface p-3 text-left shadow-sm',
+        'group cursor-grab border-2 p-3 text-left shadow-sm',
+        // «ПГ» tasks: the same pale tint as in lists.
+        issue.isPg ? 'bg-warning-subtle' : 'bg-surface',
         'transition-[background-color,border-color,box-shadow,translate] duration-100',
         'hover:-translate-x-px hover:-translate-y-px hover:shadow-md active:translate-x-px active:translate-y-px active:shadow-none',
         isSelected ? 'border-accent shadow-md' : 'border-border-strong',

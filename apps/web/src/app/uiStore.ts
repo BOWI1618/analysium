@@ -34,6 +34,11 @@ interface UiState {
   /** Issue currently shown in the side panel (null = closed). */
   openIssueId: string | null;
   /**
+   * Subtask shown in a window over its parent task (null = closed). A window
+   * rather than the side panel, so the parent stays open underneath.
+   */
+  openSubtaskId: string | null;
+  /**
    * Issues whose subtasks are unfolded in lists. Kept here rather than in the
    * row: long lists are virtualised, and a row scrolled away and back would
    * otherwise fold up again.
@@ -49,6 +54,8 @@ interface UiState {
   setShortcutsOpen: (open: boolean) => void;
   openIssue: (issueId: string) => void;
   closeIssue: () => void;
+  openSubtask: (issueId: string) => void;
+  closeSubtask: () => void;
   toggleIssueExpanded: (issueId: string, expanded?: boolean) => void;
 }
 
@@ -78,6 +85,7 @@ export const useUiStore = create<UiState>((set) => ({
   createIssueDefaults: null,
   shortcutsOpen: false,
   openIssueId: null,
+  openSubtaskId: null,
   expandedIssueIds: {},
 
   toggleSidebar: () =>
@@ -97,6 +105,8 @@ export const useUiStore = create<UiState>((set) => ({
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
   openIssue: (issueId) => set({ openIssueId: issueId }),
   closeIssue: () => set({ openIssueId: null }),
+  openSubtask: (issueId) => set({ openSubtaskId: issueId }),
+  closeSubtask: () => set({ openSubtaskId: null }),
   toggleIssueExpanded: (issueId, expanded) =>
     set((state) => {
       const next = { ...state.expandedIssueIds };

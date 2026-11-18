@@ -26,6 +26,15 @@ export const DEFAULT_STATUSES: { name: string; category: StatusCategory; color: 
   { name: 'Готово', category: SC.COMPLETED, color: '#22c55e' },
 ];
 
+/**
+ * Labels every project carries from the start. Existing projects got them in
+ * the migration `20261118120000_default_labels_pg`; keep the two in step.
+ */
+export const DEFAULT_LABELS: { name: string; color: string }[] = [
+  { name: 'МБО', color: '#0083ca' },
+  { name: 'ДИ', color: '#283a97' },
+];
+
 /** `completedAt` is derived from the status category, never set by the client. */
 export function nextCompletedAt(
   category: StatusCategory,
@@ -257,6 +266,12 @@ export function compareIssues(a: SortableIssue, b: SortableIssue, key: SortKey, 
       // Higher weight first when ascending — "most urgent at the top" is what
       // users mean by sorting by priority.
       result = PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority];
+      if (result === 0) {
+        // Same priority: nearest deadline first, whichever way priority runs.
+        const ta = time(a.dueDate);
+        const tb = time(b.dueDate);
+        if (ta !== tb) return ta === null ? 1 : tb === null ? -1 : ta - tb;
+      }
       break;
     case 'startDate':
     case 'dueDate': {

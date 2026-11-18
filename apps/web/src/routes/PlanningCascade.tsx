@@ -127,7 +127,7 @@ export function PlanningCascade() {
   /* --------------------------------------------------------------- center */
 
   const centerFilters = useMemo<IssueFilters>(
-    () => ({ ...chosen, ...state.filters, assigneeId: [personId], includeSubtasks: true, sort: 'dueDate', order: 'asc' }),
+    () => ({ ...chosen, ...state.filters, assigneeId: [personId], includeSubtasks: true, sort: 'priority', order: 'asc' }),
     [chosen, state, personId],
   );
   const center = useIssueList({ workspaceId }, centerFilters, { enabled: Boolean(personId) });
@@ -634,7 +634,7 @@ function PersonColumn({
       ...state.filters,
       assigneeId: scope === 'own' ? [report.user.id] : report.belowUserIds,
       includeSubtasks: true,
-      sort: 'dueDate',
+      sort: 'priority',
       order: 'asc',
     }),
     [chosen, state, scope, report],

@@ -244,8 +244,8 @@ test.describe('первый запуск без демо-данных', () => {
     await page.getByRole('link', { name: 'Настройки' }).click();
     await expect(page.getByRole('button', { name: 'Основное' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Статусы' })).toBeVisible();
-    // The only label here is the one created from the task form: no starter set.
-    await expect(page.getByRole('button', { name: /^Удалить метку/ })).toHaveCount(1);
+    // The shared МБО and ДИ every project has, plus the one created from the task form.
+    await expect(page.getByRole('button', { name: /^Удалить метку/ })).toHaveCount(3);
     await page.getByLabel('Новая метка').fill('временная');
     await page.getByRole('button', { name: 'Добавить метку' }).click();
     await page.getByRole('button', { name: 'Удалить метку «временная»' }).click();
@@ -406,6 +406,33 @@ test.describe('подзадачи и спринты', () => {
       await expect(panel.getByRole('heading', { name: 'Большая задача' }).or(panel.getByText('Большая задача').first())).toBeVisible();
       await expect(panel.getByRole('button', { name: /Подзадача задачи/ })).toHaveCount(0);
       await page.keyboard.press('Escape');
+    });
+
+    await test.step('из карточки задачи подзадача открывается окном поверх, окно двигается', async () => {
+      await page.getByText('Большая задача').first().click();
+      const panel = page.getByRole('dialog', { name: 'Детали задачи' });
+      await panel.getByRole('region', { name: 'Подзадачи' }).getByRole('button', { name: /Кусочек работы/ }).click();
+      const win = page.getByRole('dialog', { name: 'Подзадача' });
+      await expect(win.getByText('Кусочек работы').first()).toBeVisible({ timeout: 15_000 });
+      // The parent stays open underneath.
+      await expect(panel).toBeVisible();
+
+      const handle = win.locator('header[data-dialog-drag]');
+      const before = (await win.boundingBox())!;
+      const grip = (await handle.boundingBox())!;
+      await page.mouse.move(grip.x + grip.width / 2, grip.y + 3);
+      await page.mouse.down();
+      await page.mouse.move(grip.x + grip.width / 2 - 120, grip.y + 63, { steps: 5 });
+      await page.mouse.up();
+      const after = (await win.boundingBox())!;
+      expect(Math.round(after.x - before.x)).toBe(-120);
+      expect(Math.round(after.y - before.y)).toBe(60);
+
+      await page.keyboard.press('Escape');
+      await expect(win).toBeHidden();
+      await expect(panel).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
     });
 
     await test.step('подзадача, назначенная мне, видна в «Моих задачах» с ключом задачи', async () => {

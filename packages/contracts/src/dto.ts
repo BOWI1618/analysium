@@ -197,6 +197,8 @@ export interface IssueSummaryDto {
   /** Days the task was carried over to the next day unfinished. */
   carriedOverDays: number;
   isMilestone: boolean;
+  /** «ПГ» mark: the task is tinted in lists and on the board. */
+  isPg: boolean;
   /** Set on a recurring task: closing it creates the next one. */
   recurrence: IssueRecurrence | null;
   rank: string;

@@ -76,6 +76,24 @@ export const PRIORITY_WEIGHT: Record<IssuePriority, number> = {
 };
 
 /**
+ * The order every list, board column and subtask list shows tasks in: most
+ * urgent first, then the nearest deadline, undated tasks last. Mirrors the
+ * server's «priority» sort so an edit made on the client lands where a reload
+ * would put it.
+ */
+export function compareByPriorityAndDue(
+  a: { priority: IssuePriority; dueDate: string | null },
+  b: { priority: IssuePriority; dueDate: string | null },
+): number {
+  const byPriority = PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority];
+  if (byPriority !== 0) return byPriority;
+  if (a.dueDate === b.dueDate) return 0;
+  if (!a.dueDate) return 1;
+  if (!b.dueDate) return -1;
+  return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+}
+
+/**
  * Status categories. Project owners may create arbitrary named statuses,
  * but every status maps onto one of these categories so that cross-project
  * logic (velocity, "done", burndown) stays well defined.

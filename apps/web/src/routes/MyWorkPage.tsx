@@ -59,9 +59,9 @@ function presetFor(tab: Tab): IssueFilters {
     case 'assigned':
       return { assigneeId: ['@me'], includeDone: false, includeSubtasks: true, sort: 'priority', order: 'asc' };
     case 'created':
-      return { reporterId: ['@me'], sort: 'created', order: 'desc' };
+      return { reporterId: ['@me'], sort: 'priority', order: 'asc' };
     case 'overdue':
-      return { assigneeId: ['@me'], isOverdue: true, includeSubtasks: true, sort: 'dueDate', order: 'asc' };
+      return { assigneeId: ['@me'], isOverdue: true, includeSubtasks: true, sort: 'priority', order: 'asc' };
     case 'upcoming': {
       const now = new Date();
       return {
@@ -70,7 +70,7 @@ function presetFor(tab: Tab): IssueFilters {
         includeSubtasks: true,
         dueAfter: now.toISOString(),
         dueBefore: new Date(now.getTime() + UPCOMING_DAYS * 86_400_000).toISOString(),
-        sort: 'dueDate',
+        sort: 'priority',
         order: 'asc',
       };
     }
@@ -246,7 +246,7 @@ export function MyWorkPage() {
               columns={columns}
               selectable={false}
               onResize={resizeColumn}
-              sort={{ key: filters.sort ?? 'rank', order: filters.order ?? 'asc' }}
+              sort={{ key: filters.sort ?? 'priority', order: filters.order ?? 'asc' }}
               onSort={(next) => setExtraFilters({ ...extraFilters, sort: next.key, order: next.order })}
             />
             {issues.map((issue) => (

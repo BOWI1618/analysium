@@ -486,6 +486,7 @@ export function CreateIssueDialog() {
       dirty={dirty}
       title="Новая задача"
       size="lg"
+      draggable
       footer={
         // Wraps on a phone: the three buttons and the checkbox are wider than a
         // 390px screen, and in one row «Создать» ran off its edge.

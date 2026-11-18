@@ -127,5 +127,7 @@
   --topbar-height: 48px;
   /* Fixed rail so issue keys align vertically down a list. */
   --key-rail: 4.25rem;
+  /* Project name at the start of a list row, in place of the issue number. */
+  --project-rail: 7.5rem;
   --row-height: 2.25rem;
 }

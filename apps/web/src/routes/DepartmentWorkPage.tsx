@@ -97,8 +97,8 @@ export function DepartmentWorkPage() {
       ...(chosen.statusCategory?.length ? { includeDone: undefined } : {}),
       // People's work includes their subtasks, whoever holds the parent.
       includeSubtasks: true,
-      // A column pressed in the header puts its order over the soonest deadline first.
-      sort: barFilters.sort ?? 'dueDate',
+      // A column pressed in the header puts its order over priority, then deadline.
+      sort: barFilters.sort ?? 'priority',
       order: barFilters.sort ? (barFilters.order ?? 'asc') : 'asc',
     }),
     [chosen, barFilters.sort, barFilters.order],
@@ -386,7 +386,7 @@ export function DepartmentWorkPage() {
                     <>
                       <IssueRowHeader
                         columns={COLUMNS}
-                        sort={{ key: listFilters.sort ?? 'dueDate', order: listFilters.order ?? 'asc' }}
+                        sort={{ key: listFilters.sort ?? 'priority', order: listFilters.order ?? 'asc' }}
                         onSort={(next) => setBarFilters({ ...barFilters, sort: next.key, order: next.order })}
                       />
                       {issues.map((issue) => (

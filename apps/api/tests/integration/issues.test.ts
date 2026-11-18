@@ -209,8 +209,56 @@ describe('updating an issue', () => {
   });
 });
 
+describe('порядок задач', () => {
+  it('список, колонка доски и подзадачи — по приоритету, внутри приоритета по сроку', async () => {
+    const own = await createProject(app, owner, { name: 'Порядок' });
+    const todo = own.statuses.find((s: { name: string }) => s.name === 'К выполнению')!;
+    const make = (title: string, priority: string, dueDate: string | null, extra: Record<string, unknown> = {}) =>
+      createIssue(app, owner, own.id, { title, priority, dueDate, statusId: todo.id, ...extra });
+    const lowSoon = await make('Низкий, скоро', 'LOW', '2026-12-01T12:00:00.000Z');
+    const highLate = await make('Высокий, позже', 'HIGH', '2026-12-20T12:00:00.000Z');
+    const highNone = await make('Высокий, без срока', 'HIGH', null);
+    const highSoon = await make('Высокий, скоро', 'HIGH', '2026-12-05T12:00:00.000Z');
+    const expected = [highSoon.id, highLate.id, highNone.id, lowSoon.id];
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/api/v1/projects/${own.id}/issues`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(list.json().items.map((i: { id: string }) => i.id)).toEqual(expected);
+
+    const board = await app.inject({
+      method: 'GET',
+      url: `/api/v1/projects/${own.id}/board`,
+      headers: { cookie: owner.cookie },
+    });
+    const column = board.json().columns.find((c: { status: { id: string } }) => c.status.id === todo.id);
+    expect(column.issues.map((i: { id: string }) => i.id)).toEqual(expected);
+
+    const parent = await make('Родитель', 'MEDIUM', null);
+    const subLow = await make('Часть низкая', 'LOW', null, { type: 'SUBTASK', parentId: parent.id });
+    const subUrgent = await make('Часть срочная', 'URGENT', null, { type: 'SUBTASK', parentId: parent.id });
+    const detail = await app.inject({ method: 'GET', url: `/api/v1/issues/${parent.id}`, headers: { cookie: owner.cookie } });
+    expect(detail.json().subtasks.map((s: { id: string }) => s.id)).toEqual([subUrgent.id, subLow.id]);
+  });
+
+  it('отметка ПГ ставится и снимается', async () => {
+    const issue = await createIssue(app, owner, project.id, { title: 'С отметкой ПГ' });
+    expect(issue.isPg).toBe(false);
+    const marked = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/issues/${issue.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { isPg: true },
+    });
+    expect(marked.statusCode).toBe(200);
+    expect(marked.json().isPg).toBe(true);
+  });
+});
+
 describe('subtasks', () => {
-  it('are listed oldest first', async () => {
+  it('of the same priority are listed oldest first', async () => {
     const parent = await createIssue(app, owner, project.id, { title: 'Родитель списка' });
     const first = await createIssue(app, owner, project.id, { title: 'Первая', type: 'SUBTASK', parentId: parent.id });
     const second = await createIssue(app, owner, project.id, { title: 'Вторая', type: 'SUBTASK', parentId: parent.id });

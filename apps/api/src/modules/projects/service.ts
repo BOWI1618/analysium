@@ -12,7 +12,7 @@ import { conflict, forbidden, notFound, badRequest } from '../../lib/errors';
 import { audit } from '../../lib/audit';
 import { emit } from '../../realtime/eventBus';
 import { assertMayGive, resolveProjectRole, type RoleRef } from '../roles/service';
-import { DEFAULT_STATUSES, isDoneCategory, nextCompletedAt } from '../../domain/issueRules';
+import { DEFAULT_LABELS, DEFAULT_STATUSES, isDoneCategory, nextCompletedAt } from '../../domain/issueRules';
 import { uniqueProjectKey } from './key';
 import { labelSelect, statusSelect, toLabel, toSprint, toStatus, toUserSummary, sprintInclude } from '../../lib/serialize';
 
@@ -151,7 +151,10 @@ export async function createProject(
       })),
     });
 
-    // No starter labels: every team names its own, from the label list.
+    // The team's shared labels; anything else each project names itself.
+    await tx.label.createMany({
+      data: DEFAULT_LABELS.map((l) => ({ projectId: created.id, name: l.name, color: l.color })),
+    });
     await tx.projectMember.create({
       data: { projectId: created.id, userId: input.leadId ?? actor.userId, role: 'LEAD' },
     });
@@ -360,6 +363,9 @@ export async function ensureSystemProject(workspaceId: string): Promise<{ id: st
           wipLimit: null,
           isDefault: index === 1,
         })),
+      });
+      await tx.label.createMany({
+        data: DEFAULT_LABELS.map((l) => ({ projectId: created.id, name: l.name, color: l.color })),
       });
       return created;
     });

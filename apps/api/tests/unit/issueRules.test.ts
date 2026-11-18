@@ -217,6 +217,14 @@ describe('compareIssues', () => {
     expect(compareIssues(urgent, low, 'priority', 'asc')).toBeLessThan(0);
   });
 
+  it('при одном приоритете выше та, у которой срок ближе; без срока — внизу', () => {
+    const soon = { ...base, rank: 'Z', dueDate: '2026-02-01T00:00:00.000Z' };
+    const later = { ...base, rank: 'A', dueDate: '2026-03-01T00:00:00.000Z' };
+    const without = { ...base, rank: 'A', dueDate: null };
+    expect(compareIssues(soon, later, 'priority', 'asc')).toBeLessThan(0);
+    expect(compareIssues(without, later, 'priority', 'asc')).toBeGreaterThan(0);
+  });
+
   it('always sinks issues without a due date, in both directions', () => {
     const withDate = { ...base, dueDate: '2026-02-01T00:00:00.000Z' };
     const without = { ...base, dueDate: null };

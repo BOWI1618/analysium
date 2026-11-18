@@ -6,7 +6,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
@@ -126,6 +128,69 @@ export interface DialogProps {
    * `DialogCloseButton` asks before throwing it away.
    */
   dirty?: boolean;
+  /**
+   * The window can be moved by its header — or by any element inside marked
+   * `data-dialog-drag` — so what lies underneath can be looked at.
+   */
+  draggable?: boolean;
+  /** Children fill the window edge to edge, with no padding of the dialog's own. */
+  bare?: boolean;
+  /** Accessible name when there is no string `title`. */
+  label?: string;
+}
+
+/** Controls a press on which never starts moving the window. */
+const NOT_A_DRAG_HANDLE = 'button, a, input, select, textarea, label, [role="button"], [contenteditable="true"]';
+
+/**
+ * Moving a window by its handle. The offset is kept per opening: a window
+ * opened again starts centred. Part of the header always stays on screen, so
+ * the window can be grabbed back.
+ */
+function useDragOffset(open: boolean, enabled: boolean, panelRef: RefObject<HTMLDivElement | null>) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (!open) setOffset({ x: 0, y: 0 });
+  }, [open]);
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!enabled || event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    const handle = target.closest('[data-dialog-drag]');
+    if (!handle || !panelRef.current?.contains(handle) || target.closest(NOT_A_DRAG_HANDLE)) return;
+
+    event.preventDefault();
+    const rect = panelRef.current.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const start = offset;
+    // How far the window may travel: at least 120px of it and its top edge stay visible.
+    const keep = 120;
+    const minDx = keep - rect.right;
+    const maxDx = window.innerWidth - keep - rect.left;
+    const minDy = -rect.top;
+    const maxDy = window.innerHeight - 48 - rect.top;
+
+    const onMove = (move: PointerEvent) => {
+      const dx = Math.min(maxDx, Math.max(minDx, move.clientX - startX));
+      const dy = Math.min(maxDy, Math.max(minDy, move.clientY - startY));
+      setOffset({ x: start.x + dx, y: start.y + dy });
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      document.body.style.userSelect = '';
+    };
+    // Dragging must not select the text it passes over.
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
+
+  return { offset, onPointerDown };
 }
 
 const SIZES = {
@@ -149,8 +214,12 @@ export function Dialog({
   size = 'md',
   closeOnOverlay = true,
   dirty = false,
+  draggable = false,
+  bare = false,
+  label,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const drag = useDragOffset(open, draggable, panelRef);
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const guard = useDiscardGuard(onClose, dirty);
   // Stable across renders: re-running the effect below would move focus
@@ -227,15 +296,22 @@ export function Dialog({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === 'string' ? title : undefined}
+        aria-label={typeof title === 'string' ? title : label}
+        onPointerDown={draggable ? drag.onPointerDown : undefined}
+        style={draggable ? { translate: `${drag.offset.x}px ${drag.offset.y}px` } : undefined}
         className={clsx(
           'relative z-10 my-auto w-full rounded-lg border-2 border-border-strong bg-surface shadow-xl',
           'animate-slide-up',
+          bare && 'overflow-hidden',
+          draggable && '[&_[data-dialog-drag]]:cursor-move',
           SIZES[size],
         )}
       >
         {title && (
-          <header className="flex items-start justify-between gap-4 border-b-2 border-border-strong bg-surface-raised px-4 py-3">
+          <header
+            data-dialog-drag={draggable ? '' : undefined}
+            className="flex items-start justify-between gap-4 border-b-2 border-border-strong bg-surface-raised px-4 py-3"
+          >
             <div className="min-w-0">
               <h2 className="text-md font-semibold text-text">{title}</h2>
               {description && <p className="mt-0.5 text-xs text-text-muted">{description}</p>}
@@ -246,7 +322,7 @@ export function Dialog({
           </header>
         )}
         <guard.Provider value={guard.scope}>
-          <div className="px-4 py-4">{children}</div>
+          {bare ? children : <div className="px-4 py-4">{children}</div>}
           {footer && (
             <footer className="flex items-center justify-end gap-2 border-t-2 border-border-strong bg-surface-raised px-4 py-3">
               {footer}

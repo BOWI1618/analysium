@@ -398,7 +398,7 @@ export function FilterBar({
                 {Object.entries(SORT_LABELS).map(([key, label]) => (
                   <MenuItem
                     key={key}
-                    selected={(filters.sort ?? 'rank') === key}
+                    selected={(filters.sort ?? 'priority') === key}
                     onSelect={() => patch({ sort: key as IssueFilters['sort'] })}
                   >
                     {label}
