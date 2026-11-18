@@ -34,7 +34,6 @@ export interface IssueCardProps {
   onClick?: () => void;
   isDragging?: boolean;
   isSelected?: boolean;
-  showProject?: boolean;
   className?: string;
   fields?: IssueCardFields;
   /** Shows the checkbox that closes the task and opens it again. */
@@ -53,7 +52,6 @@ export const IssueCard = memo(function IssueCard({
   onClick,
   isDragging,
   isSelected,
-  showProject,
   className,
   fields = ALL_CARD_FIELDS,
   onToggleDone,
@@ -87,16 +85,13 @@ export const IssueCard = memo(function IssueCard({
         className,
       )}
     >
-      {/* Header: the key leads, because a column is read as an index */}
-      <div className="flex items-center gap-1.5">
+      {/* Header: the project (or subproject) the task is in — read more easily than its number */}
+      <div className="flex min-w-0 items-center gap-1.5">
         {onToggleDone && <DoneToggle done={done} issueKey={issue.issueKey} onToggle={onToggleDone} />}
         <SubprojectMark project={issue.project} />
-        <span className="fd-key font-bold text-text">{issue.issueKey}</span>
-        {showProject && (
-          <span className="truncate text-2xs text-text-subtle" title={issue.project.name}>
-            · {issue.project.name}
-          </span>
-        )}
+        <span className="min-w-0 truncate text-2xs font-bold text-text-muted" title={issue.project.name}>
+          {issue.project.name}
+        </span>
         <span className="ml-auto flex items-center gap-1.5">
           {fields.priority && issue.priority !== 'NONE' && <PriorityIcon priority={issue.priority} className="size-3.5" />}
           {fields.type && <IssueTypeIcon type={issue.type} className="size-3.5" />}

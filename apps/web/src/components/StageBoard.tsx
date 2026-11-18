@@ -173,7 +173,7 @@ export function StageBoard({
       <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }}>
         {dragging && (
           <div className="w-72 rotate-1" style={{ boxShadow: 'var(--shadow-drag)' }}>
-            <IssueCard issue={dragging} showProject />
+            <IssueCard issue={dragging} />
           </div>
         )}
       </DragOverlay>
@@ -260,7 +260,7 @@ function DraggableCard({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: issue.id });
   return (
     <div ref={setNodeRef} {...attributes} {...listeners}>
-      <IssueCard issue={issue} showProject isDragging={isDragging} onClick={onClick} onToggleDone={onToggleDone} />
+      <IssueCard issue={issue} isDragging={isDragging} onClick={onClick} onToggleDone={onToggleDone} />
     </div>
   );
 }

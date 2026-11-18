@@ -175,10 +175,11 @@ export function HomePage() {
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-hover"
                         >
                           <span
-                            className="fd-key shrink-0 truncate font-bold text-text"
-                            style={{ width: 'var(--key-rail)' }}
+                            className="shrink-0 truncate text-2xs font-bold text-text-muted"
+                            style={{ width: 'var(--project-rail)' }}
+                            title={issue.project.name}
                           >
-                            {issue.issueKey}
+                            {issue.project.name}
                           </span>
                           <IssueTypeIcon type={issue.type} className="size-3.5 shrink-0" />
                           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{issue.title}</span>
@@ -289,8 +290,12 @@ export function HomePage() {
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-hover"
                       >
                         <Avatar user={issue.assignee} size="md" />
-                        <span className="fd-key shrink-0 truncate font-bold text-text" style={{ width: 'var(--key-rail)' }}>
-                          {issue.issueKey}
+                        <span
+                          className="shrink-0 truncate text-2xs font-bold text-text-muted"
+                          style={{ width: 'var(--project-rail)' }}
+                          title={issue.project.name}
+                        >
+                          {issue.project.name}
                         </span>
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{issue.title}</span>
                         <StatusDot status={issue.status} className="size-3 shrink-0" />

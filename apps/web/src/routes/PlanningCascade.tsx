@@ -854,7 +854,6 @@ function TaskCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <IssueTypeIcon type={issue.type} className="size-3.5 shrink-0" />
-            <span className="fd-key shrink-0">{issue.issueKey}</span>
             <span className="inline-flex min-w-0 items-center gap-1 text-2xs text-text-subtle" title={`Проект: ${issue.project.name}`}>
               <ProjectIcon icon={issue.project.icon} color={issue.project.color} size="sm" />
               <span className="truncate">{issue.project.name}</span>

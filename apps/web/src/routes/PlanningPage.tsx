@@ -324,7 +324,9 @@ function PlanningPool() {
                             onClick={() => openIssue(issue.id)}
                             className="flex w-full items-center gap-2 border-b-2 border-border-strong px-3 py-1.5 text-left hover:bg-surface-hover"
                           >
-                            <span className="fd-key shrink-0">{issue.issueKey}</span>
+                            <span className="max-w-28 shrink-0 truncate text-2xs font-bold text-text-muted" title={issue.project.name}>
+                              {issue.project.name}
+                            </span>
                             <span className="min-w-0 flex-1 truncate text-xs font-bold">{issue.title}</span>
                             {issue.dueDate && (
                               <DueDateChip value={issue.dueDate} hasTime={issue.dueHasTime} carriedDays={issue.carriedOverDays} />
