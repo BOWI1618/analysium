@@ -146,7 +146,7 @@ Excel (кнопка «Выгрузить»).
 ```
 packages/contracts    типы, Zod-схемы, права, realtime-события, ранжирование
 apps/api              Fastify 5 + Prisma + PostgreSQL
-apps/web              React 19 + Vite + TanStack Query + Tailwind v4
+apps/web              React 18 + Vite + TanStack Query + Tailwind v4
 e2e                   Playwright
 ```
 
@@ -212,7 +212,7 @@ npm run dev:web      # только фронтенд
 
 npm run db:migrate   # создать миграцию
 npm run db:seed      # перезалить демо-данные
-npm run db:studio    # Prisma Studio
+npm run db:studio --workspace=@flowdesk/api   # Prisma Studio
 
 npm test             # unit + интеграционные (нужен Postgres)
 npm run test:e2e     # Playwright
