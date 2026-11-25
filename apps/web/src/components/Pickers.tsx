@@ -118,8 +118,8 @@ export function TypePicker({ value, onChange, disabled, children, align = 'start
       {!disabled && (
         <MenuContent align={align} label="Изменить тип задачи" width={180}>
           <MenuLabel>Тип</MenuLabel>
-          {/* A subtask is made from its parent, not picked as a type; epics are gone from the product. */}
-          {ISSUE_TYPES.filter((t) => t !== 'SUBTASK' && t !== 'EPIC').map((type) => (
+          {/* Subtasks come from a parent, epics are retired, and stories are no longer selectable. */}
+          {ISSUE_TYPES.filter((t) => t !== 'SUBTASK' && t !== 'EPIC' && t !== 'STORY').map((type) => (
             <MenuItem
               key={type}
               icon={<IssueTypeIcon type={type as IssueType} withTooltip={false} className="size-3.5" />}

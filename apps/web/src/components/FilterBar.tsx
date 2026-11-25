@@ -257,7 +257,7 @@ export function FilterBar({
 
         <MultiSelect
           title="Тип"
-          options={ISSUE_TYPES.filter((t) => t !== 'EPIC').map((t) => ({
+          options={ISSUE_TYPES.filter((t) => t !== 'EPIC' && t !== 'STORY').map((t) => ({
             value: t,
             label: ISSUE_TYPE_META[t as IssueType].label,
             icon: <IssueTypeIcon type={t as IssueType} withTooltip={false} className="size-3.5" />,
