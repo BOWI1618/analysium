@@ -48,7 +48,7 @@ export function TaskLinkPicker({ workspaceId, insert, preview }: {
       width={280}
       trigger={({ open, toggle }) => (
         <Button variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()} onClick={toggle} aria-expanded={open}>
-          <ListChecks className="size-3.5" /> Задача
+          <ListChecks className="size-3.5" /> Ссылка на задачу
         </Button>
       )}
     >

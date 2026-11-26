@@ -41,7 +41,7 @@ test('план форматирует отдельную строку и отк�
 
   const taskPicker = page.getByRole('dialog', { name: 'Ссылка на задачу' });
   const searchTask = async () => {
-    await page.getByRole('button', { name: 'Задача', exact: true }).click();
+    await page.getByRole('button', { name: 'Ссылка на задачу', exact: true }).click();
     await taskPicker.getByRole('textbox', { name: 'Поиск задачи' }).fill(title);
     await expect(taskPicker.getByRole('button', { name: title, exact: true })).toBeVisible();
   };

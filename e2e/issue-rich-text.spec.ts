@@ -32,7 +32,7 @@ test('чек-листы в новой задаче, сохранённом оп�
 
   const picker = page.getByRole('dialog', { name: 'Ссылка на задачу' });
   const search = async () => {
-    await dialog.getByRole('button', { name: 'Задача', exact: true }).last().click();
+    await dialog.getByRole('button', { name: 'Ссылка на задачу', exact: true }).click();
     await picker.getByRole('textbox', { name: 'Поиск задачи' }).fill(linkedTitle);
   };
   await search();
