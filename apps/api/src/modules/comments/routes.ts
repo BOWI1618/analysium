@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { createCommentSchema, toggleReactionSchema, updateCommentSchema } from '@flowdesk/contracts';
+import { checkCommentItemSchema, createCommentSchema, toggleReactionSchema, updateCommentSchema } from '@flowdesk/contracts';
 import { parse } from '../../lib/validate';
 import { issueContext, workspaceContext } from '../../lib/context';
 import { currentUser, requireAuth } from '../../plugins/auth';
@@ -35,6 +35,13 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
     const actor = await workspaceContext(currentUser(req).id, comment.issue.project.workspaceId);
     const { body } = parse(updateCommentSchema, req.body);
     return service.updateComment(actor, req.params.commentId, body);
+  });
+
+  app.patch<{ Params: { commentId: string } }>('/comments/:commentId/checklist', async (req) => {
+    const comment = await prisma.comment.findUnique({ where: { id: req.params.commentId }, select: { issueId: true } });
+    if (!comment) throw notFound('Комментарий');
+    const { actor } = await issueContext(currentUser(req).id, comment.issueId);
+    return service.checkCommentItem(actor, req.params.commentId, parse(checkCommentItemSchema, req.body));
   });
 
   // Through the task the comment belongs to: a reaction is open to whoever

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import type { IssueDetailDto, IssueRecurrence, ProjectDto, UserSummaryDto } from '@flowdesk/contracts';
-import { ISSUE_RECURRENCES, Permission, compareByPriorityAndDue, impliedStartDate } from '@flowdesk/contracts';
+import { ISSUE_RECURRENCES, Permission, compareByPriorityAndDue, impliedStartDate, sanitizeDoc } from '@flowdesk/contracts';
 import { RECURRENCE_LABEL } from '~/lib/labels';
 import {
   ArrowLeft,
@@ -43,6 +43,7 @@ import {
 import { ActivityTimeline } from './ActivityTimeline';
 import { CommentThread } from './CommentThread';
 import { IssueLinks } from './IssueLinks';
+import { TaskLinkPicker, useOpenRichTextTaskLink } from './RichTextTaskLinks';
 import { WatchersButton } from './Watchers';
 import { AttachToParentDialog, DuplicateIssueDialog } from './IssueActionDialogs';
 import { DoneToggle, doneStatusId, isClosedStatus, reopenStatusId } from '~/components/DoneToggle';
@@ -79,6 +80,7 @@ import { formatBytes, fullDate, relativeTime, shortDate } from '~/lib/format';
 export interface IssueDetailProps {
   issue: IssueDetailDto;
   onClose?: () => void;
+  onPreviewTask?: (issueId: string) => void;
   /** Full-page mode drops the close button and widens the layout. */
   variant?: 'panel' | 'page';
 }
@@ -89,12 +91,13 @@ export interface IssueDetailProps {
  * Every field edits in place: there is no "edit mode" and no save button, and
  * each change is an isolated PATCH that the server records in the history.
  */
-export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueDetailProps) {
+export function IssueDetail({ issue, onClose: close, variant = 'panel', onPreviewTask }: IssueDetailProps) {
   // In the side panel, closing asks first when a comment is typed but not sent.
   const guardedClose = useGuardedClose(close);
   const onClose = close ? guardedClose : undefined;
   const currentUser = useCurrentUser();
   const { workspace } = useSession();
+  const openTaskLink = useOpenRichTextTaskLink(workspace?.id, onPreviewTask);
   const toast = useToast();
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
   const openIssue = useUiStore((s) => s.openIssue);
@@ -142,7 +145,10 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Description value at the moment the editor took focus — compared on blur
   // to detect that a teammate saved while we were typing.
-  const descriptionBaseRef = useRef<unknown>(undefined);
+  const descriptionSession = useRef({ issueId: issue.id, base: '', sent: new Set<string>(), latest: '', pending: 0 });
+  if (descriptionSession.current.issueId !== issue.id) {
+    descriptionSession.current = { issueId: issue.id, base: '', sent: new Set(), latest: '', pending: 0 };
+  }
 
   // Everyone who can open this project — the explicit role list would leave out
   // most of the team (a new project holds only its lead).
@@ -163,6 +169,39 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
   };
 
   const patch = (values: Parameters<typeof updateIssue.mutate>[0]) => updateIssue.mutate(values);
+  const storedDescriptionKey = () => JSON.stringify(sanitizeDoc(issue.description));
+  const beginDescription = () => {
+    const session = descriptionSession.current;
+    if (session.pending) return;
+    session.base = storedDescriptionKey();
+    session.latest = session.base;
+    session.sent.clear();
+  };
+  const saveDescription = (value: unknown) => {
+    if (!canEdit) return;
+    const session = descriptionSession.current;
+    if (!session.base) beginDescription();
+    const description = sanitizeDoc(value);
+    const key = JSON.stringify(description);
+    if (key === session.latest) return;
+    const storedDescription = storedDescriptionKey();
+    if (storedDescription !== session.base && !session.sent.has(storedDescription)) {
+      toast.toast({
+        tone: 'info',
+        title: 'Описание обновилось',
+        description: 'Пока вы редактировали, описание сохранил другой участник. Ваши правки не записаны.',
+        action: { label: 'Обновить', onClick: () => window.location.reload() },
+      });
+      return;
+    }
+    session.latest = key;
+    session.sent.add(key);
+    session.pending += 1;
+    void updateIssue.mutateAsync({ description: { ...description } }).catch(() => {
+      session.sent.delete(key);
+      if (session.latest === key) session.latest = '';
+    }).finally(() => { session.pending -= 1; });
+  };
   // The task is on the screen: what its notifications asked to look at has been looked at.
   useReadIssueNotifications(workspace?.id ?? '', issue.id);
 
@@ -423,32 +462,18 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
           <Panel title="описание" icon={<FileText className="size-3.5 text-text-subtle" />} className="mt-6">
             <RichTextEditor
               value={issue.description}
+              editorLabel="Описание задачи"
               users={members}
               editable={canEdit}
               toolbar={canEdit}
               placeholder={canEdit ? 'Добавьте описание…' : 'Описания нет'}
               minHeight="4rem"
               onUploadImage={canEdit && canUpload ? uploadImage : undefined}
-              onFocus={() => {
-                descriptionBaseRef.current = issue.description;
-              }}
-              onBlur={(description) => {
-                const base = descriptionBaseRef.current;
-                descriptionBaseRef.current = undefined;
-                if (JSON.stringify(description) === JSON.stringify(base)) return;
-                if (JSON.stringify(issue.description) !== JSON.stringify(base)) {
-                  // A teammate saved while we were editing — keep their version
-                  // instead of overwriting it, and offer a reload to see it.
-                  toast.toast({
-                    tone: 'info',
-                    title: 'Описание обновилось',
-                    description: 'Пока вы редактировали, описание сохранил другой участник. Ваши правки не записаны.',
-                    action: { label: 'Обновить', onClick: () => window.location.reload() },
-                  });
-                  return;
-                }
-                patch({ description: description as Record<string, unknown> });
-              }}
+              onFocus={beginDescription}
+              onBlur={saveDescription}
+              onChecklistChange={saveDescription}
+              onLinkClick={openTaskLink}
+              renderLinkTool={workspace ? (insert) => <TaskLinkPicker workspaceId={workspace.id} insert={insert} preview={onPreviewTask} /> : undefined}
             />
           </Panel>
 
@@ -647,6 +672,8 @@ export function IssueDetail({ issue, onClose: close, variant = 'panel' }: IssueD
 
             {tab === 'comments' ? (
               <CommentThread
+              workspaceId={workspace?.id}
+              onPreviewTask={onPreviewTask}
                 issueId={issue.id}
                 members={members}
                 canComment={canComment}

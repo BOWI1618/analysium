@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useUiStore } from '~/app/uiStore';
 import { Drawer } from '~/ui/Drawer';
 import { ErrorState, SkeletonText } from '~/ui/Feedback';
@@ -11,10 +12,30 @@ import { IssueDetail } from './IssueDetail';
 export function IssueDetailPanel() {
   const issueId = useUiStore((s) => s.openIssueId);
   const closeIssue = useUiStore((s) => s.closeIssue);
+  return <IssueDrawerStack key={issueId} issueId={issueId} closeIssue={closeIssue} />;
+}
+
+function IssueDrawerStack({ issueId, closeIssue }: { issueId: string | null; closeIssue: () => void }) {
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const preview = (id: string) => { if (id !== issueId) setPreviewId(id); };
+  return (
+    <>
+      <IssueDrawer issueId={issueId} onClose={closeIssue} onPreviewTask={preview} />
+      <IssueDrawer issueId={previewId} onClose={() => setPreviewId(null)} onPreviewTask={preview} aboveDialog />
+    </>
+  );
+}
+
+export function IssueDrawer({ issueId, onClose, aboveDialog, onPreviewTask }: {
+  issueId: string | null;
+  onClose: () => void;
+  aboveDialog?: boolean;
+  onPreviewTask?: (issueId: string) => void;
+}) {
   const { data: issue, isLoading, error, refetch } = useIssue(issueId);
 
   return (
-    <Drawer open={Boolean(issueId)} onClose={closeIssue} label="Детали задачи">
+    <Drawer open={Boolean(issueId)} onClose={onClose} label="Детали задачи" aboveDialog={aboveDialog}>
       {isLoading ? (
         <div className="space-y-4 p-4">
           <SkeletonText lines={2} />
@@ -23,7 +44,7 @@ export function IssueDetailPanel() {
       ) : error ? (
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : issue ? (
-        <IssueDetail issue={issue} onClose={closeIssue} variant="panel" />
+        <IssueDetail issue={issue} onClose={onClose} variant="panel" onPreviewTask={onPreviewTask} />
       ) : null}
     </Drawer>
   );

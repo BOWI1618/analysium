@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CommentDto, CommentReactionDto } from '@flowdesk/contracts';
+import type { CheckCommentItemInput, CommentDto, CommentReactionDto } from '@flowdesk/contracts';
 import { api } from '~/lib/api';
 import { qk } from '~/lib/queryKeys';
 import { useToast } from '~/app/toast';
@@ -42,6 +42,27 @@ export function useUpdateComment(issueId: string) {
       );
     },
     onError: (error) => toast.error(error, 'Не удалось сохранить комментарий'),
+  });
+}
+
+export function useCheckCommentItem(issueId: string, commentId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const key = qk.issueComments(issueId);
+  return useMutation({
+    mutationFn: (input: CheckCommentItemInput) => api.patch<CommentDto>(`/comments/${commentId}/checklist`, input),
+    onMutate: () => queryClient.cancelQueries({ queryKey: key }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData<CommentDto[]>(key, (comments) => comments?.map((comment) =>
+        comment.id === saved.id && comment.updatedAt <= saved.updatedAt
+          ? { ...comment, body: saved.body, editedAt: saved.editedAt, updatedAt: saved.updatedAt }
+          : comment,
+      ));
+    },
+    onError: (error) => {
+      toast.error(error, 'Не удалось обновить отметку');
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
   });
 }
 

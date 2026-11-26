@@ -44,6 +44,8 @@ import { Checkbox } from '~/ui/Input';
 import { Kbd } from '~/ui/Tooltip';
 import { Avatar } from '~/ui/Avatar';
 import { RichTextEditor, replaceImageSources } from './RichText';
+import { IssueDrawer } from '~/features/issues/IssueDetailPanel';
+import { TaskLinkPicker, useOpenRichTextTaskLink } from '~/features/issues/RichTextTaskLinks';
 import {
   LabelPicker,
   MultiSelect,
@@ -73,6 +75,8 @@ export function CreateIssueDialog() {
   const [projectId, setProjectId] = useState<string>('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState<unknown>(EMPTY_DOC);
+  const [taskPreview, setTaskPreview] = useState<string | null>(null);
+  const openTaskLink = useOpenRichTextTaskLink(workspace?.id, setTaskPreview);
   const [type, setType] = useState<IssueType>('TASK');
   const [priority, setPriority] = useState<IssuePriority>('MEDIUM');
   const [statusId, setStatusId] = useState<string | undefined>();
@@ -258,6 +262,7 @@ export function CreateIssueDialog() {
     if (!open) {
       wasOpen.current = false;
       awaitedProjectId.current = null;
+      setTaskPreview(null);
       return;
     }
     if (wasOpen.current) return;
@@ -480,6 +485,7 @@ export function CreateIssueDialog() {
   if (!projects) return null;
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={closeForm}
@@ -683,6 +689,9 @@ export function CreateIssueDialog() {
         <RichTextEditor
           value={description}
           onChange={setDescription}
+          editorLabel="Описание задачи"
+          onLinkClick={openTaskLink}
+          renderLinkTool={workspace ? (insert) => <TaskLinkPicker workspaceId={workspace.id} insert={insert} preview={setTaskPreview} /> : undefined}
           users={members}
           placeholder="Описание… (введите @, чтобы упомянуть)"
           minHeight="6rem"
@@ -887,5 +896,12 @@ export function CreateIssueDialog() {
         </p>
       </div>
     </Dialog>
+      <IssueDrawer
+        issueId={open ? taskPreview : null}
+        onClose={() => setTaskPreview(null)}
+        onPreviewTask={setTaskPreview}
+        aboveDialog
+      />
+    </>
   );
 }

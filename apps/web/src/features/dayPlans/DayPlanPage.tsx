@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { addDays, format } from 'date-fns';
-import { CalendarDays, ListChecks, PanelRightOpen, Pencil } from 'lucide-react';
+import { CalendarDays, Pencil } from 'lucide-react';
 import {
   dayPlanDateSchema,
   docToText,
@@ -12,16 +12,13 @@ import {
   type DayPlanDraftDto,
   type DayPlansDto,
   type CheckDayPlanItemInput,
-  type IssueSummaryDto,
   type RichDoc,
 } from '@flowdesk/contracts';
 import { useSession, useWorkspaceCan } from '~/app/session';
 import { useToast } from '~/app/toast';
-import { useUiStore } from '~/app/uiStore';
 import { RichTextEditor, RichTextViewer } from '~/components/RichText';
-import { issueByKeyQuery } from '~/features/issues/hooks';
+import { TaskLinkPicker, useOpenRichTextTaskLink } from '~/features/issues/RichTextTaskLinks';
 import { useMembers } from '~/features/members/hooks';
-import { useSearch } from '~/features/search/hooks';
 import { api } from '~/lib/api';
 import { useLeavePageGuard } from '~/lib/hooks/useLeavePageGuard';
 import { Avatar } from '~/ui/Avatar';
@@ -29,29 +26,16 @@ import { Button } from '~/ui/Button';
 import { ConfirmDialog } from '~/ui/Dialog';
 import { EmptyState, ErrorState, SkeletonText } from '~/ui/Feedback';
 import { Input } from '~/ui/Input';
-import { Popover } from '~/ui/Popover';
 
 const dateValue = (offset: number) => format(addDays(new Date(), offset), 'yyyy-MM-dd');
 const planQueryKey = (workspaceId: string, date: string) => ['day-plans', workspaceId, date] as const;
 const planEndpoint = (workspaceId: string, date: string) => `/workspaces/${workspaceId}/day-plans/${date}`;
 const documentKey = (content: RichDoc) => JSON.stringify(sanitizeDoc(content));
 
-function taskKeyFromLink(href: string) {
-  try {
-    const url = new URL(href, window.location.href);
-    if (url.origin !== window.location.origin) return;
-    const key = /^\/issue\/([^/]+)\/?$/.exec(url.pathname)?.[1];
-    if (key) return decodeURIComponent(key);
-  } catch {
-    return;
-  }
-}
-
 export function DayPlanPage({ compose = false }: { compose?: boolean }) {
   const { user, workspace, workspaces, switchWorkspace } = useSession();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const openIssue = useUiStore((state) => state.openIssue);
   const canWrite = useWorkspaceCan(Permission.ISSUE_ASSIGN);
   const canCheck = useWorkspaceCan(Permission.ISSUE_UPDATE);
   const [params, setParams] = useSearchParams();
@@ -61,15 +45,7 @@ export function DayPlanPage({ compose = false }: { compose?: boolean }) {
   const date = dateParam.success ? dateParam.data : dateValue(compose ? 1 : 0);
   const selectedId = params.get('plan');
 
-  const openTaskLink = (href: string) => {
-    const key = taskKeyFromLink(href);
-    if (!workspaceId || !key) return false;
-    void queryClient.fetchQuery(issueByKeyQuery(workspaceId, key)).then(
-      (issue) => openIssue(issue.id),
-      (error: unknown) => toast.error(error, 'Не удалось открыть задачу'),
-    );
-    return true;
-  };
+  const openTaskLink = useOpenRichTextTaskLink(workspaceId);
 
   useEffect(() => {
     if (requested && workspaceId && workspaceId !== workspace?.id) switchWorkspace(workspaceId);
@@ -264,7 +240,6 @@ function DayPlanEditor({ workspaceId, date, draft, openTaskLink }: {
         editorLabel="Текст плана"
         users={members?.map((member) => member.user)}
         minHeight="10rem"
-        formatByLine
         onLinkClick={openTaskLink}
         autoFocus={expanded === true}
         editable={!save.isPending}
@@ -278,73 +253,5 @@ function DayPlanEditor({ workspaceId, date, draft, openTaskLink }: {
       </div>
       {guard.dialog}
     </section>
-  );
-}
-
-function TaskLinkPicker({ workspaceId, insert }: { workspaceId: string; insert: (label: string, href: string) => void }) {
-  const openIssue = useUiStore((state) => state.openIssue);
-  return (
-    <Popover
-      label="Ссылка на задачу"
-      width={280}
-      trigger={({ open, toggle }) => (
-        <Button variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()} onClick={toggle} aria-expanded={open}>
-          <ListChecks className="size-3.5" /> Задача
-        </Button>
-      )}
-    >
-      {({ close }) => (
-        <TaskLinkResults
-          workspaceId={workspaceId}
-          select={(issue) => {
-            close();
-            insert(issue.title, `/issue/${encodeURIComponent(issue.issueKey)}`);
-          }}
-          preview={(id) => {
-            close();
-            openIssue(id);
-          }}
-        />
-      )}
-    </Popover>
-  );
-}
-
-function TaskLinkResults({ workspaceId, select, preview }: {
-  workspaceId: string;
-  select: (issue: IssueSummaryDto) => void;
-  preview: (id: string) => void;
-}) {
-  const [term, setTerm] = useState('');
-  const search = useSearch(workspaceId, term);
-  const results = search.isTyping ? [] : search.data?.issues ?? [];
-
-  return (
-    <div className="space-y-2">
-      <Input autoFocus label="Поиск задачи" placeholder="Номер или название" value={term} onChange={(event) => setTerm(event.target.value)} />
-      {term.trim() && (
-        <ul className="max-h-48 overflow-y-auto">
-          {search.isError ? <li className="px-1 text-xs text-danger">Не удалось найти задачи</li> :
-            search.isFetching || search.isTyping ? <li className="px-1 text-xs text-text-muted">Ищем…</li> :
-              results.length === 0 ? <li className="px-1 text-xs text-text-muted">Задачи не найдены</li> :
-                results.map((issue) => (
-                  <li key={issue.id} className="flex items-center gap-1">
-                    <button type="button" title={issue.title} onClick={() => select(issue)} className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-xs hover:bg-surface-hover">
-                      {issue.title}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Открыть карточку: ${issue.title}`}
-                      title="Открыть карточку"
-                      onClick={() => preview(issue.id)}
-                      className="shrink-0 p-1.5 text-text-muted hover:bg-surface-hover hover:text-text"
-                    >
-                      <PanelRightOpen className="size-3.5" />
-                    </button>
-                  </li>
-                ))}
-        </ul>
-      )}
-    </div>
   );
 }

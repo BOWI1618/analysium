@@ -276,6 +276,7 @@ export function useUpdateIssue(issueId: string) {
   const toast = useToast();
 
   return useMutation({
+    scope: { id: `update-issue:${issueId}` },
     mutationFn: (patch: UpdateIssueInput) => api.patch<IssueDetailDto>(`/issues/${issueId}`, patch),
     onMutate: async (patch) => {
       await queryClient.cancelQueries({ queryKey: qk.issue(issueId) });

@@ -780,6 +780,7 @@ export async function updateIssue(
       dueDate: true,
       isMilestone: true,
       descriptionText: true,
+      description: true,
       completedAt: true,
       status: { select: { id: true, name: true, category: true } },
       labels: { select: { labelId: true } },
@@ -1172,6 +1173,7 @@ async function fanoutUpdate(
     id: string;
     issueKey: string;
     title: string;
+    description: unknown;
     assigneeId: string | null;
     dueDate: Date | null;
     status: { name: string };
@@ -1203,7 +1205,8 @@ async function fanoutUpdate(
   );
 
   if (patch.description !== undefined) {
-    const mentions = collectMentions(patch.description);
+    const previousMentions = new Set(collectMentions(before.description));
+    const mentions = collectMentions(patch.description).filter((id) => !previousMentions.has(id));
     if (mentions.length) {
       jobs.push(
         filterWorkspaceMembers(actor.workspaceId, mentions).then((ids) =>

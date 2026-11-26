@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import {
   collectMentions,
-  dayPlanChecklistItem,
+  richTextChecklistItem,
   dayPlanPath,
   docToText,
   NotificationType,
@@ -86,12 +86,12 @@ export async function checkDayPlanItem(actor: ActorContext, planId: string, inpu
       throw conflict('План был опубликован заново. Проверьте пункт и попробуйте ещё раз.');
     }
     const content = plan.publishedContent as unknown as RichDoc;
-    const item = dayPlanChecklistItem(content, input.path);
+    const item = richTextChecklistItem(content, input.path);
     if (!item) throw notFound('Пункт плана');
     if ((item.attrs?.checked === true) === input.checked) return;
 
     const draft = plan.draft as unknown as RichDoc;
-    const draftItem = dayPlanChecklistItem(draft, input.path);
+    const draftItem = richTextChecklistItem(draft, input.path);
     // Copy progress into the draft only if this position still holds the same item.
     const ownText = (node: NonNullable<typeof draftItem>) =>
       JSON.stringify(node.content?.filter((child) => child.type !== 'taskList') ?? []);

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { richTextChecklistItem } from '@flowdesk/contracts';
 import {
   addMember,
   createIssue,
@@ -48,6 +49,34 @@ const post = (cookie: string, text: string) =>
     headers: { cookie },
     payload: { body: doc(text) },
   });
+
+it('сохраняет галочку в своём комментарии и отклоняет чужую или устаревшую правку', async () => {
+  const created = await app.inject({
+    method: 'POST',
+    url: `/api/v1/issues/${issue.id}/comments`,
+    headers: { cookie: owner.cookie },
+    payload: {
+      body: { type: 'doc', content: [{
+        type: 'taskList', content: [{
+          type: 'taskItem', attrs: { checked: false }, content: doc('Проверить').content,
+        }],
+      }] },
+    },
+  });
+  expect(created.statusCode).toBe(201);
+  const { id, updatedAt } = created.json();
+  const tick = (cookie: string, checked: boolean) => app.inject({
+    method: 'PATCH',
+    url: `/api/v1/comments/${id}/checklist`,
+    headers: { cookie },
+    payload: { path: [0, 0], checked, updatedAt },
+  });
+  expect((await tick(member.sessionCookie, true)).statusCode).toBe(403);
+  const result = await tick(owner.cookie, true);
+  expect(result.statusCode, result.body).toBe(200);
+  expect(richTextChecklistItem(result.json().body, [0, 0])?.attrs?.checked).toBe(true);
+  expect((await tick(owner.cookie, false)).statusCode).toBe(409);
+});
 
 describe('creating comments', () => {
   it('stores a comment and returns its author', async () => {

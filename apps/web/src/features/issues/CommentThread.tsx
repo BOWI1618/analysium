@@ -11,10 +11,12 @@ import { ConfirmDialog, useUnsavedChanges } from '~/ui/Dialog';
 import { EmptyState, SkeletonText } from '~/ui/Feedback';
 import { relativeTime, fullDate } from '~/lib/format';
 import { RichTextEditor, RichTextViewer } from '~/components/RichText';
+import { TaskLinkPicker, useOpenRichTextTaskLink } from './RichTextTaskLinks';
 import { Shortcut } from '~/ui/Shortcut';
 import { SHORTCUTS, comboText } from '~/lib/shortcuts';
 import {
   useComments,
+  useCheckCommentItem,
   useCreateComment,
   useDeleteComment,
   useToggleReaction,
@@ -22,12 +24,16 @@ import {
 } from '~/features/comments/hooks';
 
 export function CommentThread({
+  workspaceId,
+  onPreviewTask,
   issueId,
   members,
   canComment,
   currentUser,
   onUploadImage,
 }: {
+  workspaceId?: string;
+  onPreviewTask?: (issueId: string) => void;
   issueId: string;
   members: UserSummaryDto[];
   canComment: boolean;
@@ -35,6 +41,7 @@ export function CommentThread({
   /** Stores a picture put into a comment; absent when the person may not upload. */
   onUploadImage?: (file: File) => Promise<string | null>;
 }) {
+  const openTaskLink = useOpenRichTextTaskLink(workspaceId, onPreviewTask);
   const { data: comments, isLoading, error } = useComments(issueId);
   const createComment = useCreateComment(issueId);
   const [draft, setDraft] = useState<unknown>(EMPTY_DOC);
@@ -81,6 +88,9 @@ export function CommentThread({
               comment={comment}
               issueId={issueId}
               members={members}
+              workspaceId={workspaceId}
+              openTaskLink={openTaskLink}
+              onPreviewTask={onPreviewTask}
               onUploadImage={onUploadImage}
               canReact={canComment}
               viewerName={currentUser.name}
@@ -119,6 +129,9 @@ export function CommentThread({
               key={draftKey}
               autoFocus={draftKey > 0 && replyTo !== null}
               value={draft}
+              editorLabel="Новый комментарий"
+              onLinkClick={openTaskLink}
+              renderLinkTool={workspaceId ? (insert) => <TaskLinkPicker workspaceId={workspaceId} insert={insert} preview={onPreviewTask} /> : undefined}
               onChange={setDraft}
               users={members}
               placeholder={`Оставьте комментарий… (@ — упоминание, ${comboText(SHORTCUTS.submit)} — отправить)`}
@@ -181,6 +194,9 @@ function CommentItem({
   comment,
   issueId,
   members,
+  workspaceId,
+  openTaskLink,
+  onPreviewTask,
   onUploadImage,
   canReact,
   viewerName,
@@ -189,6 +205,9 @@ function CommentItem({
   comment: CommentDto;
   issueId: string;
   members: UserSummaryDto[];
+  workspaceId?: string;
+  openTaskLink: (href: string) => boolean;
+  onPreviewTask?: (issueId: string) => void;
   onUploadImage?: (file: File) => Promise<string | null>;
   /** Reactions are put by whoever may comment; everyone else sees them. */
   canReact: boolean;
@@ -202,6 +221,7 @@ function CommentItem({
   const [draft, setDraft] = useState<unknown>(comment.body);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const updateComment = useUpdateComment(issueId);
+  const checkCommentItem = useCheckCommentItem(issueId, comment.id);
   const deleteComment = useDeleteComment(issueId);
 
   const save = async () => {
@@ -238,7 +258,10 @@ function CommentItem({
               </MenuTrigger>
               <MenuContent align="end" width={160} label="Действия с комментарием">
                 {comment.canEdit && (
-                  <MenuItem icon={<Pencil className="size-3.5" />} onSelect={() => setEditing(true)}>
+                  <MenuItem icon={<Pencil className="size-3.5" />} onSelect={() => {
+                    setDraft(comment.body);
+                    setEditing(true);
+                  }}>
                     Изменить
                   </MenuItem>
                 )}
@@ -256,6 +279,9 @@ function CommentItem({
           <div className="mt-1.5">
             <RichTextEditor
               value={draft}
+              editorLabel="Изменить комментарий"
+              onLinkClick={openTaskLink}
+              renderLinkTool={workspaceId ? (insert) => <TaskLinkPicker workspaceId={workspaceId} insert={insert} preview={onPreviewTask} /> : undefined}
               onChange={setDraft}
               users={members}
               autoFocus
@@ -285,7 +311,13 @@ function CommentItem({
           <div className="mt-1 rounded-lg bg-surface-sunken px-3 py-2">
             {comment.replyTo && <Quote quote={comment.replyTo} />}
             <div data-comment-body className={clsx(comment.replyTo && 'mt-1.5')}>
-              <RichTextViewer value={comment.body} />
+              <RichTextViewer
+                value={comment.body}
+                onLinkClick={openTaskLink}
+                onChecklistToggle={comment.canEdit ? (path, checked) => {
+                  if (!checkCommentItem.isPending) checkCommentItem.mutate({ path, checked, updatedAt: comment.updatedAt });
+                } : undefined}
+              />
             </div>
           </div>
         )}

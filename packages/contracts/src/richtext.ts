@@ -19,6 +19,12 @@ export interface RichDoc extends RichNode {
   content?: RichNode[];
 }
 
+export function richTextChecklistItem(doc: RichDoc, path: readonly number[]): RichNode | undefined {
+  let node: RichNode | undefined = doc;
+  for (const index of path) node = node?.content?.[index];
+  return node?.type === 'taskItem' ? node : undefined;
+}
+
 export const ALLOWED_NODES = new Set([
   'doc',
   'paragraph',

@@ -636,6 +636,12 @@ export const createCommentSchema = z.object({
 export const updateCommentSchema = z.object({
   body: z.record(z.unknown()),
 });
+export const checkCommentItemSchema = z.object({
+  path: z.array(z.number().int().nonnegative()).min(1).max(40),
+  checked: z.boolean(),
+  updatedAt: z.string().datetime(),
+});
+export type CheckCommentItemInput = z.infer<typeof checkCommentItemSchema>;
 
 /* ----------------------------------------------------------------- gantt */
 

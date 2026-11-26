@@ -1,4 +1,5 @@
-import type { ActorContext, CommentDto, CommentReactionDto } from '@flowdesk/contracts';
+import type { ActorContext, CheckCommentItemInput, CommentDto, CommentReactionDto } from '@flowdesk/contracts';
+import type { Prisma } from '@prisma/client';
 import {
   ActivityType,
   NotificationType,
@@ -9,11 +10,12 @@ import {
   collectMentions,
   docToText,
   isDocEmpty,
+  richTextChecklistItem,
   sanitizeDoc,
 } from '@flowdesk/contracts';
 import { prisma } from '../../lib/prisma';
 import { assertCan } from '../../lib/context';
-import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { log } from '../../lib/logger';
 import { emit } from '../../realtime/eventBus';
 import { commentSelect, toComment, toReactions } from '../../lib/serialize';
@@ -191,6 +193,44 @@ export async function updateComment(actor: ActorContext, commentId: string, body
   });
 
   return toComment(comment, { canEdit: true, canDelete: true, viewerId: actor.userId });
+}
+
+export async function checkCommentItem(actor: ActorContext, commentId: string, input: CheckCommentItemInput): Promise<CommentDto> {
+  const stale = () => conflict('Комментарий обновился. Проверьте пункт и попробуйте ещё раз.');
+  const { saved, changed } = await prisma.$transaction(async (tx) => {
+    const current = await tx.comment.findFirst({
+      where: { id: commentId, issue: { project: { workspaceId: actor.workspaceId } } },
+      select: { ...commentSelect, issue: { select: { projectId: true } } },
+    });
+    if (!current) throw notFound('Комментарий');
+    if (!canEditComment(actor, current.author.id)) throw forbidden('Редактировать можно только свои комментарии');
+    if (current.updatedAt.toISOString() !== input.updatedAt) throw stale();
+    const body = sanitizeDoc(current.body);
+    const item = richTextChecklistItem(body, input.path);
+    if (!item) throw notFound('Пункт комментария');
+    if ((item.attrs?.checked === true) === input.checked) return { saved: current, changed: false };
+
+    item.attrs = { ...item.attrs, checked: input.checked };
+    const bodyJson = body as unknown as Prisma.InputJsonObject;
+    const updated = await tx.comment.updateMany({
+      where: { id: commentId, updatedAt: current.updatedAt, body: { equals: current.body as Prisma.InputJsonValue } },
+      data: { body: bodyJson, editedAt: new Date() },
+    });
+    if (!updated.count) throw stale();
+    const saved = await tx.comment.findUniqueOrThrow({
+      where: { id: commentId },
+      select: { ...commentSelect, issue: { select: { projectId: true } } },
+    });
+    return { saved, changed: true };
+  });
+  if (changed) {
+    emit(RealtimeEventType.COMMENT_UPDATED, {
+      workspaceId: actor.workspaceId,
+      actorId: actor.userId,
+      payload: { issueId: saved.issueId, commentId, projectId: saved.issue.projectId },
+    });
+  }
+  return toComment(saved, { canEdit: true, canDelete: canDeleteComment(actor, saved.author.id), viewerId: actor.userId });
 }
 
 export async function deleteComment(actor: ActorContext, commentId: string): Promise<void> {

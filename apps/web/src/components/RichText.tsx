@@ -208,6 +208,7 @@ export function replaceImageSources(doc: unknown, sources: Map<string, string>):
 export interface RichTextEditorProps {
   value: unknown;
   onChange?: (value: unknown) => void;
+  onChecklistChange?: (value: unknown) => void;
   onBlur?: (value: unknown) => void;
   /** Called with the current document when the editor takes focus. */
   onFocus?: (value: unknown) => void;
@@ -219,7 +220,6 @@ export interface RichTextEditorProps {
   className?: string;
   toolbar?: boolean;
   editorLabel?: string;
-  formatByLine?: boolean;
   onLinkClick?: (href: string) => boolean;
   renderLinkTool?: (insertLink: (label: string, href: string) => void) => ReactNode;
   footer?: ReactNode;
@@ -236,6 +236,7 @@ export interface RichTextEditorProps {
 export function RichTextEditor({
   value,
   onChange,
+  onChecklistChange,
   onBlur,
   onFocus,
   placeholder = 'Напишите что-нибудь…',
@@ -246,7 +247,6 @@ export function RichTextEditor({
   className,
   toolbar = true,
   editorLabel,
-  formatByLine,
   onLinkClick,
   renderLinkTool,
   footer,
@@ -301,6 +301,16 @@ export function RichTextEditor({
         }
         return false;
       },
+      handleDOMEvents: {
+        change: (view, event) => {
+          if (view.editable && event.target instanceof HTMLInputElement &&
+            event.target.matches('ul[data-type="taskList"] li > label > input[type="checkbox"]')) {
+            const value = editorRef.current?.getJSON();
+            if (value) onChecklistChange?.(value);
+          }
+          return false;
+        },
+      },
       // A screenshot pasted with Ctrl+V or a picture dragged in goes straight
       // into the text — the most common way a bug gets described.
       handlePaste: (_view, event) => {
@@ -353,7 +363,6 @@ export function RichTextEditor({
         <EditorToolbar
           editor={editor}
           uploading={uploading > 0}
-          formatByLine={formatByLine}
           onPickImages={onUploadImage ? (files) => void insertImages(files) : undefined}
           extraLinkTool={renderLinkTool?.((label, href) => {
             editor.chain().focus().insertContent([
@@ -406,19 +415,14 @@ function EditorToolbar({
   uploading,
   onPickImages,
   extraLinkTool,
-  formatByLine,
 }: {
   editor: Editor;
   uploading: boolean;
   onPickImages?: (files: File[]) => void;
   extraLinkTool?: ReactNode;
-  formatByLine?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const formatBlock = (format: Parameters<typeof formatRichTextLines>[1], fallback: () => boolean) => {
-    if (formatByLine) formatRichTextLines(editor, format);
-    else fallback();
-  };
+  const formatBlock = (format: Parameters<typeof formatRichTextLines>[1]) => formatRichTextLines(editor, format);
   const setLink = () => {
     const previous = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('Ссылка', previous ?? 'https://');
@@ -458,42 +462,42 @@ function EditorToolbar({
       <ToolbarButton
         label="Заголовок"
         active={editor.isActive('heading', { level: 2 })}
-        onClick={() => formatBlock('heading', () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+        onClick={() => formatBlock('heading')}
       >
         <Heading2 className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Маркированный список"
         active={editor.isActive('bulletList')}
-        onClick={() => formatBlock('bulletList', () => editor.chain().focus().toggleBulletList().run())}
+        onClick={() => formatBlock('bulletList')}
       >
         <List className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Нумерованный список"
         active={editor.isActive('orderedList')}
-        onClick={() => formatBlock('orderedList', () => editor.chain().focus().toggleOrderedList().run())}
+        onClick={() => formatBlock('orderedList')}
       >
         <ListOrdered className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Чек-лист"
         active={editor.isActive('taskList')}
-        onClick={() => formatBlock('taskList', () => editor.chain().focus().toggleTaskList().run())}
+        onClick={() => formatBlock('taskList')}
       >
         <ListTodo className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Цитата"
         active={editor.isActive('blockquote')}
-        onClick={() => formatBlock('blockquote', () => editor.chain().focus().toggleBlockquote().run())}
+        onClick={() => formatBlock('blockquote')}
       >
         <Quote className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Блок кода"
         active={editor.isActive('codeBlock')}
-        onClick={() => formatBlock('codeBlock', () => editor.chain().focus().toggleCodeBlock().run())}
+        onClick={() => formatBlock('codeBlock')}
       >
         <Code2 className="size-3.5" />
       </ToolbarButton>

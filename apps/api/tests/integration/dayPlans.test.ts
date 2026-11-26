@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { dayPlanChecklistItem, type DayPlanDraftDto, type DayPlansDto, type NotificationDto, type RichDoc } from '@flowdesk/contracts';
+import { richTextChecklistItem, type DayPlanDraftDto, type DayPlansDto, type NotificationDto, type RichDoc } from '@flowdesk/contracts';
 import { addMember, disconnectTestDb, migrateTestSchema, registerUser, type TestUser } from '../setup';
 
 let app: FastifyInstance;
@@ -148,10 +148,10 @@ it('сохраняет отметки команды в публикации и 
   const result = await getPlans(manager, day);
   expect(result.draft?.revision).toBe(3);
   for (const index of [0, 1]) {
-    expect(dayPlanChecklistItem(result.draft!.content, [0, index])?.attrs?.checked).toBe(true);
-    expect(dayPlanChecklistItem(result.plans[0]!.content, [0, index])?.attrs?.checked).toBe(true);
+    expect(richTextChecklistItem(result.draft!.content, [0, index])?.attrs?.checked).toBe(true);
+    expect(richTextChecklistItem(result.plans[0]!.content, [0, index])?.attrs?.checked).toBe(true);
   }
   expect((await tick(report, [0, 0], false, '2030-01-17T12:00:00.000Z')).statusCode).toBe(409);
   expect((await tick(report, [0, 0], false)).statusCode).toBe(204);
-  expect(dayPlanChecklistItem((await getPlans(report, day)).plans[0]!.content, [0, 0])?.attrs?.checked).toBe(false);
+  expect(richTextChecklistItem((await getPlans(report, day)).plans[0]!.content, [0, 0])?.attrs?.checked).toBe(false);
 });
