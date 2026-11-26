@@ -39,6 +39,7 @@ export const PROJECT_TYPES = Object.values(ProjectType);
 export const IssueType = {
   TASK: 'TASK',
   BUG: 'BUG',
+  OPERATIONAL: 'OPERATIONAL',
   STORY: 'STORY',
   EPIC: 'EPIC',
   SUBTASK: 'SUBTASK',

@@ -496,6 +496,7 @@ model Sprint {
 enum IssueType {
   TASK
   BUG
+  OPERATIONAL
   STORY
   EPIC
   SUBTASK

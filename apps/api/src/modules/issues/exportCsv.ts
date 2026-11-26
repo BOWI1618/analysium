@@ -15,6 +15,7 @@ const MAX_ROWS = 5000;
 const TYPE_LABEL: Record<string, string> = {
   TASK: 'Задача',
   BUG: 'Ошибка',
+  OPERATIONAL: 'Оперативка',
   STORY: 'История',
   EPIC: 'Эпик',
   SUBTASK: 'Подзадача',

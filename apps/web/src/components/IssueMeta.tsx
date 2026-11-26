@@ -11,6 +11,7 @@ import {
   Bookmark,
   Zap,
   GitBranch,
+  ClipboardList,
 } from 'lucide-react';
 import { dueDateLabel, hexWithAlpha, pluralize, shortDate } from '~/lib/format';
 import { Tooltip } from '~/ui/Tooltip';
@@ -20,6 +21,7 @@ import { Tooltip } from '~/ui/Tooltip';
 export const ISSUE_TYPE_META: Record<IssueType, { label: string; icon: typeof Bug; color: string }> = {
   TASK: { label: 'Задача', icon: CheckSquare, color: '#0083ca' },
   BUG: { label: 'Баг', icon: Bug, color: '#ef4444' },
+  OPERATIONAL: { label: 'Оперативка', icon: ClipboardList, color: '#f97316' },
   STORY: { label: 'История', icon: Bookmark, color: '#22c55e' },
   EPIC: { label: 'Эпик', icon: Zap, color: '#8b5cf6' },
   SUBTASK: { label: 'Подзадача', icon: GitBranch, color: '#7c88a1' },
