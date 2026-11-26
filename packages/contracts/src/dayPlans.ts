@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { UserSummaryDto } from './dto';
-import type { RichDoc } from './richtext';
+import type { RichDoc, RichNode } from './richtext';
 
 export const dayPlanDateSchema = z.string().regex(/^[1-9]\d{3}-\d{2}-\d{2}$/).refine((value) => {
   const day = new Date(`${value}T12:00:00.000Z`);
@@ -15,7 +15,14 @@ export const saveDayPlanSchema = z.object({
 
 export const unpublishDayPlanSchema = z.object({ revision: z.number().int().positive() });
 
+export const checkDayPlanItemSchema = z.object({
+  publishedAt: z.string().datetime(),
+  path: z.array(z.number().int().nonnegative()).min(1).max(40),
+  checked: z.boolean(),
+});
+
 export type SaveDayPlanInput = z.infer<typeof saveDayPlanSchema>;
+export type CheckDayPlanItemInput = z.infer<typeof checkDayPlanItemSchema>;
 
 export interface DayPlanDraftDto {
   content: RichDoc;
@@ -27,6 +34,13 @@ export interface PublishedDayPlanDto {
   id: string;
   author: UserSummaryDto;
   content: RichDoc;
+  publishedAt: string;
+}
+
+export function dayPlanChecklistItem(doc: RichDoc, path: number[]): RichNode | undefined {
+  let node: RichNode | undefined = doc;
+  for (const index of path) node = node?.content?.[index];
+  return node?.type === 'taskItem' ? node : undefined;
 }
 
 export interface DayPlansDto {

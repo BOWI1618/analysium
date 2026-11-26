@@ -1,12 +1,14 @@
 import { Prisma } from '@prisma/client';
 import {
   collectMentions,
+  dayPlanChecklistItem,
   dayPlanPath,
   docToText,
   NotificationType,
   Permission,
   RealtimeEventType,
   type ActorContext,
+  type CheckDayPlanItemInput,
   type DayPlanDraftDto,
   type DayPlansDto,
   type RichDoc,
@@ -28,28 +30,33 @@ function toDraft(row: { draft: Prisma.JsonValue; publishedContent: Prisma.JsonVa
   return { content: row.draft as unknown as RichDoc, publishedContent: row.publishedContent as unknown as RichDoc | null, revision: row.revision };
 }
 
-export async function listDayPlans(actor: ActorContext, date: string): Promise<DayPlansDto> {
+async function publishedPlansWhere(actor: ActorContext): Promise<Prisma.DayPlanWhereInput> {
   const { workspaceId, userId } = actor;
-  const day = atNoon(date);
   const membership = await prisma.departmentMember.findFirst({
     where: { member: { workspaceId, userId } },
     select: { manager: { select: { member: { select: { userId: true } } } } },
   });
   const managerId = membership?.manager?.member.userId;
+  return {
+    workspaceId,
+    publishedAt: { not: null },
+    author: { status: 'ACTIVE', memberships: { some: { workspaceId } } },
+    OR: [
+      { authorId: { in: managerId ? [userId, managerId] : [userId] } },
+      { mentionedUserIds: { has: userId } },
+    ],
+  };
+}
+
+export async function listDayPlans(actor: ActorContext, date: string): Promise<DayPlansDto> {
+  const { workspaceId, userId } = actor;
+  const day = atNoon(date);
+  const visible = await publishedPlansWhere(actor);
   const [own, published] = await Promise.all([
     prisma.dayPlan.findUnique({ where: { workspaceId_day_authorId: { workspaceId, day, authorId: userId } }, select: draftSelect }),
     prisma.dayPlan.findMany({
-      where: {
-        workspaceId,
-        day,
-        publishedAt: { not: null },
-        author: { status: 'ACTIVE', memberships: { some: { workspaceId } } },
-        OR: [
-          { authorId: { in: managerId ? [userId, managerId] : [userId] } },
-          { mentionedUserIds: { has: userId } },
-        ],
-      },
-      select: { id: true, author: { select: userSummarySelect }, publishedContent: true },
+      where: { ...visible, day },
+      select: { id: true, author: { select: userSummarySelect }, publishedContent: true, publishedAt: true },
       orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
     }),
   ]);
@@ -59,8 +66,48 @@ export async function listDayPlans(actor: ActorContext, date: string): Promise<D
       id: plan.id,
       author: plan.author,
       content: plan.publishedContent as unknown as RichDoc,
+      publishedAt: plan.publishedAt!.toISOString(),
     })),
   };
+}
+
+export async function checkDayPlanItem(actor: ActorContext, planId: string, input: CheckDayPlanItemInput): Promise<void> {
+  const visible = await publishedPlansWhere(actor);
+  await prisma.$transaction(async (tx) => {
+    // Serialize checkbox writes and publication changes against this plan.
+    await tx.$queryRaw`SELECT id FROM "day_plans" WHERE id = ${planId} AND "workspaceId" = ${actor.workspaceId} FOR UPDATE`;
+    const plan = await tx.dayPlan.findFirst({
+      where: { ...visible, id: planId },
+      select: { draft: true, publishedContent: true, publishedAt: true, authorId: true },
+    });
+    if (!plan?.publishedContent) throw notFound('План');
+    if (plan.authorId !== actor.userId) assertCan(actor, Permission.ISSUE_UPDATE);
+    if (plan.publishedAt?.toISOString() !== input.publishedAt) {
+      throw conflict('План был опубликован заново. Проверьте пункт и попробуйте ещё раз.');
+    }
+    const content = plan.publishedContent as unknown as RichDoc;
+    const item = dayPlanChecklistItem(content, input.path);
+    if (!item) throw notFound('Пункт плана');
+    if ((item.attrs?.checked === true) === input.checked) return;
+
+    const draft = plan.draft as unknown as RichDoc;
+    const draftItem = dayPlanChecklistItem(draft, input.path);
+    // Copy progress into the draft only if this position still holds the same item.
+    const ownText = (node: NonNullable<typeof draftItem>) =>
+      JSON.stringify(node.content?.filter((child) => child.type !== 'taskList') ?? []);
+    const syncDraft = draftItem && ownText(draftItem) === ownText(item);
+    item.attrs = { ...item.attrs, checked: input.checked };
+    if (syncDraft) draftItem.attrs = { ...draftItem.attrs, checked: input.checked };
+
+    await tx.dayPlan.update({
+      where: { id: planId },
+      data: {
+        publishedContent: content as unknown as Prisma.InputJsonObject,
+        ...(syncDraft ? { draft: draft as unknown as Prisma.InputJsonObject } : {}),
+        revision: { increment: 1 },
+      },
+    });
+  });
 }
 
 export async function saveDayPlan(actor: ActorContext, date: string, input: SaveDayPlanInput): Promise<DayPlanDraftDto> {

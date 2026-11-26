@@ -67,6 +67,10 @@ test('план форматирует отдельную строку и отк�
 
   await page.getByRole('button', { name: 'Опубликовать', exact: true }).click();
   await expect(editor).toHaveCount(0);
+  const published = page.getByRole('article');
+  const completed = published.getByRole('checkbox', { name: /Пункт для проверки/ });
+  await completed.click();
+  await expect(completed).toBeChecked();
   const publishedLink = page.getByRole('article').getByRole('link', { name: title });
   await publishedLink.click();
   await expect(drawer).toContainText(title);
@@ -74,6 +78,9 @@ test('план форматирует отдельную строку и отк�
   await page.keyboard.press('Escape');
   await page.reload();
   await expect(editor).toHaveCount(0);
+  await expect(completed).toBeChecked();
+  await completed.click();
+  await expect(completed).not.toBeChecked();
   await page.getByRole('button', { name: 'Изменить план', exact: true }).click();
   await expect(draftLink).toBeVisible();
   await page.getByRole('button', { name: 'Свернуть', exact: true }).click();

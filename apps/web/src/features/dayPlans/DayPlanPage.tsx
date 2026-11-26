@@ -11,6 +11,7 @@ import {
   sanitizeDoc,
   type DayPlanDraftDto,
   type DayPlansDto,
+  type CheckDayPlanItemInput,
   type IssueSummaryDto,
   type RichDoc,
 } from '@flowdesk/contracts';
@@ -52,6 +53,7 @@ export function DayPlanPage({ compose = false }: { compose?: boolean }) {
   const toast = useToast();
   const openIssue = useUiStore((state) => state.openIssue);
   const canWrite = useWorkspaceCan(Permission.ISSUE_ASSIGN);
+  const canCheck = useWorkspaceCan(Permission.ISSUE_UPDATE);
   const [params, setParams] = useSearchParams();
   const requested = compose ? null : params.get('workspace');
   const workspaceId = requested ? workspaces.find(({ id }) => id === requested)?.id : workspace?.id;
@@ -77,7 +79,14 @@ export function DayPlanPage({ compose = false }: { compose?: boolean }) {
     queryKey: planQueryKey(workspaceId ?? '', date),
     queryFn: ({ signal }) => api.get<DayPlansDto>(planEndpoint(workspaceId!, date), { signal }),
     enabled: Boolean(workspaceId),
-    refetchInterval: compose ? false : 30_000,
+    refetchInterval: 30_000,
+  });
+
+  const checkItem = useMutation({
+    mutationFn: ({ workspaceId, date: _date, planId, ...input }: CheckDayPlanItemInput & { planId: string; workspaceId: string; date: string }) =>
+      api.patch<void>(`/workspaces/${workspaceId}/day-plans/${planId}/checklist`, input),
+    onError: (error) => toast.error(error, 'Не удалось обновить отметку'),
+    onSettled: (_result, _error, { workspaceId, date }) => queryClient.invalidateQueries({ queryKey: planQueryKey(workspaceId, date) }),
   });
 
   const chooseDate = (next: string) => {
@@ -138,7 +147,14 @@ export function DayPlanPage({ compose = false }: { compose?: boolean }) {
                   <Avatar user={plan.author} size="sm" />
                   {plan.author.id === user?.id ? 'Мой опубликованный план' : plan.author.name}
                 </header>
-                <RichTextViewer value={plan.content} className="px-4 py-3" onLinkClick={openTaskLink} />
+                <RichTextViewer
+                  value={plan.content}
+                  className="px-4 py-3"
+                  onLinkClick={openTaskLink}
+                  onChecklistToggle={canCheck || plan.author.id === user?.id ? (path, checked) => {
+                    checkItem.mutate({ workspaceId, date, path, checked, planId: plan.id, publishedAt: plan.publishedAt });
+                  } : undefined}
+                />
               </article>
             ))}
           </>

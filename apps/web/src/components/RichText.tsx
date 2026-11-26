@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { EditorContent, useEditor, type Editor, ReactRenderer } from '@tiptap/react';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -143,7 +144,11 @@ function createMentionSuggestion(getUsers: () => UserSummaryDto[]) {
 
 /* --------------------------------------------------------------- editor */
 
-function buildExtensions(placeholder: string, getUsers: () => UserSummaryDto[]) {
+function buildExtensions(
+  placeholder: string,
+  getUsers: () => UserSummaryDto[],
+  onReadOnlyChecked?: (node: ProseMirrorNode, checked: boolean) => boolean,
+) {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
@@ -160,7 +165,11 @@ function buildExtensions(placeholder: string, getUsers: () => UserSummaryDto[]) 
     }),
     Placeholder.configure({ placeholder }),
     TaskList,
-    TaskItem.configure({ nested: true }),
+    TaskItem.configure({
+      nested: true,
+      onReadOnlyChecked,
+      a11y: { checkboxLabel: (node, checked) => `${checked ? 'Снять отметку' : 'Отметить выполненным'}: ${node.textContent}` },
+    }),
     Mention.configure({
       HTMLAttributes: { class: 'fd-mention' },
       renderText: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
@@ -534,19 +543,38 @@ function handleLinkClick(event: MouseEvent, open: (href: string) => boolean) {
 }
 
 /** Read-only renderer. Uses the same schema as the editor, so nothing drifts. */
-export function RichTextViewer({ value, className, onLinkClick }: {
+export function RichTextViewer({ value, className, onLinkClick, onChecklistToggle }: {
   value: unknown;
   className?: string;
   onLinkClick?: (href: string) => boolean;
+  onChecklistToggle?: (path: number[], checked: boolean) => void;
 }) {
+  const editorRef = useRef<Editor | null>(null);
+  const checklist = useRef(onChecklistToggle);
+  checklist.current = onChecklistToggle;
+  const canCheck = Boolean(onChecklistToggle);
+
   const editor = useEditor(
     {
-      extensions: buildExtensions('', () => []),
+      extensions: buildExtensions('', () => [], canCheck ? (item, checked) => {
+        const doc = editorRef.current?.state.doc;
+        if (!doc) return false;
+        doc.descendants((node, pos) => {
+          if (node !== item) return;
+          const resolved = doc.resolve(pos);
+          const path = Array.from({ length: resolved.depth + 1 }, (_, depth) => resolved.index(depth));
+          checklist.current?.(path, checked);
+          return false;
+        });
+        // Render the saved state. A rejected write must not leave a local tick.
+        return false;
+      } : undefined),
       content: (value as object) ?? EMPTY_DOC,
       editable: false,
     },
-    [value],
+    [value, canCheck],
   );
+  editorRef.current = editor;
 
   if (!editor) return null;
   return <EditorContent editor={editor} className={clsx('fd-prose', className)} onClick={onLinkClick && ((event) => handleLinkClick(event, onLinkClick))} />;

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { DayPlanDraftDto, DayPlansDto, NotificationDto, RichDoc } from '@flowdesk/contracts';
+import { dayPlanChecklistItem, type DayPlanDraftDto, type DayPlansDto, type NotificationDto, type RichDoc } from '@flowdesk/contracts';
 import { addMember, disconnectTestDb, migrateTestSchema, registerUser, type TestUser } from '../setup';
 
 let app: FastifyInstance;
@@ -118,4 +118,40 @@ it('показывает опубликованный план подчинён�
   expect((await save(plan('15:00–16:00'), 7, true)).statusCode).toBe(200);
   expect((await getPlans(report)).plans).toHaveLength(1);
   expect((await notices(mentioned)).filter((item) => item.dayPlan)).toHaveLength(1);
+});
+
+it('сохраняет отметки команды в публикации и черновике и отклоняет устаревшие запросы', async () => {
+  const day = '2030-01-18';
+  const content: RichDoc = {
+    type: 'doc',
+    content: [{
+      type: 'taskList',
+      content: ['Первый пункт', 'Второй пункт'].map((text) => ({
+        type: 'taskItem',
+        attrs: { checked: false },
+        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+      })),
+    }],
+  };
+  expect((await save(content, null, true, day)).statusCode).toBe(200);
+  const [published] = (await getPlans(report, day)).plans;
+  const tick = (user: TestUser, path: number[], checked: boolean, publishedAt = published!.publishedAt) =>
+    call(user, 'PATCH', `/day-plans/${published!.id}/checklist`, { path, checked, publishedAt });
+
+  expect((await tick(colleague, [0, 0], true)).statusCode).toBe(404);
+  expect((await tick(report, [0, 0, 0], true)).statusCode).toBe(404);
+  const toggled = await Promise.all([
+    tick(report, [0, 0], true),
+    tick(manager, [0, 1], true),
+  ]);
+  expect(toggled.map((reply) => reply.statusCode)).toEqual([204, 204]);
+  const result = await getPlans(manager, day);
+  expect(result.draft?.revision).toBe(3);
+  for (const index of [0, 1]) {
+    expect(dayPlanChecklistItem(result.draft!.content, [0, index])?.attrs?.checked).toBe(true);
+    expect(dayPlanChecklistItem(result.plans[0]!.content, [0, index])?.attrs?.checked).toBe(true);
+  }
+  expect((await tick(report, [0, 0], false, '2030-01-17T12:00:00.000Z')).statusCode).toBe(409);
+  expect((await tick(report, [0, 0], false)).statusCode).toBe(204);
+  expect(dayPlanChecklistItem((await getPlans(report, day)).plans[0]!.content, [0, 0])?.attrs?.checked).toBe(false);
 });
