@@ -18,6 +18,7 @@ const notificationSelect = {
   workspaceId: true,
   actor: { select: { id: true, name: true, email: true, avatarUrl: true } },
   issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
+  dayPlan: { select: { id: true, day: true } },
 };
 
 export async function notificationRoutes(app: FastifyInstance): Promise<void> {
@@ -52,6 +53,7 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
       actor: n.actor,
       issue: n.issue,
       workspaceId: n.workspaceId,
+      ...(n.dayPlan && { dayPlan: { id: n.dayPlan.id, date: n.dayPlan.day.toISOString().slice(0, 10) } }),
     }));
 
     return { items: mapped, nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null, unreadCount };

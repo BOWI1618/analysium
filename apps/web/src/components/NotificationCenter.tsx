@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { AlarmClock, Bell, CheckCheck, Inbox, Sparkles } from 'lucide-react';
 import type { NotificationDto } from '@flowdesk/contracts';
+import { dayPlanPath } from '@flowdesk/contracts';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useMarkAllRead, useMarkRead, useNotifications, useUnreadCount } from '~/features/notifications/hooks';
@@ -26,6 +27,7 @@ const TYPE_LABEL: Record<string, string> = {
   SPRINT_STARTED: 'Спринт',
   SPRINT_COMPLETED: 'Спринт',
   RELEASE_NOTES: 'Что нового',
+  DAY_PLAN: 'План на день',
 };
 
 /**
@@ -106,6 +108,8 @@ export function NotificationList({
     if (!notification.readAt) markRead.mutate(notification.id);
     if (notification.issue) {
       openIssue(notification.issue.id);
+    } else if (notification.dayPlan) {
+      navigate(dayPlanPath(notification.workspaceId, notification.dayPlan.date, notification.dayPlan.id));
     } else {
       navigate('/inbox');
     }
@@ -192,7 +196,7 @@ export function NotificationList({
                           'mt-0.5 text-xs text-text-muted',
                           // An update's summary is a list: one point per line,
                           // whole on the inbox page, its start under the bell.
-                          notification.type === 'RELEASE_NOTES'
+                          notification.type === 'RELEASE_NOTES' || notification.type === 'DAY_PLAN'
                             ? clsx('whitespace-pre-line', !fullText && 'line-clamp-4')
                             : 'line-clamp-2',
                         )}

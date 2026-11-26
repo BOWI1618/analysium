@@ -208,6 +208,8 @@ export interface RichTextEditorProps {
   autoFocus?: boolean;
   className?: string;
   toolbar?: boolean;
+  editorLabel?: string;
+  renderLinkTool?: (insertLink: (label: string, href: string) => void) => ReactNode;
   footer?: ReactNode;
   /** Cmd/Ctrl+Enter — used by the comment composer to submit. */
   onSubmit?: () => void;
@@ -231,6 +233,8 @@ export function RichTextEditor({
   autoFocus,
   className,
   toolbar = true,
+  editorLabel,
+  renderLinkTool,
   footer,
   onSubmit,
   onUploadImage,
@@ -272,6 +276,7 @@ export function RichTextEditor({
       attributes: {
         class: 'fd-prose focus:outline-none',
         'data-editor': 'true',
+        ...(editorLabel ? { 'aria-label': editorLabel, role: 'textbox', 'aria-multiline': 'true' } : {}),
         style: `min-height:${minHeight}`,
       },
       handleKeyDown: (_view, event) => {
@@ -316,7 +321,7 @@ export function RichTextEditor({
   }, [editor, value]);
 
   useEffect(() => {
-    editor?.setEditable(editable);
+    editor?.setEditable(editable, false);
   }, [editor, editable]);
 
   if (!editor) return <div className="h-20 animate-shimmer border-2 border-border-strong bg-surface-active" />;
@@ -335,6 +340,12 @@ export function RichTextEditor({
           editor={editor}
           uploading={uploading > 0}
           onPickImages={onUploadImage ? (files) => void insertImages(files) : undefined}
+          extraLinkTool={renderLinkTool?.((label, href) => {
+            editor.chain().focus().insertContent([
+              { type: 'text', text: label, marks: [{ type: 'link', attrs: { href } }] },
+              { type: 'text', text: ' ' },
+            ]).run();
+          })}
         />
       )}
       <div className="px-3 py-2">
@@ -379,10 +390,12 @@ function EditorToolbar({
   editor,
   uploading,
   onPickImages,
+  extraLinkTool,
 }: {
   editor: Editor;
   uploading: boolean;
   onPickImages?: (files: File[]) => void;
+  extraLinkTool?: ReactNode;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const setLink = () => {
@@ -469,6 +482,7 @@ function EditorToolbar({
       <ToolbarButton label="Ссылка" active={editor.isActive('link')} onClick={setLink}>
         <Link2 className="size-3.5" />
       </ToolbarButton>
+      {extraLinkTool}
 
       {onPickImages && (
         <>

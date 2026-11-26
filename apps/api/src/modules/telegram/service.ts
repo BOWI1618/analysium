@@ -118,6 +118,7 @@ export interface TelegramNotice {
   body: string | null;
   actorName: string | null;
   issueKey: string | null;
+  dayPlanPath?: string;
   /** What happened — it words the line about who did it and picks the details worth showing. */
   type?: string | null;
   /** The body is somebody's own words (a comment) and is set apart as a quote. */
@@ -317,11 +318,13 @@ export function formatNotice(
     lines.push(...(issue ? [''] : []), `<i>${line}</i>`);
   }
 
-  const target = notice.issueKey
-    ? { text: 'Открыть задачу', url: `${origin}/issue/${notice.issueKey}` }
-    : { text: 'Открыть входящие', url: `${origin}/inbox` };
+  const target = notice.dayPlanPath
+    ? { text: 'Открыть план', url: `${origin}${notice.dayPlanPath}` }
+    : notice.issueKey
+      ? { text: 'Открыть задачу', url: `${origin}/issue/${notice.issueKey}` }
+      : { text: 'Открыть входящие', url: `${origin}/inbox` };
   if (origin.startsWith('https://')) return { text: lines.join('\n'), button: target };
 
-  lines.push('', `<a href="${target.url}">${target.text}</a>`);
+  lines.push('', `<a href="${escapeHtml(target.url)}">${target.text}</a>`);
   return { text: lines.join('\n') };
 }

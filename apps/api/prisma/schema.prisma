@@ -87,6 +87,7 @@ model User {
   activityEvents     ActivityEvent[]
   notifications      Notification[]      @relation("NotificationRecipient")
   actedNotifications Notification[]      @relation("NotificationActor")
+  dayPlans           DayPlan[]
   auditLogs          AuditLog[]
   attachments        Attachment[]
   savedViews         SavedView[]
@@ -175,6 +176,7 @@ model Workspace {
   savedViews     SavedView[]
   departments    Department[]
   issueTemplates IssueTemplate[]
+  dayPlans       DayPlan[]
   roles          Role[]
 
   @@index([ownerId])
@@ -813,6 +815,25 @@ model AuditLog {
  * -------------------------------------------------------- notifications
  */
 
+model DayPlan {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  authorId           String
+  day                DateTime
+  draft              Json
+  publishedContent   Json?
+  publishedAt        DateTime?
+  mentionedUserIds   String[]  @default([])
+  revision           Int       @default(1)
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@unique([workspaceId, day, authorId])
+  @@map("day_plans")
+}
+
 enum NotificationType {
   ISSUE_ASSIGNED
   ISSUE_MENTIONED
@@ -826,6 +847,7 @@ enum NotificationType {
   SPRINT_COMPLETED
   /// What a new version of Analysium brought, sent to everyone once.
   RELEASE_NOTES
+  DAY_PLAN
 }
 
 model Notification {
@@ -838,6 +860,7 @@ model Notification {
   body        String?
   issueId     String?
   commentId   String?
+  dayPlanId   String?
   readAt      DateTime?
   /// Set once the notification went out in an e-mail digest; never mailed twice.
   emailedAt   DateTime?
@@ -851,9 +874,11 @@ model Notification {
   actor     User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
   issue     Issue?    @relation(fields: [issueId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dayPlan   DayPlan?  @relation(fields: [dayPlanId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
   @@index([userId, createdAt])
+  @@index([dayPlanId])
   @@index([readAt, emailedAt, createdAt])
   @@index([issueId, reminderKey])
   @@map("notifications")

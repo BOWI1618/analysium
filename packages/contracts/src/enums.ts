@@ -155,6 +155,7 @@ export const NotificationType = {
   SPRINT_STARTED: 'SPRINT_STARTED',
   SPRINT_COMPLETED: 'SPRINT_COMPLETED',
   RELEASE_NOTES: 'RELEASE_NOTES',
+  DAY_PLAN: 'DAY_PLAN',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

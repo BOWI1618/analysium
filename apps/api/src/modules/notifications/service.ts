@@ -69,6 +69,15 @@ export async function notify(input: NotifyInput): Promise<void> {
     ),
   );
 
+  announceNotifications(created, input);
+}
+
+/** Call after committing notifications created together with a feature's own data. */
+export function announceNotifications(
+  created: { id: string; userId: string }[],
+  input: Omit<NotifyInput, 'userIds'> & { dayPlanPath?: string },
+): void {
+  if (created.length === 0) return;
   for (const n of created) {
     emit(RealtimeEventType.NOTIFICATION_CREATED, {
       workspaceId: input.workspaceId,
@@ -84,7 +93,7 @@ export async function notify(input: NotifyInput): Promise<void> {
   }
 }
 
-async function sendToTelegram(created: { id: string; userId: string }[], input: NotifyInput): Promise<void> {
+async function sendToTelegram(created: { id: string; userId: string }[], input: Parameters<typeof telegramNotices>[1]): Promise<void> {
   await deliverToTelegram(await telegramNotices(created, input), telegram);
 }
 
@@ -96,7 +105,7 @@ async function sendToTelegram(created: { id: string; userId: string }[], input: 
  */
 export async function telegramNotices(
   created: { id: string; userId: string }[],
-  input: Pick<NotifyInput, 'actorId' | 'issueId' | 'commentId' | 'title' | 'body' | 'type'>,
+  input: Pick<NotifyInput, 'actorId' | 'issueId' | 'commentId' | 'title' | 'body' | 'type'> & { dayPlanPath?: string },
 ): Promise<TelegramNotice[]> {
   const [actor, issue] = await Promise.all([
     input.actorId ? prisma.user.findUnique({ where: { id: input.actorId }, select: { name: true } }) : null,
@@ -125,6 +134,7 @@ export async function telegramNotices(
     actorName: actor?.name ?? null,
     issueKey: issue?.issueKey ?? null,
     type: input.type,
+    dayPlanPath: input.dayPlanPath,
     // A comment's text is somebody's words; everything else in a body is ours.
     quote: Boolean(input.commentId),
     issue: issue

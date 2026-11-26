@@ -9,11 +9,14 @@ import { ConfirmDialog, useBeforeUnloadWarning } from '~/ui/Dialog';
  * Call `allowLeave()` right before navigating away on purpose — after a
  * successful save — so that navigation is not questioned.
  */
-export function useLeavePageGuard(dirty: boolean) {
+export function useLeavePageGuard(dirty: boolean, includeSearch = false) {
   const allowed = useRef(false);
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      dirty && !allowed.current && currentLocation.pathname !== nextLocation.pathname,
+      dirty && !allowed.current && (
+        currentLocation.pathname !== nextLocation.pathname ||
+        (includeSearch && currentLocation.search !== nextLocation.search)
+      ),
   );
   useBeforeUnloadWarning(dirty);
 

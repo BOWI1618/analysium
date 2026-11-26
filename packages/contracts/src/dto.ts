@@ -405,6 +405,7 @@ export interface NotificationDto {
   actor: UserSummaryDto | null;
   issue: { id: string; issueKey: string; title: string; projectId: string } | null;
   workspaceId: string;
+  dayPlan?: { id: string; date: string } | null;
 }
 
 export type SavedViewLayout = 'BOARD' | 'LIST' | 'CALENDAR' | 'MY_WORK' | 'EMPLOYEE' | 'PLANNING' | 'DEPARTMENT';

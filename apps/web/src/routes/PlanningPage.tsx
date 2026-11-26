@@ -8,6 +8,7 @@ import { useSession, useWorkspaceCan } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useMembers } from '~/features/members/hooks';
 import { useProjects } from '~/features/projects/hooks';
+import { DayPlanPage } from '~/features/dayPlans/DayPlanPage';
 import {
   flattenPages,
   useAssigneeStats,
@@ -44,7 +45,7 @@ const PERIODS: { value: Period; label: string }[] = [
 
 const isPeriod = (value: string | null): value is Period => PERIODS.some((item) => item.value === value);
 
-type Mode = 'cascade' | 'pool' | 'weeks';
+type Mode = 'cascade' | 'pool' | 'weeks' | 'day-plan';
 
 /**
  * «Распределение задач». Its main view is one's own pool with the people
@@ -57,9 +58,10 @@ export function PlanningPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const canAssign = useWorkspaceCan(Permission.ISSUE_ASSIGN);
   const asked = searchParams.get('mode');
-  const mode: Mode = canAssign && (asked === 'pool' || asked === 'weeks') ? asked : 'cascade';
+  const mode: Mode = asked === 'day-plan' || (canAssign && (asked === 'pool' || asked === 'weeks')) ? asked : 'cascade';
   const modes: { value: Mode; label: string }[] = [
     { value: 'cascade', label: 'Мой пул и подчинённые' },
+    { value: 'day-plan', label: 'План на день' },
     ...(canAssign
       ? ([
           { value: 'pool', label: 'Без исполнителя' },
@@ -77,7 +79,9 @@ export function PlanningPage() {
             key={item.value}
             type="button"
             // The other mode starts clean: a chosen person or filter of one means nothing in the other.
-            onClick={() => setSearchParams(item.value === 'cascade' ? {} : { mode: item.value })}
+            onClick={() => {
+              if (mode !== item.value) setSearchParams(item.value === 'cascade' ? {} : { mode: item.value });
+            }}
             aria-current={mode === item.value ? 'page' : undefined}
             className={clsx(
               'px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors',
@@ -91,7 +95,9 @@ export function PlanningPage() {
           </button>
         ))}
       </div>
-      {mode === 'weeks' ? <PlanningWeeks /> : mode === 'pool' ? <PlanningPool /> : <PlanningCascade />}
+      {mode === 'day-plan' ? <DayPlanPage compose /> :
+        mode === 'weeks' ? <PlanningWeeks /> :
+          mode === 'pool' ? <PlanningPool /> : <PlanningCascade />}
     </>
   );
 }

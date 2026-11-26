@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { useSession } from '~/app/session';
 import { useUiStore } from '~/app/uiStore';
 import { useMembers } from '~/features/members/hooks';
+import { DayPlanPage } from '~/features/dayPlans/DayPlanPage';
 import { useIssueList, flattenPages } from '~/features/issues/hooks';
 import { useFilterState } from '~/features/issues/useFilterState';
 import { pageParams, viewSearchParams } from '~/features/views/viewState';
@@ -32,10 +33,12 @@ import { shortDate } from '~/lib/format';
 import type { IssueSummaryDto } from '@flowdesk/contracts';
 
 type Tab = 'assigned' | 'created' | 'overdue' | 'upcoming' | 'done' | 'recent';
+type WorkTab = Tab | 'day-plan';
 type GroupBy = 'none' | 'status' | 'project' | 'dueDate';
 
-const TABS: { value: Tab; label: string }[] = [
+const TABS: { value: WorkTab; label: string }[] = [
   { value: 'assigned', label: 'Назначено мне' },
+  { value: 'day-plan', label: 'План на день' },
   { value: 'created', label: 'Создано мной' },
   { value: 'overdue', label: 'Просрочено' },
   { value: 'upcoming', label: 'Ближайшие' },
@@ -43,7 +46,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'recent', label: 'Недавно обновлённые' },
 ];
 
-const isTab = (value: string | null): value is Tab => TABS.some((item) => item.value === value);
+const isTab = (value: string | null): value is WorkTab => TABS.some((item) => item.value === value);
 
 /** «Ближайшие» is the same week-long window as «Срок на неделе» on the home page. */
 const UPCOMING_DAYS = 7;
@@ -93,6 +96,54 @@ function presetFor(tab: Tab): IssueFilters {
  * that answers "what should I do next" rather than "what exists".
  */
 export function MyWorkPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab = isTab(tabParam) ? tabParam : 'assigned';
+  const setTab = (next: WorkTab) =>
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        // Each tab opens in its own order: one picked by a column goes with the tab it was picked on.
+        params.delete('sort');
+        params.delete('order');
+        params.delete('date');
+        params.delete('plan');
+        params.delete('workspace');
+        if (next === 'assigned') params.delete('tab');
+        else params.set('tab', next);
+        return params;
+      },
+      { replace: true },
+    );
+
+  return (
+    <>
+      <Topbar breadcrumbs={[{ label: 'Мои задачи' }]} />
+      <div className="flex items-stretch overflow-x-auto border-b-2 border-border-strong bg-bg-subtle no-scrollbar">
+        {TABS.map((item, index) => (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => { if (tab !== item.value) setTab(item.value); }}
+            aria-current={tab === item.value ? 'page' : undefined}
+            className={clsx(
+              'px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors',
+              index > 0 && 'border-l-2 border-border-strong',
+              tab === item.value
+                ? 'relative bg-surface text-text after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-accent'
+                : 'text-text-muted hover:bg-surface-hover hover:text-text',
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'day-plan' ? <DayPlanPage /> : <MyIssueWork tab={tab} />}
+    </>
+  );
+}
+
+function MyIssueWork({ tab }: { tab: Tab }) {
   const { user, workspace } = useSession();
   const openIssue = useUiStore((s) => s.openIssue);
   const openCreateIssue = useUiStore((s) => s.openCreateIssue);
@@ -101,21 +152,6 @@ export function MyWorkPage() {
   // The tab lives in the URL like the filters, so a reload keeps it and the
   // home page can link straight to «Просрочено» or «Ближайшие».
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const tab: Tab = isTab(tabParam) ? tabParam : 'assigned';
-  const setTab = (next: Tab) =>
-    setSearchParams(
-      (current) => {
-        const params = new URLSearchParams(current);
-        // Each tab opens in its own order: one picked by a column goes with the tab it was picked on.
-        params.delete('sort');
-        params.delete('order');
-        if (next === 'assigned') params.delete('tab');
-        else params.set('tab', next);
-        return params;
-      },
-      { replace: true },
-    );
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   // List or kanban by stage; remembered on this device.
   const [layout, setLayout] = useLocalStorage<'list' | 'board'>('flowdesk.my-work-layout', 'list');
@@ -157,28 +193,6 @@ export function MyWorkPage() {
 
   return (
     <>
-      <Topbar breadcrumbs={[{ label: 'Мои задачи' }]} />
-
-      <div className="flex items-stretch overflow-x-auto border-b-2 border-border-strong bg-bg-subtle no-scrollbar">
-        {TABS.map((item, index) => (
-          <button
-            key={item.value}
-            type="button"
-            onClick={() => setTab(item.value)}
-            aria-current={tab === item.value ? 'page' : undefined}
-            className={clsx(
-              'px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors',
-              index > 0 && 'border-l-2 border-border-strong',
-              tab === item.value
-                ? 'relative bg-surface text-text after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-accent'
-                : 'text-text-muted hover:bg-surface-hover hover:text-text',
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       <FilterBar
         filters={extraFilters}
         onChange={setExtraFilters}
