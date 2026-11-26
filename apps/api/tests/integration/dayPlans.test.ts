@@ -104,4 +104,18 @@ it('показывает опубликованный план подчинён�
   expect((await getPlans(mentioned)).plans).toEqual([]);
   expect((await getPlans(report)).plans).toHaveLength(1);
   expect(await notices(mentioned)).toHaveLength(3);
+
+  const unpublish = (user: TestUser, revision: number) => call(user, 'POST', `/day-plans/${date}/unpublish`, { revision });
+  expect((await unpublish(colleague, 6)).statusCode).toBe(404);
+  expect((await unpublish(manager, 5)).statusCode).toBe(409);
+  const withdrawn = await unpublish(manager, 6);
+  expect(withdrawn.statusCode, withdrawn.body).toBe(200);
+  expect(withdrawn.json<DayPlanDraftDto>()).toMatchObject({ revision: 7, publishedContent: null });
+  expect(JSON.stringify(withdrawn.json<DayPlanDraftDto>().content)).toContain('15:00–16:00');
+  expect((await getPlans(report)).plans).toEqual([]);
+  expect((await notices(mentioned)).every((item) => !item.dayPlan)).toBe(true);
+
+  expect((await save(plan('15:00–16:00'), 7, true)).statusCode).toBe(200);
+  expect((await getPlans(report)).plans).toHaveLength(1);
+  expect((await notices(mentioned)).filter((item) => item.dayPlan)).toHaveLength(1);
 });

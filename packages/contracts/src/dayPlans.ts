@@ -13,6 +13,8 @@ export const saveDayPlanSchema = z.object({
   publish: z.boolean(),
 });
 
+export const unpublishDayPlanSchema = z.object({ revision: z.number().int().positive() });
+
 export type SaveDayPlanInput = z.infer<typeof saveDayPlanSchema>;
 
 export interface DayPlanDraftDto {

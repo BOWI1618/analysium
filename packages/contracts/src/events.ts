@@ -17,6 +17,7 @@ export const RealtimeEventType = {
   COMMENT_UPDATED: 'comment.updated',
   COMMENT_DELETED: 'comment.deleted',
   NOTIFICATION_CREATED: 'notification.created',
+  NOTIFICATION_REMOVED: 'notification.removed',
   SPRINT_UPDATED: 'sprint.updated',
   PROJECT_UPDATED: 'project.updated',
   MEMBER_UPDATED: 'member.updated',
@@ -62,6 +63,7 @@ export type RealtimeEvent =
   | BaseEvent<typeof RealtimeEventType.COMMENT_UPDATED, { issueId: string; commentId: string; projectId: string }>
   | BaseEvent<typeof RealtimeEventType.COMMENT_DELETED, { issueId: string; commentId: string; projectId: string }>
   | BaseEvent<typeof RealtimeEventType.NOTIFICATION_CREATED, { notificationId: string; recipientId: string }>
+  | BaseEvent<typeof RealtimeEventType.NOTIFICATION_REMOVED, { recipientId: string }>
   | BaseEvent<typeof RealtimeEventType.SPRINT_UPDATED, { sprintId: string; projectId: string }>
   | BaseEvent<typeof RealtimeEventType.PROJECT_UPDATED, { projectId: string }>
   | BaseEvent<typeof RealtimeEventType.MEMBER_UPDATED, { memberId: string; userId: string }>
@@ -71,5 +73,7 @@ export type RealtimeEventOf<T extends RealtimeEventType> = Extract<RealtimeEvent
 
 /** Events carrying a recipient are only delivered to that user's streams. */
 export function eventRecipient(event: RealtimeEvent): string | null {
-  return event.type === RealtimeEventType.NOTIFICATION_CREATED ? event.payload.recipientId : null;
+  return event.type === RealtimeEventType.NOTIFICATION_CREATED || event.type === RealtimeEventType.NOTIFICATION_REMOVED
+    ? event.payload.recipientId
+    : null;
 }

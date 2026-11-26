@@ -78,6 +78,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           void queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId, 'notifications'] });
           break;
         }
+        case RealtimeEventType.NOTIFICATION_REMOVED: {
+          void queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId, 'notifications'] });
+          void queryClient.invalidateQueries({ queryKey: ['day-plans', workspaceId] });
+          break;
+        }
         case RealtimeEventType.SPRINT_UPDATED: {
           if (isOwnEcho) break;
           void queryClient.invalidateQueries({ queryKey: qk.sprints(event.payload.projectId) });

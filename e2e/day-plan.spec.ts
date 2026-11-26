@@ -76,4 +76,10 @@ test('план форматирует отдельную строку и отк�
   await expect(editor).toHaveCount(0);
   await page.getByRole('button', { name: 'Изменить план', exact: true }).click();
   await expect(draftLink).toBeVisible();
+  await page.getByRole('button', { name: 'Свернуть', exact: true }).click();
+  await page.getByRole('button', { name: 'Снять с публикации', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Снять план с публикации?' })
+    .getByRole('button', { name: 'Снять с публикации', exact: true }).click();
+  await expect(publishedLink).toHaveCount(0);
+  await expect(draftLink).toBeVisible();
 });

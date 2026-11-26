@@ -25,6 +25,7 @@ import { api } from '~/lib/api';
 import { useLeavePageGuard } from '~/lib/hooks/useLeavePageGuard';
 import { Avatar } from '~/ui/Avatar';
 import { Button } from '~/ui/Button';
+import { ConfirmDialog } from '~/ui/Dialog';
 import { EmptyState, ErrorState, SkeletonText } from '~/ui/Feedback';
 import { Input } from '~/ui/Input';
 import { Popover } from '~/ui/Popover';
@@ -153,11 +154,13 @@ function DayPlanEditor({ workspaceId, date, draft, openTaskLink }: {
   draft: DayPlanDraftDto | null;
   openTaskLink: (href: string) => boolean;
 }) {
+  const { user } = useSession();
   const { data: members } = useMembers(workspaceId);
   const queryClient = useQueryClient();
   const toast = useToast();
   const [edit, setEdit] = useState<{ content: RichDoc; revision: number | null } | null>(null);
   const [expanded, setExpanded] = useState<boolean | null>(null);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const saved = draft?.content ?? EMPTY_DOC;
   const content = edit?.content ?? saved;
   const contentKey = documentKey(content);
@@ -167,15 +170,15 @@ function DayPlanEditor({ workspaceId, date, draft, openTaskLink }: {
   const showEditor = expanded ?? changedSincePublication;
   const guard = useLeavePageGuard(dirty, true);
 
+  const key = planQueryKey(workspaceId, date);
   const save = useMutation({
-    onMutate: () => queryClient.cancelQueries({ queryKey: planQueryKey(workspaceId, date) }),
+    onMutate: () => queryClient.cancelQueries({ queryKey: key }),
     mutationFn: (publish: boolean) => api.patch<DayPlanDraftDto>(planEndpoint(workspaceId, date), {
       content,
       revision: edit ? edit.revision : draft?.revision ?? null,
       publish,
     }),
     onSuccess: (result, publish) => {
-      const key = planQueryKey(workspaceId, date);
       queryClient.setQueryData<DayPlansDto>(key, (data) => ({ plans: data?.plans ?? [], draft: result }));
       setEdit(null);
       if (publish) setExpanded(false);
@@ -185,13 +188,43 @@ function DayPlanEditor({ workspaceId, date, draft, openTaskLink }: {
     onError: (error) => toast.error(error, 'Не удалось сохранить план'),
   });
 
+  const unpublish = useMutation({
+    onMutate: () => queryClient.cancelQueries({ queryKey: key }),
+    mutationFn: (revision: number) => api.post<DayPlanDraftDto>(`${planEndpoint(workspaceId, date)}/unpublish`, { revision }),
+    onSuccess: (result) => {
+      queryClient.setQueryData<DayPlansDto>(key, (data) => ({
+        plans: data?.plans.filter((plan) => plan.author.id !== user?.id) ?? [],
+        draft: result,
+      }));
+      setEdit((current) => current && { ...current, revision: result.revision });
+      setConfirmUnpublish(false);
+      setExpanded(true);
+      void queryClient.invalidateQueries({ queryKey: key });
+      toast.success('План снят с публикации');
+    },
+    onError: (error) => toast.error(error, 'Не удалось снять план с публикации'),
+  });
+
   if (!showEditor) {
     return (
       <div className="flex flex-wrap items-center justify-end gap-2">
         {dirty && <span className="text-xs text-text-muted">Есть несохранённые изменения</span>}
+        {draft?.publishedContent && (
+          <Button variant="ghost" onClick={() => setConfirmUnpublish(true)}>Снять с публикации</Button>
+        )}
         <Button variant="outline" iconLeft={<Pencil className="size-3.5" />} onClick={() => setExpanded(true)}>
           {draft?.publishedContent && !changedSincePublication ? 'Изменить план' : 'Продолжить редактирование'}
         </Button>
+        <ConfirmDialog
+          open={confirmUnpublish}
+          title="Снять план с публикации?"
+          message="Сотрудники перестанут видеть план. Текст сохранится в черновике."
+          confirmLabel="Снять с публикации"
+          safeDefault
+          loading={unpublish.isPending}
+          onClose={() => { if (!unpublish.isPending) setConfirmUnpublish(false); }}
+          onConfirm={() => { if (draft) unpublish.mutate(draft.revision); }}
+        />
         {guard.dialog}
       </div>
     );
