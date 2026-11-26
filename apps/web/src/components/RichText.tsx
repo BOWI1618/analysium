@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { EditorContent, useEditor, type Editor, ReactRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Avatar } from '~/ui/Avatar';
 import { Tooltip } from '~/ui/Tooltip';
+import { formatRichTextLines } from './formatRichTextLines';
 
 /**
  * Rich text is stored and exchanged as ProseMirror JSON — never HTML — so
@@ -209,6 +210,8 @@ export interface RichTextEditorProps {
   className?: string;
   toolbar?: boolean;
   editorLabel?: string;
+  formatByLine?: boolean;
+  onLinkClick?: (href: string) => boolean;
   renderLinkTool?: (insertLink: (label: string, href: string) => void) => ReactNode;
   footer?: ReactNode;
   /** Cmd/Ctrl+Enter — used by the comment composer to submit. */
@@ -234,6 +237,8 @@ export function RichTextEditor({
   className,
   toolbar = true,
   editorLabel,
+  formatByLine,
+  onLinkClick,
   renderLinkTool,
   footer,
   onSubmit,
@@ -339,6 +344,7 @@ export function RichTextEditor({
         <EditorToolbar
           editor={editor}
           uploading={uploading > 0}
+          formatByLine={formatByLine}
           onPickImages={onUploadImage ? (files) => void insertImages(files) : undefined}
           extraLinkTool={renderLinkTool?.((label, href) => {
             editor.chain().focus().insertContent([
@@ -348,7 +354,7 @@ export function RichTextEditor({
           })}
         />
       )}
-      <div className="px-3 py-2">
+      <div className="px-3 py-2" onClick={onLinkClick && ((event) => handleLinkClick(event, onLinkClick))}>
         <EditorContent editor={editor} />
       </div>
       {footer && <div className="border-t-2 border-border-strong bg-surface-raised px-3 py-2">{footer}</div>}
@@ -391,13 +397,19 @@ function EditorToolbar({
   uploading,
   onPickImages,
   extraLinkTool,
+  formatByLine,
 }: {
   editor: Editor;
   uploading: boolean;
   onPickImages?: (files: File[]) => void;
   extraLinkTool?: ReactNode;
+  formatByLine?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formatBlock = (format: Parameters<typeof formatRichTextLines>[1], fallback: () => boolean) => {
+    if (formatByLine) formatRichTextLines(editor, format);
+    else fallback();
+  };
   const setLink = () => {
     const previous = editor.getAttributes('link').href as string | undefined;
     const url = window.prompt('Ссылка', previous ?? 'https://');
@@ -437,42 +449,42 @@ function EditorToolbar({
       <ToolbarButton
         label="Заголовок"
         active={editor.isActive('heading', { level: 2 })}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        onClick={() => formatBlock('heading', () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
       >
         <Heading2 className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Маркированный список"
         active={editor.isActive('bulletList')}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        onClick={() => formatBlock('bulletList', () => editor.chain().focus().toggleBulletList().run())}
       >
         <List className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Нумерованный список"
         active={editor.isActive('orderedList')}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        onClick={() => formatBlock('orderedList', () => editor.chain().focus().toggleOrderedList().run())}
       >
         <ListOrdered className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Чек-лист"
         active={editor.isActive('taskList')}
-        onClick={() => editor.chain().focus().toggleTaskList().run()}
+        onClick={() => formatBlock('taskList', () => editor.chain().focus().toggleTaskList().run())}
       >
         <ListTodo className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Цитата"
         active={editor.isActive('blockquote')}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        onClick={() => formatBlock('blockquote', () => editor.chain().focus().toggleBlockquote().run())}
       >
         <Quote className="size-3.5" />
       </ToolbarButton>
       <ToolbarButton
         label="Блок кода"
         active={editor.isActive('codeBlock')}
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        onClick={() => formatBlock('codeBlock', () => editor.chain().focus().toggleCodeBlock().run())}
       >
         <Code2 className="size-3.5" />
       </ToolbarButton>
@@ -515,8 +527,18 @@ function EditorToolbar({
 
 /* --------------------------------------------------------------- viewer */
 
+function handleLinkClick(event: MouseEvent, open: (href: string) => boolean) {
+  if (event.defaultPrevented || event.button !== 0 || !(event.target instanceof Element)) return;
+  const href = event.target.closest('a[href]')?.getAttribute('href');
+  if (href && open(href)) event.preventDefault();
+}
+
 /** Read-only renderer. Uses the same schema as the editor, so nothing drifts. */
-export function RichTextViewer({ value, className }: { value: unknown; className?: string }) {
+export function RichTextViewer({ value, className, onLinkClick }: {
+  value: unknown;
+  className?: string;
+  onLinkClick?: (href: string) => boolean;
+}) {
   const editor = useEditor(
     {
       extensions: buildExtensions('', () => []),
@@ -527,5 +549,5 @@ export function RichTextViewer({ value, className }: { value: unknown; className
   );
 
   if (!editor) return null;
-  return <EditorContent editor={editor} className={clsx('fd-prose', className)} />;
+  return <EditorContent editor={editor} className={clsx('fd-prose', className)} onClick={onLinkClick && ((event) => handleLinkClick(event, onLinkClick))} />;
 }

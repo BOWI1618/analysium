@@ -137,10 +137,16 @@ export function useIssue(issueId: string | null | undefined) {
 
 export function useIssueByKey(workspaceId: string, issueKey: string | undefined) {
   return useQuery({
-    queryKey: qk.issueByKey(workspaceId, issueKey),
-    queryFn: () => api.get<IssueDetailDto>(`/workspaces/${workspaceId}/issues/by-key/${issueKey}`),
-    enabled: Boolean(issueKey),
+    ...issueByKeyQuery(workspaceId, issueKey),
+    enabled: Boolean(workspaceId && issueKey),
   });
+}
+
+export function issueByKeyQuery(workspaceId: string, issueKey: string | undefined) {
+  return {
+    queryKey: qk.issueByKey(workspaceId, issueKey),
+    queryFn: () => api.get<IssueDetailDto>(`/workspaces/${workspaceId}/issues/by-key/${encodeURIComponent(issueKey ?? '')}`),
+  };
 }
 
 export function useIssueActivity(issueId: string | null | undefined) {
